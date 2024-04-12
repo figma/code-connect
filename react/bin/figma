@@ -1,0 +1,5 @@
+#!/usr/bin/env node
+// pnpm requires that package.json bin entries refer to files that exist prior
+// to running any lifecycle scripts. So here we have a stub entry that requires
+// the transpiled real binary.
+require('../dist/cli.js');

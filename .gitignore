@@ -1,0 +1,12 @@
+.env
+figma.config.json
+.DS_Store
+node_modules
+dist/
+src/components
+src/bindings.ts
+test-files
+coverage
+bundle/
+.build/
+.swiftpm/

@@ -1,0 +1,6 @@
+const figma = require('figma')
+
+export default figma.tsx`function Example() {
+    const [state] = React.useState(false);
+    return <Button />;
+}`

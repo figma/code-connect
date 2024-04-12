@@ -1,0 +1,6 @@
+const figma = require('figma')
+
+export default figma.tsx`function Example() {
+    const someExtraCode = 'test';
+    return <FunctionComponent disabled={true}>Hello</FunctionComponent>;
+}`

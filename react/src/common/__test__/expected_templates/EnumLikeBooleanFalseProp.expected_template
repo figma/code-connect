@@ -1,0 +1,7 @@
+const figma = require('figma')
+
+const icon = figma.properties.boolean('Prop', {
+"true": 'yes',
+"false": 'no'})
+
+export default figma.tsx`<Button${_fcc_renderReactProp('icon', icon)}/>`

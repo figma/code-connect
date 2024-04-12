@@ -1,0 +1,7 @@
+const figma = require('figma')
+
+export default figma.tsx`<One>
+      <Two>
+        <Three />
+      </Two>
+    </One>`

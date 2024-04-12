@@ -1,0 +1,59 @@
+import Figma
+import SwiftUI
+
+enum ButtonVariant {
+    case primary
+    case danger
+    case secondary
+    case figjam
+    case secondaryDanger
+    case inverse
+    case success
+}
+
+struct FigmaButton: View {
+    let variant: ButtonVariant
+    let title: String
+
+    var body: some View {
+        Button(action: {}, label: {
+            /*@START_MENU_TOKEN@*/Text("Button")/*@END_MENU_TOKEN@*/
+        })
+    }
+}
+
+struct FigmaButton_doc: FigmaConnect {
+    let component = FigmaButton.self
+    let figmaNodeUrl: String = "https://figma.com/file/abc/Test?node-id=123"
+
+    @FigmaProp(
+        "👥 Variant",
+        mapping: [
+            "Primary": ButtonVariant.primary,
+            "Destructive": ButtonVariant.danger,
+            "Secondary": ButtonVariant.secondary,
+            "FigJam": ButtonVariant.figjam,
+            "Secondary Danger": ButtonVariant.secondaryDanger,
+            "Inverse": ButtonVariant.inverse,
+            "Success": ButtonVariant.success
+        ]
+    )
+    var buttonVariant: ButtonVariant = .primary
+
+    var variant = ["Has Icon": true]
+
+    @FigmaProp("🎛️ Label")
+    var title: String = "Submit"
+
+    @FigmaProp("🎛️ Disabled")
+    var disabled: Bool = false
+
+    var body: some View {
+        FigmaButton(variant: self.buttonVariant, title: self.title).disabled(self.disabled)
+    }
+}
+
+
+
+
+

@@ -1,0 +1,3 @@
+const figma = require('figma')
+
+export default figma.tsx`<Button icon="some-icon-32">Click me</Button>`

@@ -1,0 +1,278 @@
+import * as url from 'url'
+import { chunk } from 'lodash'
+import axios, { isAxiosError } from 'axios'
+
+import { FigmaConnectJSON } from '../common/figma_connect'
+import { logger } from '../common/logging'
+import { validateNodeId } from './helpers'
+import { getApiUrl } from './figma_rest_api'
+
+function parseFigmaNode(doc: FigmaConnectJSON): { fileKey: string; nodeId: string } | null {
+  const figmaNodeUrl = url.parse(doc.figmaNode, true)
+  const fileKeyMatch = figmaNodeUrl.path?.match(/(file|design)\/([a-zA-Z0-9]+)/)
+  if (!fileKeyMatch) {
+    logger.error(`Failed to parse ${doc.figmaNode}`)
+    return null
+  }
+  const fileKey = fileKeyMatch[2]
+  const nodeId = figmaNodeUrl.query['node-id']
+  if (nodeId && typeof nodeId === 'string') {
+    const figmaNodeId = validateNodeId(nodeId)
+    return { fileKey, nodeId: figmaNodeId }
+  } else {
+    logger.error(`Failed to get node-id from ${doc.figmaNode}`)
+    return null
+  }
+}
+
+async function fetchNodeInfo(
+  baseApiUrl: string,
+  fileKey: string,
+  nodeIdsChunk: string[],
+  accessToken: string,
+): Promise<any> {
+  try {
+    const response = await axios.get(
+      `${baseApiUrl}${fileKey}/nodes?ids=${nodeIdsChunk.join(',')}`,
+      {
+        headers: {
+          'X-Figma-Token': accessToken,
+          'Content-Type': 'application/json',
+        },
+      },
+    )
+    if (response.status !== 200) {
+      logger.error('Failed to fetch node info: ' + response.status + ' ' + response.data?.message)
+      return null
+    }
+    return response.data.nodes
+  } catch (err) {
+    if (isAxiosError(err)) {
+      if (err.response) {
+        logger.error(
+          `Failed to to fetch node info (${err.code}): ${err.response?.status} ${err.response?.data?.err ?? err.response?.data?.message}`,
+        )
+      } else {
+        logger.error(`Failed to to fetch node info: ${err.message}`)
+      }
+      logger.debug(JSON.stringify(err.response?.data))
+    } else {
+      logger.error(`Failed to to fetch node info: ${err}`)
+    }
+    return null
+  }
+}
+
+function validateProps(doc: FigmaConnectJSON, document: any): boolean {
+  if (doc.templateData && doc.templateData?.props) {
+    let propsValid = true
+    const codeConnectProps = Object.keys(doc.templateData.props ?? {})
+
+    for (let i = 0; i < codeConnectProps.length; i++) {
+      const codeConnectProp: any = doc.templateData?.props[codeConnectProps[i]]
+      if (codeConnectProp.kind === 'children') {
+        const codeConnectLayerNames = codeConnectProp.args.layers
+        // Get all layer names in the figma doc
+        const figmaDocLayerNames: string[] = []
+        const getLayerNames = (layer: any) => {
+          if (layer.name) {
+            figmaDocLayerNames.push(layer.name)
+          }
+          if (layer.children) {
+            layer.children.forEach((child: any) => getLayerNames(child))
+          }
+        }
+        getLayerNames(document)
+        // And make sure that the layer names in the code connect file are present in the figma doc
+        for (const codeConnectLayerName of codeConnectLayerNames) {
+          if (!figmaDocLayerNames.includes(codeConnectLayerName)) {
+            logger.error(
+              `Validation failed for ${doc.component} (${doc.figmaNode}): The layer "${codeConnectLayerName}" does not exist on the Figma component`,
+            )
+            propsValid = false
+          }
+        }
+        continue
+      }
+      const codeConnectFigmaPropName = codeConnectProp?.args?.figmaPropName
+
+      if (
+        !document.componentPropertyDefinitions ||
+        !Object.keys(document.componentPropertyDefinitions).find((figmaProp) =>
+          propMatches(figmaProp, codeConnectFigmaPropName, document.componentPropertyDefinitions),
+        )
+      ) {
+        logger.error(
+          `Validation failed for ${doc.component} (${doc.figmaNode}): The property "${codeConnectFigmaPropName}" does not exist on the Figma component`,
+        )
+        propsValid = false
+      }
+    }
+
+    if (!propsValid) {
+      return false
+    }
+  }
+  return true
+}
+
+function getPropName(componentPropertyDefinitions: any, propName: string): string {
+  const prop = componentPropertyDefinitions[propName]
+  if (prop.type === 'VARIANT') {
+    return propName
+  }
+
+  // non Variant Keys are of the form "name#id"
+  // We have to take the last one in case the name contains #'s
+  const lastIndex = propName.lastIndexOf('#')
+  if (lastIndex !== -1) {
+    return propName.substring(0, lastIndex)
+  }
+  return propName
+}
+
+function propMatches(
+  figmaProp: any,
+  codeConnectPropName: string,
+  componentPropertyDefinitions: any,
+): boolean {
+  const figmaPropName = getPropName(componentPropertyDefinitions, figmaProp)
+  return figmaPropName === codeConnectPropName
+}
+
+function validateVariantRestrictions(doc: FigmaConnectJSON, document: any): boolean {
+  if (doc.variant) {
+    let variantRestrictionsValid = true
+    const codeConnectVariantRestrictions = Object.keys(doc.variant)
+
+    for (let i = 0; i < codeConnectVariantRestrictions.length; i++) {
+      const variantRestriction: any = codeConnectVariantRestrictions[i]
+
+      const match = Object.keys(document.componentPropertyDefinitions ?? {}).find((figmaProp) =>
+        propMatches(figmaProp, variantRestriction, document.componentPropertyDefinitions),
+      )
+      if (!match) {
+        logger.error(
+          `Validation failed for ${doc.component} (${doc.figmaNode}): The property "${variantRestriction}" does not exist on the Figma component`,
+        )
+        variantRestrictionsValid = false
+        continue
+      }
+
+      const variantRestrictionValue = doc.variant[variantRestriction]
+      const variantOrProp = document.componentPropertyDefinitions[match]
+
+      // Only check `variantOptions` for Variants, and not for props, since props
+      // don't have a set of possible values we can check against
+      if (
+        variantOrProp.type === 'VARIANT' &&
+        !variantOrProp.variantOptions?.includes(variantRestrictionValue)
+      ) {
+        logger.error(
+          `Validation failed for ${doc.component} (${doc.figmaNode}): The Figma Variant "${match}" does not have an option for ${variantRestrictionValue}`,
+        )
+        variantRestrictionsValid = false
+        continue
+      }
+    }
+
+    if (!variantRestrictionsValid) {
+      return false
+    }
+  }
+  return true
+}
+
+function validateDoc(doc: FigmaConnectJSON, figmaNode: any, nodeId: string): boolean {
+  if (!figmaNode || !figmaNode.document) {
+    logger.error(
+      `Validation failed for ${doc.component} (${doc.figmaNode}): node not found in file`,
+    )
+    return false
+  }
+
+  const document = figmaNode.document
+  if (document.type !== 'COMPONENT' && document.type !== 'COMPONENT_SET') {
+    logger.error(
+      `Validation failed for ${doc.component} (${doc.figmaNode}): corresponding node is not a component or component set`,
+    )
+    return false
+  }
+
+  const component = figmaNode.components[nodeId]
+  if (component && component.componentSetId) {
+    logger.error(
+      `Validation failed for ${doc.component} (${doc.figmaNode}): node is not a top level component or component set. Please check that the node is not a variant`,
+    )
+    return false
+  }
+
+  const propsValid = validateProps(doc, document)
+  if (!propsValid) {
+    return false
+  }
+
+  const variantRestrictionsValid = validateVariantRestrictions(doc, document)
+  if (!variantRestrictionsValid) {
+    return false
+  }
+
+  return true
+}
+
+export async function validateDocs(
+  accessToken: string,
+  docs: FigmaConnectJSON[],
+): Promise<boolean> {
+  let baseApiUrl = getApiUrl(docs?.[0]?.figmaNode ?? '') + '/files/'
+
+  const fileKeyToNodeIds: { [key: string]: any } = {}
+  let valid = true
+  docs.forEach((doc) => {
+    const parsedNode = parseFigmaNode(doc)
+    if (!parsedNode) {
+      valid = false
+      return
+    }
+    fileKeyToNodeIds[parsedNode.fileKey] ||= {}
+    fileKeyToNodeIds[parsedNode.fileKey][parsedNode.nodeId] ||= []
+    fileKeyToNodeIds[parsedNode.fileKey][parsedNode.nodeId].push(doc)
+  })
+
+  if (!valid) {
+    return false
+  }
+
+  logger.debug('fileKeyToNodeIds')
+  logger.debug(JSON.stringify(fileKeyToNodeIds, null, 2))
+
+  const fileKeys = Object.keys(fileKeyToNodeIds)
+  for (let i = 0; i < fileKeys.length; i++) {
+    const fileKey = fileKeys[i]
+    logger.debug(`Validating file ${fileKey}`)
+    const nodeMap = fileKeyToNodeIds[fileKey]
+    const nodeIds = Object.keys(nodeMap)
+    logger.debug(`Validating ${nodeIds.length} nodes`)
+    const chunks = chunk(nodeIds, 400)
+
+    for (let batch = 0; batch < chunks.length; batch++) {
+      const nodeIdsChunk = chunks[batch]
+      logger.debug(`Running for ${baseApiUrl + fileKey + '/nodes?ids=' + nodeIdsChunk.join(',')}`)
+      const nodeMapRet = await fetchNodeInfo(baseApiUrl, fileKey, nodeIdsChunk, accessToken)
+      if (!nodeMapRet) {
+        return false
+      }
+
+      valid =
+        valid &&
+        nodeIdsChunk
+          .map((nodeId: string) => {
+            return nodeMap[nodeId]
+              .map((doc: FigmaConnectJSON) => validateDoc(doc, nodeMapRet[nodeId], nodeId))
+              .every(Boolean)
+          })
+          .every(Boolean)
+    }
+  }
+  return valid
+}
