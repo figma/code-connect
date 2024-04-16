@@ -1,7 +1,7 @@
 {
   "name": "@figma/code-connect",
   "version": "0.1.0",
-  "description": "Figma Code Connect",
+  "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
   "license": "MIT",

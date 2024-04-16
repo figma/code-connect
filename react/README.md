@@ -27,7 +27,7 @@ Some CLI commands, like `create`, require a valid [authentication token](https:/
 To keep things simple, we're going to start by replacing the contents of the generated file with the most basic Code Connect configuration possible to make sure everything is set up and working as expected. Replace the contents of the file with the following, replacing the `Button` reference with a reference to whatever component you are trying to connect. The object called by `figma.connect` is your Code Connect doc.
 
 ```tsx
-import * as figma from '@figma/code-connect'
+import figma from '@figma/code-connect'
 import { Button } from 'src/components'
 
 figma.connect(Button, 'https://...', {
@@ -162,7 +162,7 @@ To ensure the connected code snippet accurately reflects the design, we need to 
 Here is a simple example for a button with a `label`, `disabled`, and `type` property.
 
 ```tsx
-import * as figma from '@figma/code-connect'
+import figma from '@figma/code-connect'
 
 figma.connect(Button, 'https://...', {
   props: {
@@ -186,7 +186,7 @@ figma.connect(Button, 'https://...', {
 And this is how we would achieve the same thing using the Storybook integration. Notice how this works well with existing `args` configuration you may already be using in Storybook.
 
 ```tsx
-import * as figma from '@figma/code-connect'
+import figma from "@figma/code-connect"
 
 export default {
   component: Button,
@@ -436,7 +436,7 @@ jobs:
 By default Code Connect creates a new file which lives alongside the components you want to connect to Figma. However, Code Connect may also be co-located with the component it is connecting in code. To do this, simply move the contents of the `<component-name>.figma.tsx` file into your component definition file.
 
 ```tsx
-import * as figma from '@figma/code-connect'
+import figma from "@figma/code-connect"
 
 interface ButtonProps { ... }
 export function Button(props: ButtonProps) { ... }

@@ -4,7 +4,7 @@ Code Connect is a tool for connecting your design system components in code with
 
 Code Connect is easy to set up, easy to maintain, type-safe, and extensible. Out of the box Code Connect comes with support for React, Storybook and SwiftUI.
 
-![image](https://static.figma.com/uploads/1886c9dbc6742f3eeaba7c0b4d6276a44aac0cb7.png)
+![image](https://static.figma.com/uploads/9a04c8236ff9cc18303b98a0983c82a589b6cfe3.png)
 
 > [!NOTE]
 > Code Connect is available on Organization and Enterprise plans and requires a full Design or Dev Mode seat to use. Code Connect is currently in beta, so you can expect this feature to change. You may also experience bugs or performance issues during this time.
