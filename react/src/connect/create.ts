@@ -112,6 +112,7 @@ export async function createFigmadocFromUrl({
       logger.info('Generating Code Connect file...')
 
       const figmadoc = `
+import React from 'react';
 import { ${componentName} } from './${componentName}'
 import figma from '@figma/code-connect'
 
