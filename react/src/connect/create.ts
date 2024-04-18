@@ -5,7 +5,7 @@ import * as prettier from 'prettier'
 import { FigmaRestApi, getApiUrl } from './figma_rest_api'
 import { logger } from '../common/logging'
 import { camelCase } from 'lodash'
-
+import readline from 'readline'
 interface GenerateDocsArgs {
   accessToken: string
   figmaNodeUrl: string
@@ -134,8 +134,9 @@ figma.connect(${componentName}, "${figmaNodeUrl}", {
       })
       const fileName =
         outFile ?? `${process.env.INIT_CWD ?? process.cwd()}/${componentName}.figma.tsx`
-      fs.writeFileSync(fileName, formatted)
-      logger.info(`Created ${fileName}`)
+
+        // Check if a file with the name 'fileName' already exists and handle the situation with user input
+        checkFileOverwrite(fileName, formatted);
     } else {
       logger.error(`Failed to get node information from Figma with status: ${response.status}`)
       logger.debug('Failed to get node information from Figma with Body:', response.data)
@@ -154,5 +155,26 @@ figma.connect(${componentName}, "${figmaNodeUrl}", {
       logger.error(`Failed to create: ${err}`)
     }
     process.exit(1)
+  }
+}
+
+function checkFileOverwrite(fileName: string, content: string) {
+  if (fs.existsSync(fileName)) {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    rl.question(`Code Connect file '${fileName}' already exists. Do you want to overwrite it? (y/n): `, (answer) => {
+      if (answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes') {
+        fs.writeFileSync(fileName, content);
+        logger.info(`Overwrote the file: ${fileName}`);
+      } else {
+        logger.info('Canceled: No existing file was overwritten.');
+      }
+      rl.close();
+    });
+  } else {
+    fs.writeFileSync(fileName, content);
+    logger.info(`Created ${fileName}`);
   }
 }
