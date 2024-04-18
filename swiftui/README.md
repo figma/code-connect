@@ -111,7 +111,7 @@ figma-swift connect publish --access-token <token>
 To unpublish your connected components from Figma, you can run the `unpublish` command. This will find all the Code Connect files in your repository and remove the metadata from Figma.
 
 ```sh
-figma-swift connect unpublish --token <token>
+figma-swift connect unpublish --access-token <token>
 ```
 
 `figma connect` as well as `figma connect publish` can accept a variety of flags to customize the behavior of these commands.
