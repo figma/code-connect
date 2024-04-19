@@ -121,7 +121,7 @@ struct Connect: AsyncParsableCommand {
                 return
             }
 
-            print("Attemping to publish \(codeConnectFiles.count) Code Connection(s). \(result.errors) connection(s) failed to parse.")
+            print("Attempting to publish \(codeConnectFiles.count) Code Connection(s). \(result.errors) connection(s) failed to parse.")
 
             if !skipValidation {
                 print("Validating code connect files.")
