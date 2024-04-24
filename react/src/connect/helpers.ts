@@ -11,7 +11,8 @@ export function isComponent(node: FigmaRestApi.Node): node is FigmaRestApi.Compo
 export const validateNodeId = function (id: string): string {
   const newId = id.replace('-', ':')
   if (!guidRegex.test(newId)) {
-    throw new Error(`ID ${id} is not a valid node_id`)
+    logger.error(`Invalid figma node URL: the provided node-id "${id}" is invalid`)
+    process.exit(1)
   }
   return newId
 }
@@ -21,13 +22,19 @@ export function parseNodeIds(figmaNodeUrls: string[]): string[] {
   for (const nodeURL of figmaNodeUrls) {
     const figmaNodeUrl = url.parse(nodeURL, true)
     const nodeId = figmaNodeUrl.query['node-id']
-    if (typeof nodeId !== 'string') {
-      logger.error(`Invalid figma node URL: ${nodeURL}, more than one node-id given`)
-      process.exit(1)
-    }
-    if (nodeId) {
+    if (nodeId && typeof nodeId === 'string') {
       const figmaNodeId = validateNodeId(nodeId)
       nodeIds.push(figmaNodeId)
+    } else if (!nodeId) {
+      logger.error(
+        `Invalid figma node URL: the provided url "${nodeURL}" does not contain a node-id`,
+      )
+      process.exit(1)
+    } else {
+      logger.error(
+        `Invalid figma node URL: the provided url "${nodeURL}" contains more than one node-id`,
+      )
+      process.exit(1)
     }
   }
   return nodeIds

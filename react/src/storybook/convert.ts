@@ -14,9 +14,9 @@ import {
   parseRenderFunction,
   getDefaultTemplate,
 } from '../common/parser'
-import { FigmaConnectConfig, ProjectInfo, getRemoteFileUrl } from '../common/project'
+import { CodeConnectConfig, ProjectInfo, getRemoteFileUrl } from '../common/project'
 import { logger } from '../common/logging'
-import { FigmaConnectJSON } from '../common/figma_connect'
+import { CodeConnectJSON } from '../common/figma_connect'
 import ts from 'typescript'
 import { FigmaConnectMeta } from '../common/api'
 import { minimatch } from 'minimatch'
@@ -35,17 +35,17 @@ interface ConvertStorybookFilesArgs {
 }
 
 /**
- * Converts all Storyboook files in a directory into Figmadoc objects. If a file
+ * Converts all Storyboook files in a directory into Code Connect objects. If a file
  * cannot be converted (e.g. unsupported syntax), it is ignored and an error is
  * logged.
  *
  * @param args
- * @returns An array of Figmadoc objects
+ * @returns An array of Code Connect objects
  */
 export async function convertStorybookFiles({
   projectInfo,
   storiesGlob = '**/*.stories.tsx',
-}: ConvertStorybookFilesArgs): Promise<FigmaConnectJSON[]> {
+}: ConvertStorybookFilesArgs): Promise<CodeConnectJSON[]> {
   const { remoteUrl, config, files, tsProgram } = projectInfo
 
   const storyFiles = files.filter((file) => minimatch(file, storiesGlob, { matchBase: true }))
@@ -67,7 +67,7 @@ interface ConvertStorybookFileArgs {
   path: string
   tsProgram: ts.Program
   remoteUrl: string
-  config?: FigmaConnectConfig
+  config?: CodeConnectConfig
 }
 
 type MappedPropType = 'FigmaString' | 'FigmaBoolean' | 'Mapped'
@@ -78,7 +78,7 @@ async function convertStorybookFile({
   tsProgram,
   remoteUrl,
   config,
-}: ConvertStorybookFileArgs): Promise<FigmaConnectJSON[] | undefined> {
+}: ConvertStorybookFileArgs): Promise<CodeConnectJSON[] | undefined> {
   const checker = tsProgram.getTypeChecker()
   const sourceFile = tsProgram.getSourceFile(path)
 
@@ -121,8 +121,8 @@ async function convertStorybookFile({
 
     const componentMetadata = await parseComponentMetadata(componentDeclaration, parserContext)
 
-    const figmadocs: FigmaConnectJSON[] = []
-    const baseFigmadoc: FigmaConnectJSON = {
+    const codeConnectObjects: CodeConnectJSON[] = []
+    const baseCodeConnect: CodeConnectJSON = {
       figmaNode: figmaStoryMetadata.url,
       source: getRemoteFileUrl(componentMetadata.source, remoteUrl),
       sourceLocation: { line: componentMetadata.line },
@@ -139,13 +139,13 @@ async function convertStorybookFile({
       },
     }
 
-    // If there are no examples, just return a default Figmadoc
+    // If there are no examples, just return a default Code Connect object
     if (!examples) {
-      figmadocs.push({
-        ...baseFigmadoc,
+      codeConnectObjects.push({
+        ...baseCodeConnect,
         template: getDefaultTemplate(componentMetadata),
       })
-      return figmadocs
+      return codeConnectObjects
     }
 
     for (const statement of sourceFile.statements) {
@@ -207,14 +207,14 @@ async function convertStorybookFile({
       const template = render.code ?? `<${componentMetadata.component} />`
 
       // TODO handle JSDoc on stories
-      figmadocs.push({
-        ...baseFigmadoc,
+      codeConnectObjects.push({
+        ...baseCodeConnect,
         template,
         variant: example?.variant,
       })
     }
 
-    return figmadocs
+    return codeConnectObjects
   } catch (e) {
     logger.error(`Error parsing story ${path}: ${e}`)
     throw e

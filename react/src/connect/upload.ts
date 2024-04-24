@@ -1,14 +1,14 @@
-import { FigmaConnectJSON } from '../common/figma_connect'
+import { CodeConnectJSON } from '../common/figma_connect'
 import { logger, underline, highlight } from '../common/logging'
 import axios, { isAxiosError } from 'axios'
 import { getApiUrl } from './figma_rest_api'
 
 interface Args {
   accessToken: string
-  docs: FigmaConnectJSON[]
+  docs: CodeConnectJSON[]
 }
 
-function figmaDocStr(doc: FigmaConnectJSON) {
+function codeConnectStr(doc: CodeConnectJSON) {
   return `${highlight(doc.component)}${doc.variant ? `(${Object.entries(doc.variant).map(([key, value]) => `${key}=${value}`)})` : ''} ${underline(doc.figmaNode)}`
 }
 
@@ -26,7 +26,7 @@ export async function upload({ accessToken, docs }: Args) {
     })
 
     logger.info(
-      `Successfully uploaded to Figma:\n${docs.map((doc) => `-> ${figmaDocStr(doc)}`).join('\n')}`,
+      `Successfully uploaded to Figma:\n${docs.map((doc) => `-> ${codeConnectStr(doc)}`).join('\n')}`,
     )
   } catch (err) {
     if (isAxiosError(err)) {

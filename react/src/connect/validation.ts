@@ -2,12 +2,12 @@ import * as url from 'url'
 import { chunk } from 'lodash'
 import axios, { isAxiosError } from 'axios'
 
-import { FigmaConnectJSON } from '../common/figma_connect'
+import { CodeConnectJSON } from '../common/figma_connect'
 import { logger } from '../common/logging'
 import { validateNodeId } from './helpers'
 import { getApiUrl } from './figma_rest_api'
 
-function parseFigmaNode(doc: FigmaConnectJSON): { fileKey: string; nodeId: string } | null {
+function parseFigmaNode(doc: CodeConnectJSON): { fileKey: string; nodeId: string } | null {
   const figmaNodeUrl = url.parse(doc.figmaNode, true)
   const fileKeyMatch = figmaNodeUrl.path?.match(/(file|design)\/([a-zA-Z0-9]+)/)
   if (!fileKeyMatch) {
@@ -63,7 +63,7 @@ async function fetchNodeInfo(
   }
 }
 
-function validateProps(doc: FigmaConnectJSON, document: any): boolean {
+function validateProps(doc: CodeConnectJSON, document: any): boolean {
   if (doc.templateData && doc.templateData?.props) {
     let propsValid = true
     const codeConnectProps = Object.keys(doc.templateData.props ?? {})
@@ -73,10 +73,10 @@ function validateProps(doc: FigmaConnectJSON, document: any): boolean {
       if (codeConnectProp.kind === 'children') {
         const codeConnectLayerNames = codeConnectProp.args.layers
         // Get all layer names in the figma doc
-        const figmaDocLayerNames: string[] = []
+        const figmaLayerNames: string[] = []
         const getLayerNames = (layer: any) => {
           if (layer.name) {
-            figmaDocLayerNames.push(layer.name)
+            figmaLayerNames.push(layer.name)
           }
           if (layer.children) {
             layer.children.forEach((child: any) => getLayerNames(child))
@@ -85,7 +85,7 @@ function validateProps(doc: FigmaConnectJSON, document: any): boolean {
         getLayerNames(document)
         // And make sure that the layer names in the code connect file are present in the figma doc
         for (const codeConnectLayerName of codeConnectLayerNames) {
-          if (!figmaDocLayerNames.includes(codeConnectLayerName)) {
+          if (!figmaLayerNames.includes(codeConnectLayerName)) {
             logger.error(
               `Validation failed for ${doc.component} (${doc.figmaNode}): The layer "${codeConnectLayerName}" does not exist on the Figma component`,
             )
@@ -140,7 +140,7 @@ function propMatches(
   return figmaPropName === codeConnectPropName
 }
 
-function validateVariantRestrictions(doc: FigmaConnectJSON, document: any): boolean {
+function validateVariantRestrictions(doc: CodeConnectJSON, document: any): boolean {
   if (doc.variant) {
     let variantRestrictionsValid = true
     const codeConnectVariantRestrictions = Object.keys(doc.variant)
@@ -183,7 +183,7 @@ function validateVariantRestrictions(doc: FigmaConnectJSON, document: any): bool
   return true
 }
 
-function validateDoc(doc: FigmaConnectJSON, figmaNode: any, nodeId: string): boolean {
+function validateDoc(doc: CodeConnectJSON, figmaNode: any, nodeId: string): boolean {
   if (!figmaNode || !figmaNode.document) {
     logger.error(
       `Validation failed for ${doc.component} (${doc.figmaNode}): node not found in file`,
@@ -220,10 +220,7 @@ function validateDoc(doc: FigmaConnectJSON, figmaNode: any, nodeId: string): boo
   return true
 }
 
-export async function validateDocs(
-  accessToken: string,
-  docs: FigmaConnectJSON[],
-): Promise<boolean> {
+export async function validateDocs(accessToken: string, docs: CodeConnectJSON[]): Promise<boolean> {
   let baseApiUrl = getApiUrl(docs?.[0]?.figmaNode ?? '') + '/files/'
 
   const fileKeyToNodeIds: { [key: string]: any } = {}
@@ -268,7 +265,7 @@ export async function validateDocs(
         nodeIdsChunk
           .map((nodeId: string) => {
             return nodeMap[nodeId]
-              .map((doc: FigmaConnectJSON) => validateDoc(doc, nodeMapRet[nodeId], nodeId))
+              .map((doc: CodeConnectJSON) => validateDoc(doc, nodeMapRet[nodeId], nodeId))
               .every(Boolean)
           })
           .every(Boolean)

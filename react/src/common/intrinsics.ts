@@ -85,7 +85,9 @@ function makeIntrinsic<K extends keyof FigmaConnectAPI>(
 ) {
   const name = `${API_PREFIX}.${intrinsicName}`
   Intrinsics[name] = {
-    match: (exp: ts.CallExpression) => ts.isCallExpression(exp) && exp.getText().includes(name),
+    match: (exp: ts.CallExpression) => {
+      return ts.isCallExpression(exp) && exp.getText().startsWith(name)
+    },
     ...obj(name),
   }
 }

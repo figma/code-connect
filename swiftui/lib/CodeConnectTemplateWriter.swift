@@ -38,7 +38,14 @@ extension PropMap {
 
     var functionParams: String {
         switch kind {
-        case .boolean, .string, .instance:
+        case .boolean:
+            return """
+            '\(args.figmaPropName)', {
+            'true': true,
+            'false': false
+            }
+            """
+        case .string, .instance:
             return "'\(args.figmaPropName)'"
         case .enumerable:
             if let valueMapping = args.valueMapping {

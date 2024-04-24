@@ -11,7 +11,26 @@ class CodeConnectParserTest: XCTestCase {
             sourceLocation: CodeConnectRequestBody.SourceLocation(line: 14),
             component: "FigmaButton",
             variant: ["Has Icon": .bool(true)],
-            template: "const figma = require(\'figma\')\n\nconst buttonVariant = figma.properties.enum(\'👥 Variant\', {\n\'Destructive\': \'ButtonVariant.danger\',\n\'FigJam\': \'ButtonVariant.figjam\',\n\'Inverse\': \'ButtonVariant.inverse\',\n\'Primary\': \'ButtonVariant.primary\',\n\'Secondary Danger\': \'ButtonVariant.secondaryDanger\',\n\'Secondary\': \'ButtonVariant.secondary\',\n\'Success\': \'ButtonVariant.success\'\n})\nconst disabled = figma.properties.boolean(\'🎛️ Disabled\')\nconst title = figma.properties.string(\'🎛️ Label\')\nexport default figma.swift`FigmaButton(variant: ${buttonVariant}, title: \"${title}\").disabled(${disabled})\n`",
+            template: """
+            const figma = require('figma')
+
+            const buttonVariant = figma.properties.enum('👥 Variant', {
+            'Destructive': 'ButtonVariant.danger',
+            'FigJam': 'ButtonVariant.figjam',
+            'Inverse': 'ButtonVariant.inverse',
+            'Primary': 'ButtonVariant.primary',
+            'Secondary Danger': 'ButtonVariant.secondaryDanger',
+            'Secondary': 'ButtonVariant.secondary',
+            'Success': 'ButtonVariant.success'
+            })
+            const disabled = figma.properties.boolean('🎛️ Disabled', {
+            'true': true,
+            'false': false
+            })
+            const title = figma.properties.string('🎛️ Label')
+            export default figma.swift`FigmaButton(variant: ${buttonVariant}, title: "${title}").disabled(${disabled})
+            `
+            """,
             templateData: TemplateData(
                 props: [
                     "buttonVariant": PropMap(

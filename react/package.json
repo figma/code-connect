@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -22,6 +22,7 @@
     "build": "tsc",
     "build:web": "pnpm build",
     "test": "NODE_OPTIONS=--experimental-vm-modules npx jest --coverage",
+    "test:fast": "NODE_OPTIONS=--experimental-vm-modules npx jest --coverage --testPathIgnorePatterns template_rendering.test.ts",
     "test-ci": "NODE_OPTIONS=--experimental-vm-modules npx jest --coverage --runInBand",
     "bundle": "npm run build && npm pack && mkdir -p bundle && mv figma-code-connect*.tgz bundle",
     "typecheck": "tsc --noEmit"
@@ -42,6 +43,7 @@
     "@babel/generator": "^7.23.6",
     "@babel/parser": "^7.23.6",
     "@babel/types": "^7.23.6",
+    
     "@storybook/csf-tools": "^7.6.7",
     "axios": "^1.6.0",
     "chalk": "^4.1.2",

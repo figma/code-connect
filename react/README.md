@@ -14,15 +14,15 @@ npm install @figma/code-connect
 
 ## Basic setup
 
-To connect your first component go to Dev Mode in Figma and right-click on the component you want to connect, then choose `Copy link to selection` from the menu. Make sure you are copying the link to a main component and not an instance of the component. The main component will typically be located in a centralized design system library file. Using this link, run `figma connect create`.
+To connect your first component go to Dev Mode in Figma and right-click on the component you want to connect, then choose `Copy link to selection` from the menu. Make sure you are copying the link to a main component and not an instance of the component. The main component will typically be located in a centralized design system library file. Using this link, run `figma connect create`. Note that depending on what terminal software you're using, you might need to wrap the URL in quotes.
 
 ```sh
-npx figma connect create https://... --token <auth token>
+npx figma connect create "https://..." --token <auth token>
 ```
 
 This will create a Code Connect file with some basic scaffolding for the component you want to connect. By default this file will be called `<component-name>.figma.tsx` based on the name of the component in Figma. However, you may rename this file as you see fit. The scaffolding that is generated is based on the interface of the component in Figma. Depending on how closely this matches your code component you'll need to make some edits to this file before you publish it.
 
-Some CLI commands, like `create`, require a valid [authentication token](https://help.figma.com/hc/en-us/articles/8085703771159-Manage-personal-access-tokens) with write permission for the Code Connect scope. You can either pass this via the `--token` flag, or set the `FIGMA_ACCESS_TOKEN` environment variable (the Figma CLI reads this from a `.env` file in the same folder, if it exists).
+Some CLI commands, like `create`, require a valid [authentication token](https://help.figma.com/hc/en-us/articles/8085703771159-Manage-personal-access-tokens) with write permission for the Code Connect scope. You can either pass this via the `--token` flag, or set the `FIGMA_ACCESS_TOKEN` environment variable. The Figma CLI reads this from a `.env` file in the same folder, if it exists.
 
 To keep things simple, we're going to start by replacing the contents of the generated file with the most basic Code Connect configuration possible to make sure everything is set up and working as expected. Replace the contents of the file with the following, replacing the `Button` reference with a reference to whatever component you are trying to connect. The object called by `figma.connect` is your Code Connect doc.
 
@@ -109,14 +109,14 @@ In addition to the [general configuration](../README.md) for the CLI there is Re
     "exclude": ["test/**", "docs/**", "build/**"],
 
     "react": {
-      importPaths: {
+      "importPaths": {
         "src/components/*": "@ui/components"
       },
 
-      paths: {
+      "paths": {
         "@ui/components/*": ["src/components/*"]
-      },
-    },
+      }
+    }
   }
 }
 ```
@@ -138,9 +138,15 @@ You can use `importPaths` by specifying where `Button` lives in your repo and ma
 consider the full absolute path of the source file `Button.tsx`.
 
 ```
-importPaths: {
-  "src/components/*": "@ui/components"
-},
+{
+  "codeConnect": {
+    "react": {
+      "importPaths": {
+        "src/components/*": "@ui/components"
+      }
+    }
+  }
+}
 ```
 
 Which will end up changing your connected code snippet in Figma to

@@ -1,6 +1,5 @@
 import ts from 'typescript'
-import * as prettier from 'prettier'
-import { FigmaConnectConfig, getRemoteFileUrl, resolveImportPath } from './project'
+import { CodeConnectConfig, getRemoteFileUrl, resolveImportPath } from './project'
 import { error, highlight, logger, reset } from './logging'
 import {
   assertIsObjectLiteralExpression,
@@ -11,16 +10,10 @@ import {
   parsePropertyOfType,
   parseFunctionArgument,
   isOneOf,
+  assertIsStringLiteral,
 } from './compiler'
-import {
-  FIGMA_CONNECT_CALL,
-  Intrinsic,
-  IntrinsicKind,
-  ValueMappingKind,
-  intrinsicToString,
-  parseIntrinsic,
-} from './intrinsics'
-import { FigmaConnectJSON } from './figma_connect'
+import { FIGMA_CONNECT_CALL, Intrinsic, intrinsicToString, parseIntrinsic } from './intrinsics'
+import { CodeConnectJSON } from './figma_connect'
 import { FigmaConnectMeta } from './api'
 import { getParsedTemplateHelpersString } from './parser_template_helpers'
 
@@ -66,7 +59,7 @@ export class InternalError extends ParserError {
 export interface ParserContext {
   checker: ts.TypeChecker
   sourceFile: ts.SourceFile
-  config: FigmaConnectConfig | undefined
+  config: CodeConnectConfig | undefined
 }
 
 /**
@@ -204,7 +197,7 @@ function getImportsForIdentifiers({ sourceFile }: ParserContext, _identifiers: s
 }
 
 /**
- * Parsers the `props` field of a `Figma.connect()` call, returning a mapping of
+ * Parsers the `props` field of a `figma.connect()` call, returning a mapping of
  * prop names to their respective intrinsic types
  *
  * @param objectLiteral An object literal expression
@@ -227,7 +220,7 @@ export type PropMappings = Record<string, Intrinsic>
 
 /**
  * Extract metadata about the referenced React component. Used by both the
- * Figmadoc and Storybook commands.
+ * Code Connect and Storybook commands.
  *
  * @param parserContext Parser context
  * @param componentSymbol The ts.Symbol from the metadata referencing the
@@ -344,11 +337,11 @@ export async function parseComponentMetadata(
 }
 
 /**
- * Checks if an AST node is a `Figma.connect()` call
+ * Checks if an AST node is a `figma.connect()` call
  *
  * @param node AST node
  * @param sourceFile Source file
- * @returns True if the node is a `Figma.connect()` call
+ * @returns True if the node is a `figma.connect()` call
  */
 function isFigmaConnectCall(node: ts.Node, sourceFile: ts.SourceFile): node is ts.CallExpression {
   return (
@@ -357,14 +350,14 @@ function isFigmaConnectCall(node: ts.Node, sourceFile: ts.SourceFile): node is t
 }
 
 /**
- * Checks if a file contains figmadoc by looking for the `Figma.connect()` function call
+ * Checks if a file contains Code Connect by looking for the `figma.connect()` function call
  *
  * @param program
  * @param file
  * @returns
  */
 export function isFigmaConnectFile(program: ts.Program, file: string) {
-  // We don't support Figmadoc in JSX and this throws an error if we let it proceed
+  // We don't support Code Connect in JSX and this throws an error if we let it proceed
   if (!file.endsWith('.tsx')) {
     return false
   }
@@ -385,7 +378,7 @@ export function isFigmaConnectFile(program: ts.Program, file: string) {
 }
 
 /**
- * Parses the `links` field of a `Figma.connect()` call
+ * Parses the `links` field of a `figma.connect()` call
  *
  * @param linksArray an ArrayLiteralExpression
  * @param parserContext Parser context
@@ -447,7 +440,25 @@ function parseVariant(
 }
 
 /**
- * Parses the render function passed to `Figma.connect()`, extracting the code and
+ * Parses the `imports` field of a `figma.connect()` call
+ *
+ * @param importsArray an ArrayLiteralExpression
+ * @param parserContext Parser context
+ * @returns An array of link objects
+ */
+function parseImports(importsArray: ts.ArrayLiteralExpression, parserContext: ParserContext) {
+  const { sourceFile } = parserContext
+  const imports: string[] = []
+  for (const element of importsArray.elements) {
+    assertIsStringLiteral(element, sourceFile, `'imports' must be an array literal with strings`)
+    imports.push(stripQuotes(element))
+  }
+
+  return imports
+}
+
+/**
+ * Parses the render function passed to `figma.connect()`, extracting the code and
  * any import statements matching the JSX elements used in the function body
  *
  * @param exp A function or arrow function expression
@@ -552,15 +563,30 @@ export function parseRenderFunction(
           if (
             ts.isJsxSpreadAttribute(node) &&
             ts.isIdentifier(node.expression) &&
-            node.expression.getText() === propsParameter.name.getText()
+            // example: (props) => (...)
+            (node.expression.getText() === propsParameter.name.getText() ||
+              // example: ({ prop1, prop2 ...props }) => (...)
+              (ts.isObjectBindingPattern(propsParameter.name) &&
+                propsParameter.name.elements.find(
+                  (el) => el.dotDotDotToken && el.name.getText() === node.expression?.getText(),
+                )))
           ) {
+            // if we have an object binding pattern ({ prop1, prop2 ...props }),
+            // exclude the props that are already destructured (prop1, prop2)
+            const propsToExclude = ts.isObjectBindingPattern(propsParameter.name)
+              ? propsParameter.name.elements
+                  .filter((el) => !el.dotDotDotToken)
+                  .map((el) => el.name.getText())
+              : []
             const props = propMappings
-              ? Object.keys(propMappings).map((prop) => {
-                  return ts.factory.createJsxAttribute(
-                    ts.factory.createIdentifier(prop),
-                    createPropPlaceholder(prop, node, true) as ts.JsxExpression,
-                  )
-                })
+              ? Object.keys(propMappings)
+                  .filter((prop) => !propsToExclude.includes(prop))
+                  .map((prop) => {
+                    return ts.factory.createJsxAttribute(
+                      ts.factory.createIdentifier(prop),
+                      createPropPlaceholder(prop, node, true) as ts.JsxExpression,
+                    )
+                  })
               : []
 
             if (propMappings) {
@@ -680,7 +706,7 @@ export function parseRenderFunction(
 
 /**
  * This wrapper function ensures that property names are type checked in case
- * we make changes to the `Figma.connect()` interface.
+ * we make changes to the `figma.connect()` interface.
  */
 function makeConfigPropertyParser<T extends ts.Node>({
   key,
@@ -825,6 +851,15 @@ function makeArgParser() {
   ]
 })\``,
     }),
+
+    parseImports: makeConfigPropertyParser({
+      key: 'imports',
+      predicate: ts.isArrayLiteralExpression,
+      errorMessage: `The 'imports' property must be an array literal. Example usage:
+\`${FIGMA_CONNECT_CALL}(Button, 'https://www.figma.com/file/123?node-id=1-1', {
+  imports: ['import { Button } from "./Button"']
+})\``,
+    }),
   }
 }
 
@@ -839,10 +874,10 @@ async function parseDoc(
   node: ts.CallExpression,
   parserContext: ParserContext,
   repoUrl?: string,
-): Promise<FigmaConnectJSON> {
+): Promise<CodeConnectJSON> {
   const { checker, sourceFile, config } = parserContext
 
-  // Parse the arguments to the `Figma.connect()` call
+  // Parse the arguments to the `figma.connect()` call
   const args = makeArgParser()
   // The ones with ! are definitely defined because their parser fn has required: true,
   // but I couldn't work out how to model that in TypeScript
@@ -853,6 +888,7 @@ async function parseDoc(
   const exampleArg = configObjArg && args.parseExample(configObjArg, parserContext)
   const variantArg = configObjArg && args.parseVariant(configObjArg, parserContext)
   const linksArg = configObjArg && args.parseLinks(configObjArg, parserContext)
+  const importsArg = configObjArg && args.parseImports(configObjArg, parserContext)
 
   let figmaNode = stripQuotes(figmaNodeUrlArg)
   if (config?.documentUrlSubstitutions) {
@@ -867,39 +903,46 @@ async function parseDoc(
   const variant = variantArg ? parseVariant(variantArg, sourceFile, checker) : undefined
   const links = linksArg ? parseLinks(linksArg, parserContext) : undefined
 
-  // If no template function was provided, construct one and add the import
-  // statement for the component
-  let imports = render?.imports ?? getImportsForIdentifiers(parserContext, [metadata.component])
-  const template = render?.code ?? getDefaultTemplate(metadata)
-  if (imports.length === 0) {
-    // If no imports were found, it might mean that the component is not imported, or
-    // that the `figma.connect` call is in the same file as the component. In the latter
-    // case - we'll want to generate one
-    const fileName = metadata.source.split('/').pop()?.split('.')[0]
-    imports = [
-      {
-        statement: `import { ${metadata.component} } from './${fileName}'`,
-        file: sourceFile.fileName,
-      },
-    ]
-  }
+  let resolvedImports: string[]
+  if (importsArg) {
+    resolvedImports = parseImports(importsArg, parserContext)
+  } else {
+    // Use auto-generated imports
+    // If no template function was provided, construct one and add the import
+    // statement for the component
+    let imports = render?.imports ?? getImportsForIdentifiers(parserContext, [metadata.component])
+    if (imports.length === 0) {
+      // If no imports were found, it might mean that the component is not imported, or
+      // that the `figma.connect` call is in the same file as the component. In the latter
+      // case - we'll want to generate one
+      const fileName = metadata.source.split('/').pop()?.split('.')[0]
+      imports = [
+        {
+          statement: `import { ${metadata.component} } from './${fileName}'`,
+          file: sourceFile.fileName,
+        },
+      ]
+    }
 
-  const resolvedImports: string[] =
-    imports.map((imp) => {
-      if (config) {
-        const resolvedPath = resolveImportPath(imp.file, config)
-        if (resolvedPath) {
-          return imp.statement.replace(/['"]([\.\/a-zA-Z0-9]*)['"]/, `'${resolvedPath}'`)
+    resolvedImports =
+      imports.map((imp) => {
+        if (config) {
+          const resolvedPath = resolveImportPath(imp.file, config)
+          if (resolvedPath) {
+            return imp.statement.replace(/['"]([\.\/a-zA-Z0-9]*)['"]/, `'${resolvedPath}'`)
+          }
         }
-      }
-      return imp.statement
-    }) ?? []
+        return imp.statement
+      }) ?? []
 
-  if (resolvedImports.length === 0) {
-    logger.warn(
-      `The import statement for ${metadata.component} could not be automatically resolved, make sure the component is imported (if not colocating) and that the path mappings are correct in your figma.config.json`,
-    )
+    if (resolvedImports.length === 0) {
+      logger.warn(
+        `The import statement for ${metadata.component} could not be automatically resolved, make sure the component is imported (if not colocating) and that the path mappings are correct in your figma.config.json`,
+      )
+    }
   }
+
+  const template = render?.code ?? getDefaultTemplate(metadata)
 
   return {
     figmaNode,
@@ -929,7 +972,7 @@ export async function parse(
   program: ts.Program,
   file: string,
   repoUrl?: string,
-  config?: FigmaConnectConfig,
+  config?: CodeConnectConfig,
   debug?: boolean,
 ): Promise<any[]> {
   const sourceFile = program.getSourceFile(file)
@@ -943,7 +986,7 @@ export async function parse(
     config,
   }
 
-  const figmadocs: FigmaConnectJSON[] = []
+  const codeConnectObjects: CodeConnectJSON[] = []
 
   const nodes: ts.Node[] = [parserContext.sourceFile]
   while (nodes.length > 0) {
@@ -951,18 +994,18 @@ export async function parse(
     if (isFigmaConnectCall(node, parserContext.sourceFile)) {
       const doc = await parseDoc(node, parserContext, repoUrl)
       if (doc) {
-        figmadocs.push(doc)
+        codeConnectObjects.push(doc)
       }
     }
     nodes.push(...node.getChildren(parserContext.sourceFile))
   }
 
-  if (figmadocs.length === 0) {
-    throw new ParserError(`Didn't find any calls to Figmadoc()`, {
+  if (codeConnectObjects.length === 0) {
+    throw new ParserError(`Didn't find any calls to figma.connect()`, {
       sourceFile: parserContext.sourceFile,
       node: parserContext.sourceFile,
     })
   }
 
-  return figmadocs
+  return codeConnectObjects
 }

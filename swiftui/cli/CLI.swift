@@ -16,9 +16,17 @@ struct FigmaConnectError: LocalizedError {
 }
 
 struct Config: Codable {
-    let importMapping: [String: String]?
-    let include: [String]?
-    let exclude: [String]?
+    struct FigmaConnectConfig: Codable {
+        let swift: SwiftConfig?
+        let include: [String]?
+        let exclude: [String]?
+    }
+
+    struct SwiftConfig: Codable {
+        let importPaths: [String: String]?
+    }
+
+    let codeConnect: FigmaConnectConfig
 }
 
 @main
@@ -46,7 +54,7 @@ struct Connect: AsyncParsableCommand {
             "If no config file is found, this parses the current directory. An optional `--dir` flag can be used to specify a directory to parse."
         )
 
-        @Option(name: [.customLong("access-token"), .customShort("t")], help: "Figma API Token with read access to dev resources.")
+        @Option(name: [.customLong("token"), .customShort("t")], help: "Figma API Token with write access to Code Connect.")
         public var accessToken: String?
 
 
@@ -62,7 +70,7 @@ struct Connect: AsyncParsableCommand {
             }
 
             let config = try Connect.getConfigFromConfigPath(configPath: configPath)
-            if config?.include != nil  && dir != nil {
+            if config?.codeConnect.include != nil  && dir != nil {
                 throw ValidationError("Could not resolve search paths since both a config file and directory were provided.")
             }
             let result = try parseCodeConnects(config: config, dir: dir)
@@ -92,7 +100,7 @@ struct Connect: AsyncParsableCommand {
             "If no config file is found, this parses the current directory. An optional `--dir` flag can be used to specify a directory to parse."
         )
 
-        @Option(name: [.customLong("access-token"), .customShort("t")], help: "Figma API Token with read access to dev resources.")
+        @Option(name: [.customLong("access-token"), .customShort("t")], help: "Figma API Token with write access to Code Connect.")
         public var accessToken: String?
 
         @Option(name: .shortAndLong, help: "Path to a configuration json file")
@@ -104,12 +112,15 @@ struct Connect: AsyncParsableCommand {
         @Flag(name: .customLong("skip-validation"), help: "Skip validation of code connect files.")
         public var skipValidation: Bool = false
 
+        @Flag(name: .customLong("dry-run"), help: "Performs a dry run of publishing, returning errors if any exist but does not publish your connected components.")
+        public var dryRun: Bool = false
+
         public func run() async throws {
             guard let token = accessToken ?? ProcessInfo.processInfo.environment["FIGMA_ACCESS_TOKEN"] else {
-                throw ValidationError("Code Connect requires a valid API key. Use the --access-token parameter to specify a valid API key or set the \"FIGMA_ACCESS_TOKEN\" environment variable.")
+                throw ValidationError("Code Connect requires a valid API key. Use the --token parameter to specify a valid API key or set the \"FIGMA_ACCESS_TOKEN\" environment variable.")
             }
             let config = try Connect.getConfigFromConfigPath(configPath: configPath)
-            guard config?.include == nil || dir == nil else {
+            guard config?.codeConnect.include == nil || dir == nil else {
                 throw ValidationError("Couldn't resolve which paths should be searched in since both a config file with include and directory were provided")
             }
             let result = try parseCodeConnects(config: config, dir: dir)
@@ -121,7 +132,7 @@ struct Connect: AsyncParsableCommand {
                 return
             }
 
-            print("Attemping to publish \(codeConnectFiles.count) Code Connection(s). \(result.errors) connection(s) failed to parse.")
+            print("Parsed \(codeConnectFiles.count) Code Connection(s). \(result.errors) connection(s) failed to parse.")
 
             if !skipValidation {
                 print("Validating code connect files.")
@@ -129,12 +140,18 @@ struct Connect: AsyncParsableCommand {
                     return
                 }
             }
-
-            try await CodeConnectUploader.uploadFigmaConnectFiles(docs: codeConnectFiles, token: token)
-
+            
             let codeConnectLogStatements = codeConnectFiles.map({ codeConnect in
                 return codeConnect.infoLabel()
             }).joined(separator: "\n")
+
+            if dryRun {
+                print ("Succesfully validated:\n\(codeConnectLogStatements)")
+                return
+            }
+
+            try await CodeConnectUploader.uploadFigmaConnectFiles(docs: codeConnectFiles, token: token)
+
             print("Successfully published:\n\(codeConnectLogStatements)")
         }
     }
@@ -148,7 +165,7 @@ struct Connect: AsyncParsableCommand {
         @Argument
         public var nodeUrl: String
 
-        @Option(name: [.customLong("access-token"), .customShort("t")], help: "Figma API Token with read access to dev resources.")
+        @Option(name: [.customLong("access-token"), .customShort("t")], help: "Figma API Token with write access to Code Connect.")
         public var accessToken: String?
 
         @Option(name: .shortAndLong, help: "Output figmadoc file")
@@ -182,7 +199,7 @@ struct Connect: AsyncParsableCommand {
 
         public func run() async throws {
             let config = try Connect.getConfigFromConfigPath(configPath: configPath)
-            if config?.include != nil  && dir != nil {
+            if config?.codeConnect.include != nil  && dir != nil {
                 throw ValidationError("Couldn't resolve which paths should be searched in since both a config file with include and directory were provided")
             }
             let result = try parseCodeConnects(config: config, dir: dir)
@@ -208,7 +225,7 @@ struct Connect: AsyncParsableCommand {
 
     static func parseCodeConnects(config: Config?, dir: String?) throws -> CodeConnectParserResult {
         var codeConnectSearchPaths: [URL]
-        if let config, config.include != nil {
+        if let config, config.codeConnect.include != nil {
             codeConnectSearchPaths = Connect.getSearchPathsFromConfig(config: config)
         } else {
             let dir = dir ?? FileManager.default.currentDirectoryPath
@@ -220,7 +237,7 @@ struct Connect: AsyncParsableCommand {
         // Find all figmadoc conforming components
         return CodeConnectParser.createCodeConnects(
             codeConnectSearchPaths,
-            importMapping: config?.importMapping ?? [:],
+            importMapping: config?.codeConnect.swift?.importPaths ?? [:],
             sourceControlPath: gitRemoteUrl
         )
     }
@@ -251,9 +268,9 @@ struct Connect: AsyncParsableCommand {
     }
 
     static func getSearchPathsFromConfig(config: Config) -> [URL] {
-        let includedFiles = CodeConnectParser.getFilesMatching(config.include ?? ["*"])
-        let excludedFiles = (config.exclude != nil)
-            ? CodeConnectParser.getFilesMatching(config.exclude!)
+        let includedFiles = CodeConnectParser.getFilesMatching(config.codeConnect.include ?? ["*"])
+        let excludedFiles = (config.codeConnect.exclude != nil)
+        ? CodeConnectParser.getFilesMatching(config.codeConnect.exclude!)
             : []
 
         return Array(Set(includedFiles).subtracting(Set(excludedFiles)).compactMap { URL(fileURLWithPath: $0) })

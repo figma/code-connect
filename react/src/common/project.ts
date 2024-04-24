@@ -6,25 +6,7 @@ import ts from 'typescript'
 import { logger } from './logging'
 
 const DEFAULT_CONFIG_FILE_NAME = 'figma.config.json'
-export interface FigmaConnectConfig {
-  /**
-   * Maps imports from their path on disk to the specified path.
-   * This will rewrite the imports in generated code examples, so it works with
-   * relative imports such as `import { Button } from "./"`.
-   *
-   * Example: { "src/components/*": "@ui/components" }
-   * Would rewrite imports for components located in `src/components` to `@ui/components` in
-   * generated code examples.
-   * `import { Button } from "./"` -> `import { Button } from "@ui/components/Button"`
-   */
-  importPaths?: Record<string, string>
-  /**
-   * For import resolution - this is a temporary solution to support projects that use
-   * pnpm workspaces, as the compiler doesn't seem to be able to resolve imports when
-   * the package in node_modules is a symlink. Need to look into this more and find a
-   * better solution.
-   */
-  paths?: Record<string, string[]>
+export interface CodeConnectConfig {
   /**
    * Specify glob patterns for files (relative to the project root) to be
    * included when looking for source files. If not specified, all files
@@ -43,10 +25,33 @@ export interface FigmaConnectConfig {
    * staging URL). Not publicly documented.
    */
   documentUrlSubstitutions?: Record<string, string>
+  /**
+   * React specific configuration
+   */
+  react?: {
+    /**
+     * Maps imports from their path on disk to the specified path.
+     * This will rewrite the imports in generated code examples, so it works with
+     * relative imports such as `import { Button } from "./"`.
+     *
+     * Example: { "src/components/*": "@ui/components" }
+     * Would rewrite imports for components located in `src/components` to `@ui/components` in
+     * generated code examples.
+     * `import { Button } from "./"` -> `import { Button } from "@ui/components/Button"`
+     */
+    importPaths?: Record<string, string>
+    /**
+     * For import resolution - this is a temporary solution to support projects that use
+     * pnpm workspaces, as the compiler doesn't seem to be able to resolve imports when
+     * the package in node_modules is a symlink. Need to look into this more and find a
+     * better solution.
+     */
+    paths?: Record<string, string[]>
+  }
 }
 
 interface FigmaConfig {
-  codeConnect?: FigmaConnectConfig
+  codeConnect?: CodeConnectConfig
 }
 
 function parseConfig(configFilePath: string): FigmaConfig | undefined {
@@ -138,7 +143,7 @@ export interface ProjectInfo {
   /**
    * The parsed Code Connect config file
    */
-  config?: FigmaConnectConfig
+  config?: CodeConnectConfig
   /**
    * TS program containing all tsx files in the project
    */
@@ -162,6 +167,16 @@ export function getProjectInfo(dir: string, configPath?: string): ProjectInfo {
     : path.resolve(path.join(dir, DEFAULT_CONFIG_FILE_NAME))
   const globalConfig = configFilePath ? parseConfig(configFilePath) : undefined
   const config = globalConfig?.codeConnect
+
+  // `importPaths` and `paths` previously (incorrectly) lived in the global `codeConnect` config -
+  // some early users may have it defined here so we'll log this error message to notify them to move it
+  if (globalConfig && (globalConfig.codeConnect as any).importPaths) {
+    logger.error(`The 'importPaths' option in the config file should be specified under 'react'`)
+  }
+
+  if (globalConfig && (globalConfig.codeConnect as any).paths) {
+    logger.error(`The 'paths' option in the config file should be specified under 'react'`)
+  }
 
   if (!globalConfig) {
     logger.info(`No config file found in ${dir}, proceeding with default options`)
@@ -194,7 +209,7 @@ export function getProjectInfo(dir: string, configPath?: string): ProjectInfo {
     // TODO: not sure why Node10 is needed her, but otherwise module resolution for
     // pnpm workspaces won't work
     moduleResolution: ts.ModuleResolutionKind.Node10,
-    paths: config?.paths ?? {},
+    paths: config?.react?.paths ?? {},
     allowJs: true,
   }
   const tsProgram = ts.createProgram(files, compilerOptions)
@@ -208,7 +223,7 @@ export function getProjectInfo(dir: string, configPath?: string): ProjectInfo {
   }
 }
 
-export function resolveImportPath(filePath: string, config: FigmaConnectConfig): string | null {
+export function resolveImportPath(filePath: string, config: CodeConnectConfig): string | null {
   function isMatch(patternParts: string[], pathParts: string[]) {
     for (let i = 0; i < patternParts.length; i++) {
       if (patternParts[i] !== '*' && patternParts[i] !== pathParts[i]) {
@@ -218,11 +233,10 @@ export function resolveImportPath(filePath: string, config: FigmaConnectConfig):
     return true
   }
 
-  for (const [key, value] of Object.entries(config.importPaths || {})) {
+  for (const [key, value] of Object.entries(config.react?.importPaths || {})) {
     // Do a partial match from the end of the path
     const patternParts = key.split('/').reverse()
     const pathParts = filePath.split('/').reverse()
-
     if (pathParts.length < patternParts.length) {
       continue
     }

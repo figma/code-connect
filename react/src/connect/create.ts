@@ -85,7 +85,7 @@ function generateProps(component: FigmaRestApi.Component) {
 }`
 }
 
-export async function createFigmadocFromUrl({
+export async function createCodeConnectFromUrl({
   accessToken,
   figmaNodeUrl,
   outFile,
@@ -111,7 +111,8 @@ export async function createFigmadocFromUrl({
 
       logger.info('Generating Code Connect file...')
 
-      const figmadoc = `
+      const codeConnect = `
+import React from 'react'
 import { ${componentName} } from './${componentName}'
 import figma from '@figma/code-connect'
 
@@ -128,7 +129,7 @@ figma.connect(${componentName}, "${figmaNodeUrl}", {
   example: (props) => <${componentName} />
 })
 `
-      let formatted = await prettier.format(figmadoc, {
+      let formatted = await prettier.format(codeConnect, {
         parser: 'typescript',
         semi: false,
       })

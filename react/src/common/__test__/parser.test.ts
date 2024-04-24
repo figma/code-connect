@@ -1,10 +1,10 @@
 import { ParserError, parse } from '../parser'
 import ts from 'typescript'
 import path from 'path'
-import { FigmaConnectConfig } from '../project'
-import { readFileSync, writeFileSync } from 'fs'
+import { CodeConnectConfig } from '../project'
+import { readFileSync } from 'fs'
 
-async function testParse(file: string, extraFiles: string[] = [], config?: FigmaConnectConfig) {
+async function testParse(file: string, extraFiles: string[] = [], config?: CodeConnectConfig) {
   const program = ts.createProgram(
     [
       path.join(__dirname, file),
@@ -12,7 +12,7 @@ async function testParse(file: string, extraFiles: string[] = [], config?: Figma
       ...extraFiles.map((file) => path.join(__dirname, file)),
     ],
     {
-      paths: config?.paths ?? {},
+      paths: config?.react?.paths ?? {},
     },
   )
   return await parse(
@@ -124,8 +124,10 @@ describe('Parser (JS templates)', () => {
 
   it('should rewrite paths if importPaths is specified', async () => {
     const result = await testParse('ButtonTest.figma.tsx', [], {
-      importPaths: {
-        '__test__/*': '@lib',
+      react: {
+        importPaths: {
+          '__test__/*': '@lib',
+        },
       },
     })
 
@@ -140,8 +142,10 @@ describe('Parser (JS templates)', () => {
 
   it('should handle rewriting * paths', async () => {
     const result = await testParse('ButtonTest.figma.tsx', [], {
-      importPaths: {
-        '__test__/*': '@lib/*',
+      react: {
+        importPaths: {
+          '__test__/*': '@lib/*',
+        },
       },
     })
 
@@ -156,8 +160,10 @@ describe('Parser (JS templates)', () => {
 
   it('should insert import statements into examples', async () => {
     const result = await testParse('ImportMappingsTest.figma.tsx', ['ImportMappingsTest.tsx'], {
-      importPaths: {
-        '__test__/*': '@lib/*',
+      react: {
+        importPaths: {
+          '__test__/*': '@lib/*',
+        },
       },
     })
 
@@ -428,6 +434,68 @@ describe('Parser (JS templates)', () => {
     ])
   })
 
+  it('generates Code Connect for components with destructuring and spread props', async () => {
+    const tsProgram = ts.createProgram(
+      [
+        path.join(__dirname, 'PropsSpread.tsx'),
+        path.join(__dirname, 'PropsSpreadWithDestructuring.figma.tsx'),
+      ],
+      {},
+    )
+
+    const result = await parse(
+      tsProgram,
+      path.join(__dirname, 'PropsSpreadWithDestructuring.figma.tsx'),
+    )
+
+    expect(result).toMatchObject([
+      {
+        figmaNode: 'spreadWithDestructuring',
+        component: 'Button',
+        label: 'React',
+        language: 'typescript',
+        source: '',
+        sourceLocation: { line: 8 },
+        template: getExpectedTemplate('PropsSpreadWithDestructuring'),
+        templateData: {
+          props: {
+            variant: {
+              kind: 'enum',
+              args: {
+                figmaPropName: 'Variant',
+                valueMapping: {
+                  Primary: 'primary',
+                  Destructive: 'destructive',
+                  Inverse: 'inverse',
+                  Success: 'success',
+                  FigJam: 'FigJam',
+                  Secondary: 'secondary',
+                  'Secondary Destruct': 'destructive-secondary',
+                },
+              },
+            },
+            width: {
+              kind: 'enum',
+              args: {
+                figmaPropName: 'Size',
+                valueMapping: {
+                  Default: 'hug-contents',
+                  Large: undefined,
+                  Wide: 'fit-parent',
+                },
+              },
+            },
+            disabled: {
+              kind: 'boolean',
+              args: { figmaPropName: 'Disabled' },
+            },
+          },
+          imports: ["import { Button } from './PropsSpread'"],
+        },
+      },
+    ])
+  })
+
   it('generates Code Connect for components with no props', async () => {
     const result = await testParse('NoProps.figma.tsx')
 
@@ -451,8 +519,10 @@ describe('Parser (JS templates)', () => {
 
     // with `paths` set the import should resolve correctly
     const withAlias = await testParse('PathAliasImport.figma.tsx', [], {
-      paths: {
-        '@components/*': [path.join(__dirname, '*')],
+      react: {
+        paths: {
+          '@components/*': [path.join(__dirname, '*')],
+        },
       },
     })
     expect(withAlias).toMatchObject([
@@ -477,8 +547,10 @@ describe('Parser (JS templates)', () => {
 
   it('Can map import paths for a generated import statement for co-located components', async () => {
     const result = await testParse('ColocatedCodeConnect.tsx', [], {
-      importPaths: {
-        '__test__/*': '@lib/*',
+      react: {
+        importPaths: {
+          '__test__/*': '@lib/*',
+        },
       },
     })
 
@@ -487,6 +559,26 @@ describe('Parser (JS templates)', () => {
         component: 'ColocatedButton',
         templateData: {
           imports: ["import { ColocatedButton } from '@lib/ColocatedCodeConnect'"],
+        },
+      },
+    ])
+  })
+
+  it('Handles custom imports', async () => {
+    const result = await testParse('CustomImports.figma.tsx', [], {
+      react: {
+        // It should ignore importPaths mappings
+        importPaths: {
+          '__test__/*': '@lib/*',
+        },
+      },
+    })
+
+    expect(result).toMatchObject([
+      {
+        component: 'Button',
+        templateData: {
+          imports: ['import Button from "@ui/Button"', 'import { myHook } from "@ui/hooks"'],
         },
       },
     ])

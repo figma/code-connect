@@ -159,6 +159,13 @@ export interface FigmaConnectMeta<T = {}, ExtraExampleT = never> {
   example?: ((props: T) => React.Component | JSX.Element) | ExtraExampleT
 
   /**
+   * A list of import statements that will render in the Code Snippet in Figma.
+   * This overrides the auto-generated imports for the component. When this is specified,
+   * the `importPaths` option in the config file is also ignored.
+   */
+  imports?: string[]
+
+  /**
    * A list of links that will display in Figma along with the examples
    */
   links?: FigmaConnectLink[]

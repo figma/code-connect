@@ -94,7 +94,7 @@ describe('convertStorybookFiles (JS templates)', () => {
   })
 
   describe('story styles', () => {
-    const expectedFigmadoc = [
+    const expectedCodeConnect = [
       {
         figmaNode: 'https://figma.com/test',
         source:
@@ -112,12 +112,12 @@ describe('convertStorybookFiles (JS templates)', () => {
 
     it('handles function stories', async () => {
       const result = await convertStorybookFile('FunctionStories.stories.tsx')
-      expect(result).toMatchObject(expectedFigmadoc)
+      expect(result).toMatchObject(expectedCodeConnect)
     })
 
     it('handles arrow function stories with explicit return', async () => {
       const result = await convertStorybookFile('ArrowStoriesExplicitReturn.stories.tsx')
-      expect(result).toMatchObject(expectedFigmadoc)
+      expect(result).toMatchObject(expectedCodeConnect)
     })
 
     it('handles arrow function stories with implicit return', async () => {
@@ -157,7 +157,7 @@ describe('convertStorybookFiles (JS templates)', () => {
   })
 
   describe('prop mapping', () => {
-    const expectedFigmadoc = [
+    const expectedCodeConnect = [
       {
         figmaNode: 'https://figma.com/test',
         source:
@@ -197,7 +197,7 @@ describe('convertStorybookFiles (JS templates)', () => {
 
     it('handles prop mapping', async () => {
       const result = await convertStorybookFile('PropMapping.stories.tsx')
-      expect(result).toMatchObject(expectedFigmadoc)
+      expect(result).toMatchObject(expectedCodeConnect)
     })
   })
 

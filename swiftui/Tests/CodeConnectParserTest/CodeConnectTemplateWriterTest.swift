@@ -59,7 +59,10 @@ class CodeConnectTemplateWriterTest: XCTestCase {
         'Destructive': 'ButtonVariant.danger',
         'Primary': 'ButtonVariant.primary'
         })
-        const disabled = figma.properties.boolean('Disabled')
+        const disabled = figma.properties.boolean('Disabled', {
+        'true': true,
+        'false': false
+        })
         const icon = figma.properties.instance('Icon')
         const title = figma.properties.string('Label')
         export default figma.swift`Button(variant: ${buttonVariant})\n    .disabled(${disabled})\n    .title("${title}")\n`

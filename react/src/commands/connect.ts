@@ -3,10 +3,10 @@ import { InternalError, ParserError, isFigmaConnectFile, parse } from '../common
 import fs from 'fs'
 import { upload } from '../connect/upload'
 import { validateDocs } from '../connect/validation'
-import { createFigmadocFromUrl } from '../connect/create'
+import { createCodeConnectFromUrl } from '../connect/create'
 import { ProjectInfo, getProjectInfo } from '../common/project'
 import { LogLevel, error, highlight, logger, success } from '../common/logging'
-import { FigmaConnectJSON } from '../common/figma_connect'
+import { CodeConnectJSON } from '../common/figma_connect'
 import { convertStorybookFiles } from '../storybook/convert'
 import { delete_docs } from '../connect/delete_docs'
 
@@ -89,8 +89,8 @@ function setupHandler(cmd: BaseCommand) {
   }
 }
 
-async function getFigmadocs(dir: string, cmd: BaseCommand, projectInfo: ProjectInfo) {
-  const figmadocs: FigmaConnectJSON[] = []
+async function getCodeConnectObjects(dir: string, cmd: BaseCommand, projectInfo: ProjectInfo) {
+  const codeConnectObjects: CodeConnectJSON[] = []
   const { files, remoteUrl, config, tsProgram } = projectInfo
 
   const figmaNodeToFile = new Map()
@@ -100,7 +100,7 @@ async function getFigmadocs(dir: string, cmd: BaseCommand, projectInfo: ProjectI
       for (const doc of docs) {
         figmaNodeToFile.set(doc.figmaNode, file)
       }
-      figmadocs.push(...docs)
+      codeConnectObjects.push(...docs)
       logger.info(success(file))
     } catch (e) {
       logger.error(`❌ ${file}`)
@@ -120,7 +120,7 @@ async function getFigmadocs(dir: string, cmd: BaseCommand, projectInfo: ProjectI
     }
   }
 
-  return figmadocs
+  return codeConnectObjects
 }
 
 async function handlePublish(cmd: BaseCommand & { skipValidation: boolean }) {
@@ -133,12 +133,12 @@ async function handlePublish(cmd: BaseCommand & { skipValidation: boolean }) {
     logger.info(`Files that would be published:`)
   }
 
-  const figmadocs = await getFigmadocs(dir, cmd, projectInfo)
-  const storybookFigmadocs = await convertStorybookFiles({
+  const codeConnectObjects = await getCodeConnectObjects(dir, cmd, projectInfo)
+  const storybookCodeConnectObjects = await convertStorybookFiles({
     projectInfo,
   })
 
-  const allCodeConnectFiles = figmadocs.concat(storybookFigmadocs)
+  const allCodeConnectFiles = codeConnectObjects.concat(storybookCodeConnectObjects)
   if (allCodeConnectFiles.length === 0) {
     logger.warn(
       `No Code Connect files found in ${dir} - Make sure you have configured \`include\` and \`exclude\` in your figma.config.json file correctly, or that you are running in a directory that contains Code Connect files.`,
@@ -196,12 +196,12 @@ async function handleUnpublish(cmd: BaseCommand & { node: string }) {
   } else {
     const projectInfo = getProjectInfo(dir, cmd.config)
 
-    const figmadocs = await getFigmadocs(dir, cmd, projectInfo)
-    const storybookFigmadocs = await convertStorybookFiles({
+    const codeConnectObjects = await getCodeConnectObjects(dir, cmd, projectInfo)
+    const storybookCodeConnectObjects = await convertStorybookFiles({
       projectInfo,
     })
 
-    const allCodeConnectFiles = figmadocs.concat(storybookFigmadocs)
+    const allCodeConnectFiles = codeConnectObjects.concat(storybookCodeConnectObjects)
 
     nodesToDeleteRelevantInfo = allCodeConnectFiles.map((doc) => ({
       figmaNode: doc.figmaNode,
@@ -233,12 +233,12 @@ async function handleParse(cmd: BaseCommand) {
   let dir = cmd.dir ?? process.cwd()
   const projectInfo = getProjectInfo(dir, cmd.config)
 
-  const figmadocs = await getFigmadocs(dir, cmd, projectInfo)
-  const storybookFigmadocs = await convertStorybookFiles({
+  const codeConnectObjects = await getCodeConnectObjects(dir, cmd, projectInfo)
+  const storybookCodeConnectObjects = await convertStorybookFiles({
     projectInfo,
   })
 
-  const allCodeConnectFiles = figmadocs.concat(storybookFigmadocs)
+  const allCodeConnectFiles = codeConnectObjects.concat(storybookCodeConnectObjects)
 
   if (cmd.dryRun) {
     logger.info(`Dry run complete`)
@@ -246,7 +246,7 @@ async function handleParse(cmd: BaseCommand) {
   }
 
   if (cmd.outfile) {
-    fs.writeFileSync(cmd.outfile, JSON.stringify(figmadocs, null, 2))
+    fs.writeFileSync(cmd.outfile, JSON.stringify(codeConnectObjects, null, 2))
     logger.info(`Wrote Code Connect JSON to ${highlight(cmd.outfile)}`)
   } else {
     // don't format the output, so it can be piped to other commands
@@ -269,7 +269,7 @@ function handleCreate(nodeUrl: string, cmd: BaseCommand) {
     process.exit(1)
   }
 
-  return createFigmadocFromUrl({
+  return createCodeConnectFromUrl({
     accessToken,
     // We remove \s to allow users to paste URLs inside quotes - the terminal
     // paste will add backslashes, which the quotes preserve, but expected user

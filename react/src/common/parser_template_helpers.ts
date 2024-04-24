@@ -1,3 +1,9 @@
+/* istanbul ignore file */
+// This file needs to be ignored from code coverage, as Istanbul adds extra calls
+// to `cov_*` functions which are used to track coverage, but these functions
+// can't be resolved when executing the templates from the unit tests inside
+// `new Function()`
+
 declare const figma: { tsx: (template: TemplateStringsArray, ...args: any[]) => string }
 
 // This file contains helper functions which hare included in the React template
@@ -8,7 +14,7 @@ declare const figma: { tsx: (template: TemplateStringsArray, ...args: any[]) => 
 // `.toString()` on the functions and return a string we can inject. Note that
 // comments will be stripped, as this is run through the build step first.
 
-// Render a React prop correctly, based on its type
+// Render a React prop correctly, based on its type.
 function _fcc_renderReactProp(
   name: string,
   value: string | boolean | { type: 'CODE' | 'INSTANCE' }[],

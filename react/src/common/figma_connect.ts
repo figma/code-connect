@@ -1,7 +1,7 @@
 import { FigmaConnectLink } from './api'
 import { Intrinsic } from './intrinsics'
 
-export interface FigmaConnectJSON {
+export interface CodeConnectJSON {
   figmaNode: string
   component: string
   variant?: Record<string, any>
