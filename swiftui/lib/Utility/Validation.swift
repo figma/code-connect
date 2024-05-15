@@ -147,14 +147,22 @@ public struct Validation {
                     url: file.figmaNode
                 )
             }
-            guard variantProperty.variantOptions?.contains(where: { variantProperty in
-                switch variantValue {
-                case .bool(let bool):
-                    return allowableBooleanValues.contains(variantProperty) || variantProperty == String(bool)
-                case .string(let string):
-                    return variantProperty == string
+
+            switch variantProperty.type {
+            case .boolean:
+                guard case .bool = variantValue else { fallthrough }
+            case .variant:
+                guard variantProperty.variantOptions?.contains(where: { variantProperty in
+                    switch variantValue {
+                    case .bool(let bool):
+                        return allowableBooleanValues.contains(variantProperty) || variantProperty == String(bool)
+                    case .string(let string):
+                        return variantProperty == string
+                    }
+                }) ?? false else {
+                    fallthrough
                 }
-            }) ?? false else {
+            default:
                 throw FigmaValidationError.invalidVariantValue(
                     variantName: fileVariantName,
                     variantValue: variantValue.toString(),

@@ -118,16 +118,8 @@ extension DictionaryExprSyntax {
             guard let key = element.key.as(StringLiteralExprSyntax.self)?.concatenateSegments() else {
                 throw ParsingError.nonStringLiteralKey
             }
-            if let boolValue = element.value.as(BooleanLiteralExprSyntax.self) {
-                reconstructedDictionary[key] = DictionaryValue.bool(boolValue.booleanValue())
-            } else if let value = element.value.as(FloatLiteralExprSyntax.self)?.literal
-                        ?? element.value.as(IntegerLiteralExprSyntax.self)?.literal,
-                      let number = Double(value.text)
-            {
-                reconstructedDictionary[key] = DictionaryValue.number(number)
-            } else {
-                reconstructedDictionary[key] = DictionaryValue.string(element.value.trimmedDescription)
-            }
+            let value = element.value.extractLiteralOrNamedValue()
+            reconstructedDictionary[key] = value
         }
         return reconstructedDictionary
     }
@@ -148,6 +140,46 @@ extension CodeBlockItemListSyntax {
             return returnStmtExpr.trimmedDescription
         }
         return self.trimmedDescription
+    }
+}
+
+extension ClosureExprSyntax {
+    func getCodeAppliedToClosureArgument() -> String? {
+        var viewArg = "$0"
+        // Check if there's a closure signature
+        if let signature {
+            // Check if there's an argument in shorthand form
+            if let shorthand = signature.parameterClause?.as(ClosureShorthandParameterListSyntax.self)?.first?.name.text {
+                viewArg = shorthand
+            } else if let firstParam = signature.parameterClause?.as(ClosureParameterClauseSyntax.self)?.parameters.first?.firstName.text {
+                viewArg = firstParam
+            }
+        }
+
+        // Get the function call string suffixed after the viewArg declaration
+        return statements.description.suffix(after: viewArg)
+    }
+}
+
+extension ExprSyntax {
+    func extractLiteralOrNamedValue() -> DictionaryValue {
+        if let boolValue = self.as(BooleanLiteralExprSyntax.self) {
+            return DictionaryValue.bool(boolValue.booleanValue())
+        } else if let value = self.as(FloatLiteralExprSyntax.self)?.literal
+                    ?? self.as(IntegerLiteralExprSyntax.self)?.literal,
+                  let number = Double(value.text)
+        {
+            return DictionaryValue.number(number)
+        } else {
+            return DictionaryValue.string(self.trimmedDescription)
+        }
+    }
+}
+
+extension LabeledExprSyntax {
+    // Returns the base name of the argument (I.e strips out self.argumentName)
+    func getArgumentBasename() -> String? {
+        return expression.as(MemberAccessExprSyntax.self)?.declName.baseName.text ?? expression.as(DeclReferenceExprSyntax.self)?.baseName.text
     }
 }
 #endif

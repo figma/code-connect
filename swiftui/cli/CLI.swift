@@ -54,7 +54,7 @@ struct Connect: AsyncParsableCommand {
             "If no config file is found, this parses the current directory. An optional `--dir` flag can be used to specify a directory to parse."
         )
 
-        @Option(name: [.customLong("token"), .customShort("t")], help: "Figma API Token with write access to Code Connect.")
+        @Option(name: [.customLong("--access-token"), .customShort("t")], help: "Figma API Token with write access to Code Connect.")
         public var accessToken: String?
 
 

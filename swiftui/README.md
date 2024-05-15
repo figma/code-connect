@@ -28,7 +28,7 @@ let package = Package(
     platforms: [...],
     products: [...],
     dependencies: [
-        .package(url: "https://github.com/figma/code-connect", from: "0.1.1"),
+        .package(url: "https://github.com/figma/code-connect", from: "0.1.2"),
     ],
     targets: [...]
 )
@@ -44,7 +44,7 @@ figma-swift connect create https://... --access-token <auth token>
 
 This will create a Code Connect file with some basic scaffolding for the component you want to connect. By default this file will be called `<component-name>.figma.swift` based on the name of the component in Figma. However, you may rename this file as you see fit. The scaffolding that is generated is based on the interface of the component in Figma. Depending on how closely this matches your code component you'll need to make some edits to this file before you publish it.
 
-Some CLI commands, like `create`, require a valid [authentication token](https://help.figma.com/hc/en-us/articles/8085703771159-Manage-personal-access-tokens) with write permission for the Code Connect scope. You can either pass this via the `--access-token` flag, or set the `FIGMA_ACCESS_TOKEN` environment variable.
+Some CLI commands, like `create`, require a valid [authentication token](https://help.figma.com/hc/en-us/articles/8085703771159-Manage-personal-access-tokens) with write permission for the Code Connect scope as well as the read permission for the File content scope. You can either pass this via the `--access-token` flag, or set the `FIGMA_ACCESS_TOKEN` environment variable.
 
 To keep things simple, we're going to start by replacing the contents of the generated file with the most basic Code Connect configuration possible to make sure everything is set up and working as expected. Replace the contents of the file with the following, replacing the `Button` reference with a reference to whatever component you are trying to connect.
 
@@ -120,7 +120,6 @@ figma-swift connect unpublish --access-token <token>
 - `-c --config <path>` Path to config file (by default looks for "figma.config.json" in the current directory).
 - `-d --dir <folder>` Directory to parse (uses current directory by default)
 - `--skip-validation` By default, `publish` will validate your Code Connect file with the Figma component to ensure that their properties match. This flag can be used to skip this validation.
-- `--verbose` Enable verbose logging for debugging
 
 ## Configuration
 

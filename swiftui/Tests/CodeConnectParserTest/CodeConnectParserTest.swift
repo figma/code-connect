@@ -46,21 +46,27 @@ class CodeConnectParserTest: XCTestCase {
                                 "Inverse": .string("ButtonVariant.inverse"),
                                 "Success": .string("ButtonVariant.success")
                             ]
-                        )
+                        ),
+                        hideDefault: false,
+                        defaultValue: .string(".primary")
                     ),
                     "title": PropMap(
                         kind: .string,
                         args: PropMapArgs(
                             figmaPropName: "🎛️ Label",
                             valueMapping: nil
-                        )
+                        ), 
+                        hideDefault: false,
+                        defaultValue: .string("\"Submit\"")
                     ),
                     "disabled": PropMap(
                         kind: .boolean,
                         args: PropMapArgs(
                             figmaPropName: "🎛️ Disabled",
                             valueMapping: nil
-                        )
+                        ),
+                        hideDefault: false,
+                        defaultValue: .bool(false)
                     )
                 ],
                 imports: []

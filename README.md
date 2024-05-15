@@ -13,5 +13,5 @@ Code Connect is easy to set up, easy to maintain, type-safe, and extensible. Out
 
 To learn how to implement Code Connect for your platform, please navigate to the platform-specific API usage and documentation.
 
-- [React](react/README.md)
+- [React](cli/README.md)
 - [SwiftUI](swiftui/README.md)

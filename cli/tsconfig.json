@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "jsx": "react",
+    "module": "commonjs",
+    "target": "ES2021",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "lib": ["ES2021"],
+    "strict": true,
+    "outDir": "dist",
+    "rootDir": "src",
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/__test__",
+    "src/react/__test__",
+    "src/connect/__test__",
+    "src/storybook/__test__",
+    "src/components",
+    "scripts",
+    "react/scripts",
+  ],
+}

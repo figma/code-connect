@@ -54,6 +54,7 @@ enum NodeNames {
     static let body = "body"
     static let figmaProp = "FigmaProp"
     static let figmaPropMapping = "mapping"
+    static let hideDefault = "hideDefault"
     static let variant = "variant"
 }
 
@@ -112,6 +113,19 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
         return .instance
     }
 
+    func extractDefaultValueFromFigmaPropDecl(_ decl: VariableDeclSyntax) -> DictionaryValue? {
+        return decl.bindings.first?.initializer?.value.extractLiteralOrNamedValue()
+    }
+
+    func shouldHideDefaultFromFigmaPropDecl(_ decl: AttributeSyntax) -> Bool {
+        guard let booleanValue = decl.arguments?.as(LabeledExprListSyntax.self)?.first(where: {
+            $0.label?.text == NodeNames.hideDefault
+        })?.expression.as(BooleanLiteralExprSyntax.self)?.booleanValue() else {
+            return false
+        }
+        return booleanValue
+    }
+
     func extractFigmaConnectFromNode(_ node: StructDeclSyntax) throws -> CodeConnectRequestBody? {
         let members = node.memberBlock.members
         var component: String?
@@ -148,13 +162,18 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
                     if let mapping = extractMappingFromFigmaPropDecl(figmaProp) {
                         propMaps[varName] = PropMap(
                             kind: .enumerable,
-                            args: PropMapArgs(figmaPropName: name, valueMapping: mapping)
+                            args: PropMapArgs(figmaPropName: name, valueMapping: mapping),
+                            hideDefault: shouldHideDefaultFromFigmaPropDecl(figmaProp),
+                            defaultValue: extractDefaultValueFromFigmaPropDecl(varDecl)
+
                         )
                     } else {
                         let kind = extractPropKindFromFigmaPropDecl(varDecl)
                         propMaps[varName] = PropMap(
                             kind: kind,
-                            args: PropMapArgs(figmaPropName: name, valueMapping: nil)
+                            args: PropMapArgs(figmaPropName: name, valueMapping: nil),
+                            hideDefault: shouldHideDefaultFromFigmaPropDecl(figmaProp),
+                            defaultValue: extractDefaultValueFromFigmaPropDecl(varDecl)
                         )
                     }
                 }
@@ -190,7 +209,7 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
         guard let template = templateWriter.createTemplate() else {
             throw ParserError.failedToParseExampleDefinition(connectionName: node.name.text)
         }
-
+        
         // TODO: Find the source location
         return CodeConnectRequestBody(
             figmaNode: figmaNodeUrl,
