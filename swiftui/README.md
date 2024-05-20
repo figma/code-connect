@@ -39,7 +39,7 @@ let package = Package(
 To connect your first component, start by going to Dev Mode in Figma and right-click on the component you want to connect, then choose to `Copy link to selection`. Make sure you are copying the link to a main component and not an instance of the component. The main component will typically be located in a centralized design system library file. Using this link, run `figma-swift connect create`.
 
 ```sh
-figma-swift connect create https://... --access-token <auth token>
+figma-swift connect create "https://..." --access-token <auth token>
 ```
 
 This will create a Code Connect file with some basic scaffolding for the component you want to connect. By default this file will be called `<component-name>.figma.swift` based on the name of the component in Figma. However, you may rename this file as you see fit. The scaffolding that is generated is based on the interface of the component in Figma. Depending on how closely this matches your code component you'll need to make some edits to this file before you publish it.
