@@ -8,8 +8,4 @@ extension String {
         
         return String(self[range.upperBound...])
     }
-    
-    var isWhitespaceOnly: Bool {
-        return self.trimmingCharacters(in: .whitespaces).isEmpty
-    }
 }

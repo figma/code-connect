@@ -1,4 +1,4 @@
-import { FigmaConnectMeta, PropMapping, ValueOf, EnumValue } from './api'
+import { FigmaConnectMeta, PropMapping, ValueOf } from './api'
 import * as React from 'react'
 
 function connectType<P = {}>(_figmaNodeUrl: string, _meta?: FigmaConnectMeta<P>): void
@@ -10,7 +10,7 @@ function connectType<P = {}>(
 function connectType(_component: unknown, _figmaNodeUrl: unknown, _meta?: unknown): void {}
 
 function booleanType(_figmaPropName: string): boolean
-function booleanType<V extends EnumValue>(
+function booleanType<V extends string | boolean | number | symbol | undefined | JSX.Element>(
   _figmaPropName: string,
   _valueMapping?: Record<'true' | 'false', V>,
 ) {
@@ -20,7 +20,7 @@ function booleanType<V extends EnumValue>(
   return true
 }
 
-function enumType<V extends EnumValue>(
+function enumType<V extends string | boolean | number | symbol | undefined | JSX.Element>(
   _figmaPropName: string,
   _valueMapping: PropMapping<Record<string, V>>,
 ): ValueOf<Record<string, V>> {
@@ -39,18 +39,6 @@ function childrenType(_layers: string | string[]) {
   return React.createElement('div')
 }
 
-function nestedPropsType<T>(_layer: string, props: PropMapping<T>) {
-  return props
-}
-
-function classNameType(_className: (string | undefined)[]) {
-  return ''
-}
-
-function textContentType(_layer: string) {
-  return ''
-}
-
 export {
   connectType as connect,
   booleanType as boolean,
@@ -58,7 +46,4 @@ export {
   stringType as string,
   instanceType as instance,
   childrenType as children,
-  nestedPropsType as nestedProps,
-  classNameType as className,
-  textContentType as textContent,
 }

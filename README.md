@@ -9,56 +9,9 @@ Code Connect is easy to set up, easy to maintain, type-safe, and extensible. Out
 > [!NOTE]
 > Code Connect is available on Organization and Enterprise plans and requires a full Design or Dev Mode seat to use. Code Connect is currently in beta, so you can expect this feature to change. You may also experience bugs or performance issues during this time.
 
-## CLI installation
-
-To install Code Connect locally to a React project, you can follow the instructions in the [React README](cli/README.md#installation).
-
-For other platforms, you first need to have Node.js v16 or newer installed on your computer. You can check if you already have Node.js installed and which version by running `node -v`. If you need to install Node.js, instructions for all platforms can be found [on the Node.js website](https://nodejs.org/en/download/package-manager).
-
-Once you have Node.js installed, you can install Code Connect globally, so it can be run from anywhere on your machine, by running:
-
-`npm install --global @figma/code-connect`
-
-We hope to provide a way to install Code Connect without requiring Node.js soon.
-
-## Setup
+## Installation
 
 To learn how to implement Code Connect for your platform, please navigate to the platform-specific API usage and documentation.
 
 - [React](cli/README.md)
 - [SwiftUI](swiftui/README.md)
-
-## General configuration
-
-Code Connect can be configured with a `figma.config.json` file, which must be located in your project root (e.g. alongside the `package.json` or `.xcodeproj` file).
-
-Every platform supports some common configuration options, in addition to any platform-specific options.
-
-### `include` and `exclude`
-
-`include` and `exclude` are lists of globs for where to parse Code Connect files. `include` and `exclude` paths must be relative to the location of the config file.
-
-```jsonp
-{
-  "codeConnect": {
-    "include": [],
-    "exclude": ["test/**", "docs/**", "build/**"]
-  }
-}
-```
-
-### `parser`
-
-Code Connect will attempt to determine your project type by looking the first ancestor of the working directory which matches one of the following:
-- If a `package.json` containing `react` is found, your project is detected as React
-- If a file matching `Package.swift` or `*.xcodeproj` is found, your project is detected as Swift
-
-In case this does not correctly work for your project, you can override the project type by using the `parser` configuration key. Valid values are `react` or `swift`.
-
-```jsonp
-{
-  "codeConnect": {
-    "parser": "react"
-  }
-}
-```

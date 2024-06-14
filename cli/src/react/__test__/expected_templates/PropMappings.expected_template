@@ -1,6 +1,6 @@
 const figma = require('figma')
 
-const variant = figma.currentLayer.__properties__.enum('👥 Variant', {
+const variant = figma.properties.enum('👥 Variant', {
 "Primary": 'primary',
 "Destructive": 'destructive',
 "Inverse": 'inverse',
@@ -8,16 +8,16 @@ const variant = figma.currentLayer.__properties__.enum('👥 Variant', {
 "FigJam": 'FigJam',
 "Secondary": 'secondary',
 "Secondary Destruct": 'destructive-secondary'})
-const size = figma.currentLayer.__properties__.enum('👥 Size', {
+const size = figma.properties.enum('👥 Size', {
 "Default": 'hug-contents',
 "Large": undefined,
 "Wide": 'fit-parent'})
-const disabled = figma.currentLayer.__properties__.boolean('🎛️ Disabled')
-const iconLead = figma.currentLayer.__properties__.boolean('🎛️ Icon Lead', {
+const disabled = figma.properties.boolean('🎛️ Disabled')
+const iconLead = figma.properties.boolean('🎛️ Icon Lead', {
 "true": 'icon',
 "false": undefined})
-const label = figma.currentLayer.__properties__.string('🎛️ Label')
+const label = figma.properties.string('🎛️ Label')
 
 export default figma.tsx`<Button${_fcc_renderReactProp('variant', variant)} onClick={() => { }}${_fcc_renderReactProp('width', size)}${_fcc_renderReactProp('disabled', disabled)}${_fcc_renderReactProp('iconLead', iconLead)}>
-      ${_fcc_renderReactChildren(label)}
+      ${label}
     </Button>`

@@ -1,6 +1,6 @@
 const figma = require('figma')
 
-const disabled = figma.currentLayer.__properties__.boolean('Disabled')
+const disabled = figma.properties.boolean('Disabled')
 
 export default figma.tsx`<FunctionComponent${_fcc_renderReactProp('disabled', disabled)}>
         Hello this line is long to cause it to wrap in brackets

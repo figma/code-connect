@@ -1,6 +1,6 @@
 const figma = require('figma')
 
-const variant = figma.currentLayer.__properties__.enum('👥 Variant', {
+const variant = figma.properties.enum('👥 Variant', {
 "Primary": 'primary',
 "Destructive": 'destructive',
 "Inverse": 'inverse',
@@ -8,10 +8,10 @@ const variant = figma.currentLayer.__properties__.enum('👥 Variant', {
 "FigJam": 'FigJam',
 "Secondary": 'secondary',
 "Secondary Destruct": 'destructive-secondary'})
-const width = figma.currentLayer.__properties__.enum('👥 Size', {
+const width = figma.properties.enum('👥 Size', {
 "Default": 'hug-contents',
 "Large": undefined,
 "Wide": 'fit-parent'})
-const disabled = figma.currentLayer.__properties__.boolean('🎛️ Disabled')
+const disabled = figma.properties.boolean('🎛️ Disabled')
 
 export default figma.tsx`<Button${_fcc_renderReactProp('variant', variant)}${_fcc_renderReactProp('width', width)}${_fcc_renderReactProp('disabled', disabled)}/>`

@@ -1,6 +1,6 @@
 import { FigmaRestApi } from './figma_rest_api'
 import * as url from 'url'
-import { exitWithError, logger } from '../common/logging'
+import { logger } from '../common/logging'
 
 const guidRegex = /^I?[0-9]+:[0-9]+(;[0-9]+:[0-9]+)*$/
 
@@ -26,13 +26,15 @@ export function parseNodeIds(figmaNodeUrls: string[]): string[] {
       const figmaNodeId = validateNodeId(nodeId)
       nodeIds.push(figmaNodeId)
     } else if (!nodeId) {
-      exitWithError(
+      logger.error(
         `Invalid figma node URL: the provided url "${nodeURL}" does not contain a node-id`,
       )
+      process.exit(1)
     } else {
-      exitWithError(
+      logger.error(
         `Invalid figma node URL: the provided url "${nodeURL}" contains more than one node-id`,
       )
+      process.exit(1)
     }
   }
   return nodeIds
@@ -50,20 +52,17 @@ export function parseFileKey(figmaNodeUrl: string) {
  */
 export function findComponentsInDocument(
   document: FigmaRestApi.Node,
-  nodeIds?: string[],
+  nodeIds: string[],
 ): FigmaRestApi.Component[] {
   const components: FigmaRestApi.Component[] = []
   const stack = [document]
 
   while (stack.length > 0) {
     const node = stack.pop()!
-    if (nodeIds && nodeIds.includes(node.id)) {
+    if (nodeIds.includes(node.id)) {
       if (!isComponent(node)) {
         throw new Error('Specified node is not a component or a component set')
       }
-      components.push(node)
-    }
-    if (!nodeIds && isComponent(node)) {
       components.push(node)
     }
     if (Array.isArray(node.children)) {

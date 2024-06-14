@@ -1,24 +1,17 @@
 import * as url from 'url'
-import { chunk, get } from 'lodash'
+import { chunk } from 'lodash'
 import axios, { isAxiosError } from 'axios'
 
 import { CodeConnectJSON } from '../common/figma_connect'
 import { logger } from '../common/logging'
 import { validateNodeId } from './helpers'
-import { getApiUrl, getHeaders } from './figma_rest_api'
-import { BaseCommand } from '../commands/connect'
+import { getApiUrl } from './figma_rest_api'
 
-export function parseFigmaNode(
-  cmd: BaseCommand,
-  doc: CodeConnectJSON,
-  silent: boolean = false,
-): { fileKey: string; nodeId: string } | null {
+function parseFigmaNode(doc: CodeConnectJSON): { fileKey: string; nodeId: string } | null {
   const figmaNodeUrl = url.parse(doc.figmaNode, true)
   const fileKeyMatch = figmaNodeUrl.path?.match(/(file|design)\/([a-zA-Z0-9]+)/)
   if (!fileKeyMatch) {
-    if (!silent || cmd.verbose) {
-      logger.error(`Failed to parse ${doc.figmaNode}`)
-    }
+    logger.error(`Failed to parse ${doc.figmaNode}`)
     return null
   }
   const fileKey = fileKeyMatch[2]
@@ -27,9 +20,7 @@ export function parseFigmaNode(
     const figmaNodeId = validateNodeId(nodeId)
     return { fileKey, nodeId: figmaNodeId }
   } else {
-    if (!silent || cmd.verbose) {
-      logger.error(`Failed to get node-id from ${doc.figmaNode}`)
-    }
+    logger.error(`Failed to get node-id from ${doc.figmaNode}`)
     return null
   }
 }
@@ -43,7 +34,12 @@ async function fetchNodeInfo(
   try {
     const response = await axios.get(
       `${baseApiUrl}${fileKey}/nodes?ids=${nodeIdsChunk.join(',')}`,
-      { headers: getHeaders(accessToken) },
+      {
+        headers: {
+          'X-Figma-Token': accessToken,
+          'Content-Type': 'application/json',
+        },
+      },
     )
     if (response.status !== 200) {
       logger.error('Failed to fetch node info: ' + response.status + ' ' + response.data?.message)
@@ -224,17 +220,13 @@ function validateDoc(doc: CodeConnectJSON, figmaNode: any, nodeId: string): bool
   return true
 }
 
-export async function validateDocs(
-  cmd: BaseCommand,
-  accessToken: string,
-  docs: CodeConnectJSON[],
-): Promise<boolean> {
+export async function validateDocs(accessToken: string, docs: CodeConnectJSON[]): Promise<boolean> {
   let baseApiUrl = getApiUrl(docs?.[0]?.figmaNode ?? '') + '/files/'
 
   const fileKeyToNodeIds: { [key: string]: any } = {}
   let valid = true
   docs.forEach((doc) => {
-    const parsedNode = parseFigmaNode(cmd, doc)
+    const parsedNode = parseFigmaNode(doc)
     if (!parsedNode) {
       valid = false
       return

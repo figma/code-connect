@@ -1,5 +1,5 @@
 import ts from 'typescript'
-import { CodeConnectReactConfig, getRemoteFileUrl, resolveImportPath } from '../connect/project'
+import { CodeConnectConfig, getRemoteFileUrl, resolveImportPath } from '../common/project'
 import { error, highlight, logger, reset } from '../common/logging'
 import {
   assertIsObjectLiteralExpression,
@@ -14,15 +14,13 @@ import {
 } from '../typescript/compiler'
 import {
   FIGMA_CONNECT_CALL,
-  IntrinsicKind,
-  PropMappings,
+  Intrinsic,
   intrinsicToString,
-  parsePropsObject,
+  parseIntrinsic,
 } from '../common/intrinsics'
 import { CodeConnectJSON } from '../common/figma_connect'
 import { FigmaConnectMeta } from '../common/api'
 import { getParsedTemplateHelpersString } from './parser_template_helpers'
-import path from 'path'
 
 interface ParserErrorContext {
   sourceFile: ts.SourceFile
@@ -66,8 +64,7 @@ export class InternalError extends ParserError {
 export interface ParserContext {
   checker: ts.TypeChecker
   sourceFile: ts.SourceFile
-  config: CodeConnectReactConfig
-  absPath: string
+  config: CodeConnectConfig | undefined
 }
 
 /**
@@ -205,6 +202,28 @@ function getImportsForIdentifiers({ sourceFile }: ParserContext, _identifiers: s
 }
 
 /**
+ * Parsers the `props` field of a `figma.connect()` call, returning a mapping of
+ * prop names to their respective intrinsic types
+ *
+ * @param objectLiteral An object literal expression
+ * @param parserContext Parser context
+ * @returns
+ */
+export function parsePropsObject(
+  objectLiteral: ts.ObjectLiteralExpression,
+  parserContext: ParserContext,
+): PropMappings {
+  const { sourceFile, checker } = parserContext
+  return convertObjectLiteralToJs(objectLiteral, sourceFile, checker, (valueNode) => {
+    if (ts.isCallExpression(valueNode)) {
+      return parseIntrinsic(valueNode, parserContext)
+    }
+  })
+}
+
+export type PropMappings = Record<string, Intrinsic>
+
+/**
  * Extract metadata about the referenced React component. Used by both the
  * Code Connect and Storybook commands.
  *
@@ -216,7 +235,7 @@ function getImportsForIdentifiers({ sourceFile }: ParserContext, _identifiers: s
  */
 export async function parseComponentMetadata(
   node: ts.PropertyAccessExpression | ts.Identifier | ts.Expression,
-  { checker, sourceFile, absPath }: ParserContext,
+  { checker, sourceFile }: ParserContext,
 ) {
   let componentSymbol = checker.getSymbolAtLocation(node)
   let componentSourceFile = sourceFile
@@ -294,13 +313,7 @@ export async function parseComponentMetadata(
     componentDeclaration = componentSymbol?.declarations?.[0]
   }
 
-  // On Windows, fileName is relative whereas on Mac it's absolute, so we need
-  // to use path.resolve to build an absolute path
-  const source = path.join(
-    path.resolve(componentSourceFile.fileName, absPath),
-    path.basename(componentSourceFile.fileName),
-  )
-
+  const source = componentSourceFile.fileName
   if (!source) {
     throw new InternalError(
       `Could not find source file for component ${component} - is this file included in the directory passed to \`figma connect <dir>\`?`,
@@ -482,35 +495,16 @@ export function parseRenderFunction(
   // insert the appropriate `figma.properties` call in the JS template
   const referencedProps = new Set<string>()
 
-  function createPropPlaceholder({
-    name,
-    node,
-    wrapInJsxExpression = false,
-  }: {
-    name: string
-    node: ts.Node
-    wrapInJsxExpression?: boolean
-  }) {
-    let propReferenceName = name
-    // for nested prop references like `nested.prop`, we only want to look for
-    // the prop mapping of `nested`, but include the full `nested.prop` in the
-    // __PROP__ call
-    if (name.includes('.')) {
-      propReferenceName = name.split('.')[0]
-    }
-
-    const mappedProp = propMappings && propMappings[propReferenceName]
+  function createPropPlaceholder(name: string, node: ts.Node, wrapInJsxExpression = false) {
+    const mappedProp = propMappings && propMappings[name]
     if (!mappedProp) {
-      throw new ParserError(
-        `Could not find prop mapping for ${propReferenceName} in the props object`,
-        {
-          sourceFile,
-          node,
-        },
-      )
+      throw new ParserError(`Could not find prop mapping for ${name} in the props object`, {
+        sourceFile,
+        node,
+      })
     }
 
-    referencedProps.add(propReferenceName)
+    referencedProps.add(name)
     const callExpression = ts.factory.createCallExpression(
       ts.factory.createIdentifier('__PROP__'),
       undefined,
@@ -543,13 +537,8 @@ export function parseRenderFunction(
             ts.isPropertyAccessExpression(node) &&
             node.expression.getText().startsWith(propsParameter.name.getText())
           ) {
-            // nested notation e.g `props.nested.prop`
-            if (ts.isPropertyAccessExpression(node.expression)) {
-              const name = `${node.expression.name.getText()}.${node.name.getText()}`
-              return createPropPlaceholder({ name, node })
-            }
             const name = node.name.getText()
-            return createPropPlaceholder({ name, node })
+            return createPropPlaceholder(name, node)
           }
           // `props[""]` notation
           if (
@@ -559,19 +548,19 @@ export function parseRenderFunction(
             ts.isStringLiteral(node.argumentExpression)
           ) {
             const name = stripQuotes(node.argumentExpression)
-            return createPropPlaceholder({ name, node })
+            return createPropPlaceholder(name, node)
           }
           // object destructuring references
           if (
             ts.isObjectBindingPattern(propsParameter.name) &&
             ts.isJsxExpression(node) &&
             node.expression &&
-            propsParameter.name.elements.find((el) =>
-              node.expression?.getText().startsWith(el.name.getText()),
+            propsParameter.name.elements.find(
+              (el) => el.name.getText() === node.expression?.getText(),
             )
           ) {
             const name = node.expression.getText()
-            return createPropPlaceholder({ name, node, wrapInJsxExpression: true })
+            return createPropPlaceholder(name, node, true)
           }
           // Replaces {...props} with all the prop mapped props we know about,
           // e.g. <Button {...props} /> becomes:
@@ -600,11 +589,7 @@ export function parseRenderFunction(
                   .map((prop) => {
                     return ts.factory.createJsxAttribute(
                       ts.factory.createIdentifier(prop),
-                      createPropPlaceholder({
-                        name: prop,
-                        node,
-                        wrapInJsxExpression: true,
-                      }) as ts.JsxExpression,
+                      createPropPlaceholder(prop, node, true) as ts.JsxExpression,
                     )
                   })
               : []
@@ -671,26 +656,20 @@ export function parseRenderFunction(
   // parser_template_helpers.ts)
   exampleCode = exampleCode.replace(
     // match " reactPropName={__PROP__("figmaPropName")}" and extract the names
-    / ([A-Za-z0-9]+)=\{__PROP__\("([A-Za-z0-9_\.]+)"\)\}/g,
+    / ([A-Za-z0-9]+)=\{__PROP__\("([A-Za-z0-9]+)"\)\}/g,
     (_match, reactPropName, figmaPropName) => {
       return `\${_fcc_renderReactProp('${reactPropName}', ${figmaPropName})}`
     },
   )
 
   // Replace React children placeholders like `${__PROP__("propName")}` with
-  // calls to _fcc_renderReactChildren, which renders them correctly (see
-  // parser_template_helpers.ts)
-  exampleCode = exampleCode.replace(
-    /\{__PROP__\("([A-Za-z_\.]+)"\)\}/g,
-    (_match, figmaPropName) => {
-      return `\${_fcc_renderReactChildren(${figmaPropName})}`
-    },
-  )
+  // `${propName}`. These never need special treatment based on their type.
+  exampleCode = exampleCode.replace(/\{__PROP__\("([A-Za-z]+)"\)\}/g, '${$1}')
 
   // Replace object values like `{ prop: __PROP__("propName") }` with
   // `{ prop: ${propName} }`. These never need special treatment based on their type.
   exampleCode = exampleCode.replace(
-    /([A-Za-z0-9]+):\s+__PROP__\("([A-Za-z_\.]+)"\)/g,
+    /([A-Za-z0-9]+):\s+__PROP__\("([A-Za-z]+)"\)/g,
     (_match, objectKey, figmaPropName) => {
       return `${objectKey}: \${${figmaPropName}}`
     },
@@ -703,8 +682,6 @@ export function parseRenderFunction(
   // Require the template API
   templateCode += `const figma = require('figma')\n\n`
 
-  let nestedLayerCount = 0
-
   // Then we output `const propName = figma.properties.<kind>('propName')` calls
   // for each referenced prop, so these are accessible to the template code.
   if (propMappings && referencedProps.size > 0) {
@@ -716,21 +693,7 @@ export function parseRenderFunction(
           node: exp,
         })
       }
-      if (propMapping.kind === IntrinsicKind.NestedProps) {
-        // the actual layer name in figma could have a bunch of special characters in it,
-        // and if we try to normalize it to a valid JS identifier, it could conflict with
-        // other variables in the template code. So we generate a unique variable name
-        // for each nested layer reference instead.
-        const nestedLayerRef = `nestedLayer${nestedLayerCount++}`
-        templateCode += `const ${nestedLayerRef} = figma.currentLayer.__find__("${propMapping.args.layer}")\n`
-        templateCode += `const ${prop} = {
-${Object.entries(propMapping.args.props).map(
-  ([key, intrinsic]) => `${key}: ${intrinsicToString(intrinsic, nestedLayerRef)}\n`,
-)}
-        }\n`
-      } else {
-        templateCode += `const ${prop} = ${intrinsicToString(propMapping)}\n`
-      }
+      templateCode += `const ${prop} = ${intrinsicToString(propMapping)}\n`
     })
     templateCode += '\n'
   }
@@ -752,6 +715,50 @@ ${Object.entries(propMapping.args.props).map(
     code: templateCode,
     imports,
     nestable,
+  }
+}
+
+/**
+ * This wrapper function ensures that property names are type checked in case
+ * we make changes to the `figma.connect()` interface.
+ */
+function makeConfigPropertyParser<T extends ts.Node>({
+  key,
+  predicate,
+  errorMessage,
+}: {
+  key: keyof FigmaConnectMeta
+  predicate: (node: ts.Node) => node is T
+  errorMessage?: string
+}) {
+  return (configArg: ts.ObjectLiteralExpression, parserContext: ParserContext) => {
+    if (!configArg) {
+      return undefined
+    }
+    return parsePropertyOfType({
+      objectLiteralNode: configArg,
+      propertyName: key,
+      predicate,
+      parserContext,
+      required: false,
+      errorMessage,
+    })
+  }
+}
+
+function makeFunctionArgumentParser<T extends ts.Node>({
+  index,
+  predicate,
+  required,
+  errorMessage,
+}: {
+  index: number
+  predicate: (node: ts.Node) => node is T
+  required: boolean
+  errorMessage?: string
+}) {
+  return (node: ts.CallExpression, parserContext: ParserContext) => {
+    return parseFunctionArgument(node, parserContext, index, predicate, required, errorMessage)
   }
 }
 
@@ -969,7 +976,7 @@ async function parseDoc(
   )
 
   let figmaNode = stripQuotes(figmaNodeUrlArg)
-  if (config.documentUrlSubstitutions) {
+  if (config?.documentUrlSubstitutions) {
     Object.entries(config.documentUrlSubstitutions).forEach(([from, to]) => {
       figmaNode = figmaNode.replace(from, to)
     })
@@ -999,7 +1006,7 @@ async function parseDoc(
       // If no imports were found, it might mean that the component is not imported, or
       // that the `figma.connect` call is in the same file as the component. In the latter
       // case - we'll want to generate one
-      const fileName = metadata.source.split(path.sep).pop()?.split('.')[0]
+      const fileName = metadata.source.split('/').pop()?.split('.')[0]
       imports = [
         {
           statement: `import { ${metadata.component} } from './${fileName}'`,
@@ -1065,9 +1072,8 @@ async function parseDoc(
 export async function parse(
   program: ts.Program,
   file: string,
-  config: CodeConnectReactConfig,
-  absPath: string,
   repoUrl?: string,
+  config?: CodeConnectConfig,
   debug?: boolean,
 ): Promise<any[]> {
   const sourceFile = program.getSourceFile(file)
@@ -1079,7 +1085,6 @@ export async function parse(
     checker: program.getTypeChecker(),
     sourceFile,
     config,
-    absPath,
   }
 
   const codeConnectObjects: CodeConnectJSON[] = []

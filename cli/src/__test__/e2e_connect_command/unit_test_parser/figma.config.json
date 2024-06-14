@@ -1,7 +1,0 @@
-{
-  "codeConnect": {
-    "parser": "__unit_test__",
-    "include": ["*.test"],
-    "exclude": ["Excluded.test"]
-  }
-}

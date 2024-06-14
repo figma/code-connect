@@ -1,13 +1,13 @@
 const figma = require('figma')
 
-const stringProp = figma.currentLayer.__properties__.string('Text')
-const booleanProp = figma.currentLayer.__properties__.boolean('Boolean Prop')
-const enumProp = figma.currentLayer.__properties__.enum('Size', {
+const stringProp = figma.properties.string('Text')
+const booleanProp = figma.properties.boolean('Boolean Prop')
+const enumProp = figma.properties.enum('Size', {
 "Slim": 'slim',
 "Medium": 'medium',
 "Large": 'large'})
-const children = figma.currentLayer.__properties__.string('Text')
+const children = figma.properties.string('Text')
 
 export default figma.tsx`<PropMapping${_fcc_renderReactProp('stringProp', stringProp)}${_fcc_renderReactProp('booleanProp', booleanProp)}${_fcc_renderReactProp('enumProp', enumProp)}>
-      ${_fcc_renderReactChildren(children)}
+      ${children}
     </PropMapping>`

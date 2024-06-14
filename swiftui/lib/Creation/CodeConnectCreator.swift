@@ -76,63 +76,66 @@ extension String {
     }
 }
 
-public struct CodeConnectCreatorCreatedFile: Encodable {
-    public var filePath: String
-}
-
-public struct CodeConnectCreatorResult: Encodable {
-    public var createdFiles: [CodeConnectCreatorCreatedFile]
-    public var messages: [ParserResultMessage]
-}
-
 public struct CodeConnectCreator {
     // Takes a URL pointing to a node and generate the code connect for the given node.
-    public static func createCodeConnect(component: Component, output: String?) -> CodeConnectCreatorResult {
+    public static func createCodeConnect(url: String, token: String, output: String?) async throws {
+        guard let nodeId = try? Validation.parseNodeId(from: url),
+              let fileKey = try? Validation.parseFileKey(from: url),
+              let url = URL(string: url)
+        else {
+            throw CodeConnectCreationError.invalidFigmaNodeUrl
+        }
+
+        guard let request = try FigmaAPIRoute.files(fileKey: fileKey, nodeIds: [nodeId]).createFigmaAPIRequest(token: token, nodeUrl: url, body: nil) else {
+            throw CodeConnectCreationError.unknown
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { throw CodeConnectCreationError.unknown }
+        guard httpResponse.statusCode == 200 else {
+            let description = String(data: data, encoding: .utf8)
+            throw CodeConnectCreationError.networkRequestFailed(errorCode: httpResponse.statusCode, description: description)
+        }
+
+        guard let figmaFile = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
+            throw CodeConnectCreationError.serverReturnedInvalidFormat
+        }
+
+        // Verify that a document exists and then find components corresponding to nodeIds
+        guard let document = figmaFile["document"] as? [String: Any] else { throw CodeConnectCreationError.noDocumentInFile }
+        guard let component = try findComponentsInDocument(document: document, nodeIds: [nodeId]).first else { return }
+
         // Convert components to code connect files
-        var createdFiles: [CodeConnectCreatorCreatedFile] = []
-        var messages: [ParserResultMessage] = []
-
-        do {
-            guard let url = URL(string: component.figmaNodeUrl) else {
-                throw CodeConnectCreationError.invalidFigmaNodeUrl
-            }
-
-            let codeConnect = try convertComponentToCodeConnectFile(component, url: url.absoluteString)
-            var outputFile: URL
-            if let output {
-                let outputUrl = URL(fileURLWithPath: output)
-                if outputUrl.isDirectory {
-                    outputFile = outputUrl.appendingPathComponent("\(component.name).figma.swift")
-                } else {
-                    outputFile = outputUrl
-                }
+        let codeConnect = try convertComponentToCodeConnectFile(component, url: url.absoluteString)
+        var outputFile: URL
+        if let output {
+            let outputUrl = URL(fileURLWithPath: output)
+            if outputUrl.isDirectory {
+                outputFile = outputUrl.appendingPathComponent("\(component.name).figma.swift")
             } else {
-                outputFile = URL(fileURLWithPath: "\(component.name).figma.swift")
+                outputFile = outputUrl
             }
+        } else {
+            outputFile = URL(fileURLWithPath: "\(component.name).figma.swift")
+        }
+        guard let fileData = codeConnect.formatted().description.data(using: .utf8) else {
+            throw CodeConnectCreationError.failedToCreateCodeConnectFile(node: url.path)
+        }
 
-            guard let fileData = codeConnect.formatted().description.data(using: .utf8) else {
-                throw CodeConnectCreationError.failedToCreateCodeConnectFile(node: url.path)
-            }
-
-            let outputDir = outputFile.deletingLastPathComponent()
-            if !FileManager.default.fileExists(atPath: outputDir.path) {
-                do {
-                    try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
-                } catch {
-                    throw CodeConnectCreationError.couldntCreateFile(path: outputFile.path)
-                }
-            }
-
-            if FileManager.default.createFile(atPath: outputFile.path, contents: fileData) {
-                createdFiles.append(CodeConnectCreatorCreatedFile(filePath: outputFile.path))
-            } else {
+        let outputDir = outputFile.deletingLastPathComponent()
+        if !FileManager.default.fileExists(atPath: outputDir.path) {
+            do {
+                try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
+            } catch {
                 throw CodeConnectCreationError.couldntCreateFile(path: outputFile.path)
             }
-        } catch {
-            messages.append(ParserResultMessage(level: .error, message: error.localizedDescription))
-        } 
+        }
 
-        return CodeConnectCreatorResult(createdFiles: createdFiles, messages: messages)
+        if FileManager.default.createFile(atPath: outputFile.path, contents: fileData) {
+            print("Created Code Connect file at \(outputFile.path)")
+        } else {
+            throw CodeConnectCreationError.couldntCreateFile(path: outputFile.path)
+        }
     }
 
     // MARK: - Private
@@ -227,6 +230,40 @@ public struct CodeConnectCreator {
             try ImportDeclSyntax("import Figma").with(\.trailingTrivia, .newlines(2))
             structDecl
         }
+    }
+
+    static func findComponentsInDocument(document: [String: Any], nodeIds: [String]) throws -> [Component] {
+        var stack: [[String: Any]] = [document]
+        var components: [Component] = []
+
+        let decoder = JSONDecoder()
+        // DFS for all components in a document, looking for nodes that match `nodeIds`
+        while stack.count > 0 {
+            guard let current = stack.popLast() else { continue }
+            if let children = current["children"] as? [[String: Any]] {
+                stack.append(contentsOf: children)
+            }
+            guard let id = current["id"] as? String, nodeIds.contains(id) else {
+                continue
+            }
+
+            // In order to create a code connection the node must be a component or component set
+            guard let type = current["type"] as? String,
+                  type == "COMPONENT" || type == "COMPONENT_SET"
+            else {
+                throw CodeConnectCreationError.nodeIsNotComponentOrComponentSet(node: id)
+            }
+
+            guard current["name"] as? String != nil else {
+                throw CodeConnectCreationError.nodeHasNoName(node: id)
+            }
+            // Turn current into a Component
+            let jsonData = try JSONSerialization.data(withJSONObject: current, options: .fragmentsAllowed)
+
+            let component: Component = try decoder.decode(Component.self, from: jsonData)
+            components.append(component)
+        }
+        return components
     }
 }
 #endif

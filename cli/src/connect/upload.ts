@@ -1,7 +1,7 @@
 import { CodeConnectJSON } from '../common/figma_connect'
 import { logger, underline, highlight } from '../common/logging'
 import axios, { isAxiosError } from 'axios'
-import { getApiUrl, getHeaders } from './figma_rest_api'
+import { getApiUrl } from './figma_rest_api'
 
 interface Args {
   accessToken: string
@@ -19,7 +19,10 @@ export async function upload({ accessToken, docs }: Args) {
     logger.info(`Uploading to Figma...`)
 
     const response = await axios.post(apiUrl, docs, {
-      headers: getHeaders(accessToken),
+      headers: {
+        'X-Figma-Token': accessToken,
+        'Content-Type': 'application/json',
+      },
     })
 
     logger.info(

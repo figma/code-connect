@@ -4,117 +4,16 @@ import XCTest
 @testable import CodeConnectParser
 
 class CodeConnectParserTest: XCTestCase {
-    let currentDirectory = FileManager.default.currentDirectoryPath
-
     func testParser() throws {
-        let expectedDoc = CodeConnectDoc(
+        let expectedRequestBody = CodeConnectRequestBody(
             figmaNode: "https://figma.com/file/abc/Test?node-id=123",
-            source: currentDirectory + "/CodeConnectParserTest.xctest/Contents/Resources/Figma_CodeConnectParserTest.bundle/Contents/Resources/Button.figma.test",
-            sourceLocation: CodeConnectDoc.SourceLocation(line: 14),
+            source: "",
+            sourceLocation: CodeConnectRequestBody.SourceLocation(line: 14),
             component: "FigmaButton",
             variant: ["Has Icon": .bool(true)],
-            template: JSTemplateTestHelpers.templateWithInitialBoilerplate("""
-            const buttonVariant = figma.properties.enum('👥 Variant', {
-            'Destructive': 'ButtonVariant.danger',
-            'FigJam': 'ButtonVariant.figjam',
-            'Inverse': 'ButtonVariant.inverse',
-            'Primary': 'ButtonVariant.primary',
-            'Secondary Danger': 'ButtonVariant.secondaryDanger',
-            'Secondary': 'ButtonVariant.secondary',
-            'Success': 'ButtonVariant.success'
-            })
-            const disabled = figma.properties.boolean('🎛️ Disabled', {
-            'true': true,
-            'false': false
-            })
-            const icon = figma.properties.instance('Icon')
-            const role = figma.properties.boolean('Is Destructive', {
-            'false': '.none',
-            'true': '.destructive'
-            })
-            const title = figma.properties.string('🎛️ Label')
-            export default figma.swift`FigmaButton(\n    variant: ${buttonVariant},\n    role: ${role},\n    title: \"${title.replace(/\\n/g, \'\\\\n\')}\",\n    icon: ${__fcc_renderSwiftChildren(icon, \'\')}\n)\n.disabled(${disabled}) { ${__fcc_renderSwiftChildren(icon, \'\')} }`
-            """),
-            templateData: TemplateData(
-                props: [
-                    "buttonVariant": .propMap(PropMap(
-                        kind: .enumerable,
-                        args: PropMapArgs(
-                            figmaPropName: "👥 Variant",
-                            valueMapping: [
-                                .string("Primary"): .string("ButtonVariant.primary"),
-                                .string("Destructive"): .string("ButtonVariant.danger"),
-                                .string("Secondary"): .string("ButtonVariant.secondary"),
-                                .string("FigJam"): .string("ButtonVariant.figjam"),
-                                .string("Secondary Danger"): .string("ButtonVariant.secondaryDanger"),
-                                .string("Inverse"): .string("ButtonVariant.inverse"),
-                                .string("Success"): .string("ButtonVariant.success")
-                            ]
-                        ),
-                        hideDefault: false,
-                        defaultValue: .string(".primary"))
-                    ),
-                    "title": .propMap(PropMap(
-                        kind: .string,
-                        args: PropMapArgs(
-                            figmaPropName: "🎛️ Label",
-                            valueMapping: nil
-                        ),
-                        hideDefault: false,
-                        defaultValue: .string("\"Submit\"")
-                    )),
-                    "disabled": .propMap(PropMap(
-                        kind: .boolean,
-                        args: PropMapArgs(
-                            figmaPropName: "🎛️ Disabled",
-                            valueMapping: nil
-                        ),
-                        hideDefault: false,
-                        defaultValue: .bool(false)
-                    )),
-                    "role": .propMap(PropMap(
-                        kind: .boolean,
-                        args: PropMapArgs(
-                            figmaPropName: "Is Destructive",
-                            valueMapping: [
-                                .bool(true): .string(".destructive"),
-                                .bool(false): .string(".none"),
-                            ]
-                        ),
-                        hideDefault: false,
-                        defaultValue: .string(".none")
-                    )),
-                    "icon": .propMap(PropMap(
-                        kind: .instance,
-                        args: PropMapArgs(
-                            figmaPropName: "Icon",
-                            valueMapping: nil
-                        ),
-                        hideDefault: false,
-                        defaultValue: .null
-                    ))
-                ],
-                imports: [],
-                nestable: true
-            )
-        )
+            template: """
+            const figma = require('figma')
 
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "Button.figma", withExtension: "test"))
-        let figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:]).docs.first(where: {
-            $0.component == "FigmaButton"
-        }))
-
-        XCTAssertEqual(figmadoc, expectedDoc)
-    }
-    
-    func testLegacyParser() throws {
-        let expectedDoc = CodeConnectDoc(
-            figmaNode: "https://figma.com/file/abc/Test?node-id=123",
-            source: currentDirectory + "/CodeConnectParserTest.xctest/Contents/Resources/Figma_CodeConnectParserTest.bundle/Contents/Resources/Button.figma.test",
-            sourceLocation: CodeConnectDoc.SourceLocation(line: 68),
-            component: "LegacyFigmaButton",
-            variant: ["Has Icon": .bool(true)],
-            template: JSTemplateTestHelpers.templateWithInitialBoilerplate("""
             const buttonVariant = figma.properties.enum('👥 Variant', {
             'Destructive': 'ButtonVariant.danger',
             'FigJam': 'ButtonVariant.figjam',
@@ -129,28 +28,29 @@ class CodeConnectParserTest: XCTestCase {
             'false': false
             })
             const title = figma.properties.string('🎛️ Label')
-            export default figma.swift`FigmaButton(variant: ${buttonVariant}, title: "${title.replace(/\\n/g, \'\\\\n\')}").disabled(${disabled})`
-            """),
+            export default figma.swift`FigmaButton(variant: ${buttonVariant}, title: "${title}").disabled(${disabled})
+            `
+            """,
             templateData: TemplateData(
                 props: [
-                    "buttonVariant": .propMap(PropMap(
+                    "buttonVariant": PropMap(
                         kind: .enumerable,
                         args: PropMapArgs(
                             figmaPropName: "👥 Variant",
                             valueMapping: [
-                                .string("Primary"): .string("ButtonVariant.primary"),
-                                .string("Destructive"): .string("ButtonVariant.danger"),
-                                .string("Secondary"): .string("ButtonVariant.secondary"),
-                                .string("FigJam"): .string("ButtonVariant.figjam"),
-                                .string("Secondary Danger"): .string("ButtonVariant.secondaryDanger"),
-                                .string("Inverse"): .string("ButtonVariant.inverse"),
-                                .string("Success"): .string("ButtonVariant.success")
+                                "Primary": .string("ButtonVariant.primary"),
+                                "Destructive": .string("ButtonVariant.danger"),
+                                "Secondary": .string("ButtonVariant.secondary"),
+                                "FigJam": .string("ButtonVariant.figjam"),
+                                "Secondary Danger": .string("ButtonVariant.secondaryDanger"),
+                                "Inverse": .string("ButtonVariant.inverse"),
+                                "Success": .string("ButtonVariant.success")
                             ]
                         ),
                         hideDefault: false,
-                        defaultValue: .string(".primary"))
+                        defaultValue: .string(".primary")
                     ),
-                    "title": .propMap(PropMap(
+                    "title": PropMap(
                         kind: .string,
                         args: PropMapArgs(
                             figmaPropName: "🎛️ Label",
@@ -158,8 +58,8 @@ class CodeConnectParserTest: XCTestCase {
                         ), 
                         hideDefault: false,
                         defaultValue: .string("\"Submit\"")
-                    )),
-                    "disabled": .propMap(PropMap(
+                    ),
+                    "disabled": PropMap(
                         kind: .boolean,
                         args: PropMapArgs(
                             figmaPropName: "🎛️ Disabled",
@@ -167,39 +67,15 @@ class CodeConnectParserTest: XCTestCase {
                         ),
                         hideDefault: false,
                         defaultValue: .bool(false)
-                    ))
+                    )
                 ],
-                imports: [],
-                nestable: true
+                imports: []
             )
         )
 
         let url = try XCTUnwrap(Bundle.module.url(forResource: "Button.figma", withExtension: "test"))
-        let figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:]).docs.first(where: { $0.component == "LegacyFigmaButton"}))
+        let figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:], sourceControlPath: nil).codeConnectFiles.first)
 
-        XCTAssertEqual(figmadoc, expectedDoc)
-    }
-    
-    func testMultilineBodyDefinitionsAreNotNestable() throws {
-        let expectedDoc = CodeConnectDoc(
-            figmaNode: "https://figma.com/file/abc/Test?node-id=123",
-            source: "",
-            sourceLocation: CodeConnectDoc.SourceLocation(line: 0),
-            component: "AnyView",
-            variant: [:],
-            template: JSTemplateTestHelpers.templateWithInitialBoilerplate("""
-            export default figma.swift`@State var isOn = true\n\nElementWithBinding(isOn: $isOn)`
-            """),
-            templateData: TemplateData(
-                props: [:],
-                imports: [],
-                nestable: false
-            )
-        )
-
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "Button.figma", withExtension: "test"))
-        let figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:])).docs.first(where: { $0.component == "AnyView" })
-
-        XCTAssertEqual(figmadoc, expectedDoc)
+        XCTAssertEqual(figmadoc, expectedRequestBody)
     }
 }

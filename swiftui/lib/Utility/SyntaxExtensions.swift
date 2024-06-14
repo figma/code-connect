@@ -7,21 +7,15 @@ enum ParsingError: Error {
     case nonStringLiteralKey
     case variantIncorrectValueType
     case incorrectStringDictionaryFormat
-    case nonStringLiteralsForLayers
-    case nonBooleanLiteralKey
 
     var localizedDescription: String {
         switch self {
         case .nonStringLiteralKey:
             return "Expected a string literal as a key for the dictionary"
-        case .nonBooleanLiteralKey:
-            return "Expected a boolean literal as a key for the dictionary."
         case .variantIncorrectValueType:
             return "Expected either a `String` or `Bool` literal for variant options"
         case .incorrectStringDictionaryFormat:
             return "Expected a [String: String] dictionary"
-        case .nonStringLiteralsForLayers:
-            return "Layer names in a @FigmaChildren declaration can only be string literals."
         }
     }
 }
@@ -39,19 +33,6 @@ extension VariableDeclSyntax {
         return self.bindings.first(where: {
             $0.pattern.as(IdentifierPatternSyntax.self)?.identifier.text == identifier
         })
-    }
-    
-    func firstAttributeNamed(_ name: String) -> AttributeSyntax? {
-        return attributes.first(where: { element in
-            element.as(AttributeSyntax.self)?.attributeName.as(IdentifierTypeSyntax.self)?.name.text == name
-        })?.as(AttributeSyntax.self)
-    }
-    
-    func firstAttributeMatching(_ names: [String]) -> AttributeSyntax? {
-        return attributes.first(where: { element in
-            guard let attributeName = element.as(AttributeSyntax.self)?.attributeName.as(IdentifierTypeSyntax.self)?.name.text else { return false }
-            return names.contains(attributeName)
-        })?.as(AttributeSyntax.self)
     }
 }
 
@@ -127,12 +108,12 @@ extension DictionaryExprSyntax {
         return reconstructedDictionary
     }
 
-    // Reconstructs a dictionary literal with string keys
-    func reconstructStringKeyedDictionary() throws -> [String: JSONPrimitive] {
+    // Reconstructs a dictionary literal
+    func reconstructDictionary() throws -> [String: DictionaryValue] {
         guard case let .elements(elements) = self.content else {
             return [:]
         }
-        var reconstructedDictionary: [String: JSONPrimitive] = [:]
+        var reconstructedDictionary: [String: DictionaryValue] = [:]
         try elements.forEach { element in
             guard let key = element.key.as(StringLiteralExprSyntax.self)?.concatenateSegments() else {
                 throw ParsingError.nonStringLiteralKey
@@ -141,33 +122,6 @@ extension DictionaryExprSyntax {
             reconstructedDictionary[key] = value
         }
         return reconstructedDictionary
-    }
-    
-    // Reconstructs a dictionary literal with boolean keys
-    func reconstructBooleanKeyedDictionary() throws -> [Bool: JSONPrimitive] {
-        guard case let .elements(elements) = self.content else {
-            return [:]
-        }
-        var reconstructedDictionary: [Bool: JSONPrimitive] = [:]
-        try elements.forEach { element in
-            guard let key = element.key.as(BooleanLiteralExprSyntax.self)?.booleanValue() else {
-                throw ParsingError.nonStringLiteralKey
-            }
-            let value = element.value.extractLiteralOrNamedValue()
-            reconstructedDictionary[key] = value
-        }
-        return reconstructedDictionary
-    }
-}
-
-extension ArrayExprSyntax {
-    func reconstructArray() throws -> [String] {
-        return try elements.compactMap { element in
-            guard let stringExpr = element.expression.as(StringLiteralExprSyntax.self) else {
-                throw ParsingError.nonStringLiteralsForLayers
-            }
-            return stringExpr.concatenateSegments()
-        }
     }
 }
 
@@ -181,21 +135,11 @@ extension StringLiteralExprSyntax {
 }
 
 extension CodeBlockItemListSyntax {
-    static let validNestableSyntaxes: [SyntaxProtocol.Type] = [ReturnStmtSyntax.self, FunctionCallExprSyntax.self, DeclReferenceExprSyntax.self]
     func trimmedDescriptionRemovingReturnStatement() -> String {
         if let returnStmtExpr = self.first?.item.as(ReturnStmtSyntax.self)?.expression {
             return returnStmtExpr.trimmedDescription
         }
         return self.trimmedDescription
-    }
-    
-    /// Determines whether or not a code snippet can be nested. Otherwise, it will be rendered as a "Pill" that links to an instance.
-    var nestable: Bool {
-        // If there are more than one code blocks, or no code blocks, then this element is not nestable.
-        guard self.count == 1, let item = self.first?.item else { return false }
-        return CodeBlockItemListSyntax.validNestableSyntaxes.contains(where: {
-            item.is($0)
-        })
     }
 }
 
@@ -218,18 +162,16 @@ extension ClosureExprSyntax {
 }
 
 extension ExprSyntax {
-    func extractLiteralOrNamedValue() -> JSONPrimitive {
+    func extractLiteralOrNamedValue() -> DictionaryValue {
         if let boolValue = self.as(BooleanLiteralExprSyntax.self) {
-            return JSONPrimitive.bool(boolValue.booleanValue())
+            return DictionaryValue.bool(boolValue.booleanValue())
         } else if let value = self.as(FloatLiteralExprSyntax.self)?.literal
                     ?? self.as(IntegerLiteralExprSyntax.self)?.literal,
                   let number = Double(value.text)
         {
-            return JSONPrimitive.number(number)
-        } else if self.is(NilLiteralExprSyntax.self) {
-            return .null
+            return DictionaryValue.number(number)
         } else {
-            return JSONPrimitive.string(self.trimmedDescription)
+            return DictionaryValue.string(self.trimmedDescription)
         }
     }
 }

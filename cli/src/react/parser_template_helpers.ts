@@ -14,153 +14,50 @@ declare const figma: { tsx: (template: TemplateStringsArray, ...args: any[]) => 
 // `.toString()` on the functions and return a string we can inject. Note that
 // comments will be stripped, as this is run through the build step first.
 
-// The parser serializes all enum values to strings when passing them to the
-// template. To preserve type information, we wrap any complex types with a
-// `type` field so we can determine how to render the prop value correctly in
-// the template (when passed to e.g __fcc_renderReactProp), and also to
-// differentiate between things like template strings and identifiers (e.g
-// MyEnum.Something).
-export type FCCValue =
-  | string
-  | number
-  | boolean
-  | undefined
-  | ReturnType<
-      | typeof _fcc_jsxElement
-      | typeof _fcc_function
-      | typeof _fcc_identifier
-      | typeof _fcc_object
-      | typeof _fcc_templateString
-    >
-
-export function _fcc_jsxElement(value: string) {
-  return {
-    value,
-    type: 'jsx-element',
-  } as const
-}
-
-export function _fcc_function(value: string) {
-  return {
-    value,
-    type: 'function',
-  } as const
-}
-
-export function _fcc_identifier(value: string) {
-  return {
-    value,
-    type: 'identifier',
-  } as const
-}
-
-export function _fcc_object(value: string) {
-  return {
-    value,
-    type: 'object',
-  } as const
-}
-
-export function _fcc_templateString(value: string) {
-  return {
-    value,
-    type: 'template-string',
-  } as const
-}
-
-// Render a React prop correctly, based on its type
-function _fcc_renderReactProp(name: string, prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) {
+// Render a React prop correctly, based on its type.
+function _fcc_renderReactProp(
+  name: string,
+  value: string | number | boolean | { type: 'CODE' | 'INSTANCE' }[],
+) {
   // If the value is an array, then it's an array of objects representing React
   // children (either of type INSTANCE for pills, or CODE for inline code). The
   // template string handler in the template API handles extracting the instance
   // objects in a way the UI can handle.
-  const isReactComponentArray = Array.isArray(prop)
+  const isReactComponentArray = Array.isArray(value)
 
-  if (isReactComponentArray) {
-    if (prop.length > 1) {
-      // If the array has multiple children, render them wrapped in braces and a
-      // fragment.
-      //
-      // We recursively call `figma.tsx` on the value as it itself is an array of
-      // CODE/INSTANCE sections, so we need to run it through the template string
-      // function otherwise this would just output `[object Object]` for the value.
-      // The template string handler function handles flattening nested arrays.
-      return figma.tsx` ${name}={<>${prop}</>}`
-    } else {
-      // Render a single child wrapped in braces, see above for why we use `figma.tsx`
-      return figma.tsx` ${name}={${prop}}`
-    }
-  }
-
-  // Render either the prop name or nothing for a boolean, we don't want to
-  // render `prop={true/false}`
-  if (typeof prop === 'boolean') {
-    return prop ? ` ${name}` : ''
-  }
-
-  // Replace any newlines or quotes in the string with escaped versions
-  if (typeof prop === 'string') {
-    return ` ${name}="${prop.replaceAll('\n', '\\n').replaceAll('"', '\\"')}"`
-  }
-
-  if (typeof prop === 'number') {
-    return ` ${name}={${prop}}`
-  }
-
-  if (prop === undefined) {
-    return ''
-  }
-
-  if (
-    prop.type === 'function' ||
-    prop.type === 'identifier' ||
-    prop.type === 'object' ||
-    prop.type === 'jsx-element'
+  if (isReactComponentArray && value.length > 1) {
+    // If the array has multiple children, render them wrapped in braces and a
+    // fragment.
+    //
+    // We recursively call `figma.tsx` on the value as it itself is an array of
+    // CODE/INSTANCE sections, so we need to run it through the template string
+    // function otherwise this would just output `[object Object]` for the value.
+    // The template string handler function handles flattening nested arrays.
+    return figma.tsx` ${name}={<>${value}</>}`
+  } else if (
+    isReactComponentArray ||
+    // This is a hack to allow React components to be passed in as enum mapping
+    // values - we should switch to using a more robust solution
+    (typeof value === 'string' && value.startsWith('<'))
   ) {
-    return ` ${name}={${prop.value}}`
-  }
-
-  if (prop.type === 'template-string') {
-    return ` ${name}={\`${prop.value}\`}`
-  }
-
-  return ''
-}
-
-// Renders React children correctly, based on their type
-function _fcc_renderReactChildren(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) {
-  if (Array.isArray(prop)) {
-    return prop
-  }
-
-  if (typeof prop === 'string' || typeof prop === 'number' || typeof prop === 'boolean') {
-    return prop
-  }
-
-  if (prop === undefined) {
+    // Render a single child wrapped in braces, see above for why we use `figma.tsx`
+    return figma.tsx` ${name}={${value}}`
+  } else if (typeof value === 'string') {
+    // Strings are wrapped in quotes
+    return ` ${name}="${value}"`
+  } else if (typeof value === 'number') {
+    // Numbers are wrapped in braces
+    return ` ${name}={${value}}`
+  } else if (typeof value === 'boolean') {
+    // Render either the prop name or nothing for a boolean, we don't want to
+    // render `prop={true/false}`
+    return value ? ` ${name}` : ''
+  } else if (typeof value === 'undefined') {
     return ''
   }
-
-  if (prop.type === 'template-string') {
-    // If the value is a template string, wrap in braces
-    return figma.tsx`{\`${prop.value}\`}`
-  }
-
-  // any other enum should be output as-is
-  return prop.value
 }
 
 // Return the helpers as a string which can be injected into the template
 export function getParsedTemplateHelpersString() {
-  return [
-    _fcc_renderReactProp,
-    _fcc_renderReactChildren,
-    _fcc_jsxElement,
-    _fcc_function,
-    _fcc_identifier,
-    _fcc_object,
-    _fcc_templateString,
-  ]
-    .map((fn) => fn.toString())
-    .join('\n')
+  return _fcc_renderReactProp.toString()
 }

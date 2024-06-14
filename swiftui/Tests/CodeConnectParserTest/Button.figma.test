@@ -26,61 +26,6 @@ struct FigmaButton_doc: FigmaConnect {
     let component = FigmaButton.self
     let figmaNodeUrl: String = "https://figma.com/file/abc/Test?node-id=123"
 
-    @FigmaEnum(
-        "👥 Variant",
-        mapping: [
-            "Primary": ButtonVariant.primary,
-            "Destructive": ButtonVariant.danger,
-            "Secondary": ButtonVariant.secondary,
-            "FigJam": ButtonVariant.figjam,
-            "Secondary Danger": ButtonVariant.secondaryDanger,
-            "Inverse": ButtonVariant.inverse,
-            "Success": ButtonVariant.success
-        ]
-    )
-    var buttonVariant: ButtonVariant = .primary
-    
-    var variant = ["Has Icon": true]
-
-    @FigmaString("🎛️ Label")
-    var title: String = "Submit"
-
-    @FigmaBoolean("🎛️ Disabled")
-    var disabled: Bool = false
-    
-    @FigmaBoolean("Is Destructive", mapping: [true: .destructive, false: .none])
-    var role: ButtonRole = .none
-    
-    @FigmaInstance("Icon")
-    var icon: Icon? = nil
-
-    var body: some View {
-        FigmaButton(
-            variant: self.buttonVariant,
-            role: role,
-            title: self.title,
-            icon: icon
-        )
-        .disabled(self.disabled) { self.icon }
-    }
-}
-
-struct LegacyFigmaButton: View {
-    let variant: ButtonVariant
-    let title: String
-
-    var body: some View {
-        Button(action: {}, label: {
-            /*@START_MENU_TOKEN@*/Text("Button")/*@END_MENU_TOKEN@*/
-        })
-    }
-}
-
-
-struct LegacyFigmaButton_doc: FigmaConnect {
-    let component = LegacyFigmaButton.self
-    let figmaNodeUrl: String = "https://figma.com/file/abc/Test?node-id=123"
-
     @FigmaProp(
         "👥 Variant",
         mapping: [
@@ -109,14 +54,6 @@ struct LegacyFigmaButton_doc: FigmaConnect {
 }
 
 
-struct NonNestable: FigmaConnect {
-    let component = AnyView.self
-    let figmaNodeUrl: String = "https://figma.com/file/abc/Test?node-id=123"
-    
-    var body: some View {
-        @State var isOn = true
-        
-        ElementWithBinding(isOn: $isOn)
-    }
-}
+
+
 

@@ -7,32 +7,26 @@ enum ComponentParsingError: Error {
 }
 
 // Represents a component as returned from the files API
-public struct Component: Decodable {
-    let figmaNodeUrl: String
+struct Component: Decodable {
     let name: String
-    let normalizedName: String
     let id: String
     let type: ComponentType
     let componentProperties: [String: ComponentProperty]?
 
     enum CodingKeys: String, CodingKey {
-        case figmaNodeUrl, name, normalizedName, id, type, componentProperties = "componentPropertyDefinitions"
+        case name, id, type, componentProperties = "componentPropertyDefinitions"
     }
 
     init(name: String, id: String, type: ComponentType, componentProperties: [String: ComponentProperty]) {
-        self.figmaNodeUrl = "TODO"
         self.name = name
-        self.normalizedName = "TODO"
         self.id = id
         self.type = type
         self.componentProperties = componentProperties
     }
 
-    public init(from decoder: Decoder) throws {
+    init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        figmaNodeUrl = try container.decode(String.self, forKey: .figmaNodeUrl)
         name = try container.decode(String.self, forKey: .name)
-        normalizedName = try container.decode(String.self, forKey: .normalizedName)
         id = try container.decode(String.self, forKey: .id)
         type = try container.decode(ComponentType.self, forKey: .type)
         componentProperties = try container.decodeIfPresent([String: ComponentProperty].self, forKey: .componentProperties)

@@ -1,21 +1,9 @@
 import * as ts from 'typescript'
 import { InternalError, ParserContext, ParserError } from '../react/parser'
-import {
-  assertIsArrayLiteralExpression,
-  assertIsStringLiteral,
-  stripQuotes,
-} from '../typescript/compiler'
+import { assertIsStringLiteral, stripQuotes } from '../typescript/compiler'
 import { convertObjectLiteralToJs } from '../typescript/compiler'
 import { assertIsObjectLiteralExpression } from '../typescript/compiler'
 import { FigmaConnectAPI } from './api'
-import {
-  FCCValue,
-  _fcc_function,
-  _fcc_identifier,
-  _fcc_jsxElement,
-  _fcc_object,
-  _fcc_templateString,
-} from '../react/parser_template_helpers'
 
 export const API_PREFIX = 'figma'
 export const FIGMA_CONNECT_CALL = `${API_PREFIX}.connect`
@@ -26,9 +14,6 @@ export enum IntrinsicKind {
   Boolean = 'boolean',
   Instance = 'instance',
   Children = 'children',
-  NestedProps = 'nested-props',
-  ClassName = 'className',
-  TextContent = 'text-content',
 }
 
 export interface IntrinsicBase {
@@ -36,7 +21,7 @@ export interface IntrinsicBase {
   args: {}
 }
 
-export type ValueMappingKind = FCCValue | Intrinsic
+export type ValueMappingKind = string | boolean | number | undefined | JSX.Element | Intrinsic
 
 export interface FigmaBoolean extends IntrinsicBase {
   kind: IntrinsicKind.Boolean
@@ -75,37 +60,7 @@ export interface FigmaChildren extends IntrinsicBase {
   }
 }
 
-export interface FigmaNestedProps extends IntrinsicBase {
-  kind: IntrinsicKind.NestedProps
-  args: {
-    layer: string
-    props: Record<string, Intrinsic>
-  }
-}
-
-export interface FigmaClassName extends IntrinsicBase {
-  kind: IntrinsicKind.ClassName
-  args: {
-    className: (string | Intrinsic)[]
-  }
-}
-
-export interface FigmaTextContent extends IntrinsicBase {
-  kind: IntrinsicKind.TextContent
-  args: {
-    layer: string
-  }
-}
-
-export type Intrinsic =
-  | FigmaBoolean
-  | FigmaEnum
-  | FigmaString
-  | FigmaInstance
-  | FigmaChildren
-  | FigmaNestedProps
-  | FigmaClassName
-  | FigmaTextContent
+export type Intrinsic = FigmaBoolean | FigmaEnum | FigmaString | FigmaInstance | FigmaChildren
 
 const Intrinsics: {
   [key: string]: {
@@ -154,10 +109,16 @@ makeIntrinsic('boolean', (name) => {
           ctx.sourceFile,
           `${name} second argument should be an object literal, that sets values for 'true' and 'false'`,
         )
-        valueMapping = parsePropsObject(valueMappingArg, ctx) as Record<
-          'true' | 'false',
-          ValueMappingKind
-        >
+        valueMapping = convertObjectLiteralToJs(
+          valueMappingArg,
+          ctx.sourceFile,
+          ctx.checker,
+          (valueNode) => {
+            if (ts.isCallExpression(valueNode)) {
+              return parseIntrinsic(valueNode, ctx)
+            }
+          },
+        )
       }
       return {
         kind: IntrinsicKind.Boolean,
@@ -173,7 +134,7 @@ makeIntrinsic('boolean', (name) => {
 makeIntrinsic('enum', (name) => {
   return {
     parse: (exp: ts.CallExpression, ctx: ParserContext): FigmaEnum => {
-      const { sourceFile } = ctx
+      const { sourceFile, checker } = ctx
       const figmaPropNameIdentifier = exp.arguments?.[0]
       assertIsStringLiteral(
         figmaPropNameIdentifier,
@@ -190,7 +151,11 @@ makeIntrinsic('enum', (name) => {
         kind: IntrinsicKind.Enum,
         args: {
           figmaPropName: stripQuotes(figmaPropNameIdentifier),
-          valueMapping: parsePropsObject(valueMapping, ctx),
+          valueMapping: convertObjectLiteralToJs(valueMapping, sourceFile, checker, (valueNode) => {
+            if (ts.isCallExpression(valueNode)) {
+              return parseIntrinsic(valueNode, ctx)
+            }
+          }),
         },
       }
     },
@@ -248,16 +213,6 @@ makeIntrinsic('children', (name) => {
       } else if (ts.isArrayLiteralExpression(layerName) && layerName.elements.length > 0) {
         layerName.elements.forEach((el) => {
           assertIsStringLiteral(el, sourceFile)
-          const name = stripQuotes(el)
-          if (name.includes('*')) {
-            throw new ParserError(
-              `Wildcards can not be used with an array of strings. Use a single string literal instead.`,
-              {
-                node: layerName,
-                sourceFile,
-              },
-            )
-          }
           layers.push(stripQuotes(el))
         })
       } else {
@@ -274,82 +229,6 @@ makeIntrinsic('children', (name) => {
         kind: IntrinsicKind.Children,
         args: {
           layers,
-        },
-      }
-    },
-  }
-})
-
-makeIntrinsic('nestedProps', (name) => {
-  return {
-    parse: (exp: ts.CallExpression, ctx: ParserContext): FigmaNestedProps => {
-      const { sourceFile } = ctx
-      const layerName = exp.arguments?.[0]
-      const mapping = exp.arguments?.[1]
-
-      assertIsStringLiteral(
-        layerName,
-        sourceFile,
-        `Invalid argument to ${name}, \`layerName\` should be a string literal`,
-      )
-      assertIsObjectLiteralExpression(
-        mapping,
-        sourceFile,
-        `Invalid argument to ${name}, \`props\` should be an object literal`,
-      )
-
-      return {
-        kind: IntrinsicKind.NestedProps,
-        args: {
-          layer: stripQuotes(layerName),
-          props: parsePropsObject(mapping, ctx),
-        },
-      }
-    },
-  }
-})
-
-makeIntrinsic('className', (name) => {
-  return {
-    parse: (exp: ts.CallExpression, ctx: ParserContext): FigmaClassName => {
-      const { sourceFile } = ctx
-      const classNameArg = exp.arguments?.[0]
-      const className: (string | Intrinsic)[] = []
-      assertIsArrayLiteralExpression(classNameArg, sourceFile, `${name} takes an array of strings`)
-
-      classNameArg.elements.forEach((el) => {
-        if (ts.isStringLiteral(el)) {
-          className.push(stripQuotes(el))
-        } else if (ts.isCallExpression(el)) {
-          className.push(parseIntrinsic(el, ctx))
-        }
-      })
-
-      return {
-        kind: IntrinsicKind.ClassName,
-        args: {
-          className,
-        },
-      }
-    },
-  }
-})
-
-makeIntrinsic('textContent', (name) => {
-  return {
-    parse: (exp: ts.CallExpression, ctx: ParserContext): FigmaTextContent => {
-      const { sourceFile } = ctx
-      const layerNameArg = exp.arguments?.[0]
-      assertIsStringLiteral(
-        layerNameArg,
-        sourceFile,
-        `${name} takes a single argument which is the Figma layer name`,
-      )
-
-      return {
-        kind: IntrinsicKind.TextContent,
-        args: {
-          layer: stripQuotes(layerNameArg),
         },
       }
     },
@@ -376,55 +255,24 @@ export function parseIntrinsic(exp: ts.CallExpression, parserContext: ParserCont
   })
 }
 
-/**
- * Replace newlines in enum values with \\n so that we don't output
- * broken JS with newlines inside the string
- */
-function replaceNewlines(str: string) {
-  return str.toString().replaceAll('\n', '\\n').replaceAll("'", "\\'")
-}
-
-export function valueMappingToString(
-  valueMapping: Record<string, ValueMappingKind>,
-  childLayer?: string,
-): string {
+export function valueMappingToString(valueMapping: Record<string, ValueMappingKind>): string {
   // For enums (and booleans with a valueMapping provided), convert the
   // value mapping to an object.
   return (
     '{\n' +
     Object.entries(valueMapping)
       .map(([key, value]) => {
-        if (
+        if (typeof value === 'object' && 'kind' in value) {
+          // Mappings can be nested, e.g. an enum value can be figma.instance(...)
+          return `"${key}": ${intrinsicToString(value as Intrinsic)}`
+        } else if (
           typeof value === 'boolean' ||
           typeof value === 'number' ||
           typeof value === 'undefined'
         ) {
           return `"${key}": ${value}`
-        }
-
-        if (typeof value === 'string') {
-          return `"${key}": '${replaceNewlines(value)}'`
-        }
-
-        if ('kind' in value) {
-          // Mappings can be nested, e.g. an enum value can be figma.instance(...)
-          return `"${key}": ${intrinsicToString(value as Intrinsic, childLayer)}`
-        }
-
-        const v = replaceNewlines(value.value)
-        switch (value.type) {
-          case 'function':
-            return `"${key}": _fcc_function('${v}')`
-          case 'identifier':
-            return `"${key}": _fcc_identifier('${v}')`
-          case 'object':
-            return `"${key}": _fcc_object('${v}')`
-          case 'template-string':
-            return `"${key}": _fcc_templateString('${v}')`
-          case 'jsx-element':
-            return `"${key}": _fcc_jsxElement('${v}')`
-          default:
-            throw new InternalError(`Unknown helper type: ${value}`)
+        } else {
+          return `"${key}": '${value}'`
         }
       })
       .join(',\n') +
@@ -432,8 +280,7 @@ export function valueMappingToString(
   )
 }
 
-export function intrinsicToString({ kind, args }: Intrinsic, childLayer?: string): string {
-  const selector = childLayer ?? `figma.currentLayer`
+export function intrinsicToString({ kind, args }: Intrinsic): string {
   switch (kind) {
     case IntrinsicKind.String:
     case IntrinsicKind.Instance: {
@@ -441,92 +288,27 @@ export function intrinsicToString({ kind, args }: Intrinsic, childLayer?: string
       // `const propName = figma.properties.string('propName')`, or
       // `const propName = figma.properties.boolean('propName')`, or
       // `const propName = figma.properties.instance('propName')`
-      return `${selector}.__properties__.${kind}('${args.figmaPropName}')`
+      return `figma.properties.${kind}('${args.figmaPropName}')`
     }
     case IntrinsicKind.Boolean: {
       if (args.valueMapping) {
         const mappingString = valueMappingToString(args.valueMapping)
         // Outputs: `const propName = figma.properties.boolean('propName', { ... mapping object from above ... })`
-        return `${selector}.__properties__.boolean('${args.figmaPropName}', ${mappingString})`
+        return `figma.properties.boolean('${args.figmaPropName}', ${mappingString})`
       }
-      return `${selector}.__properties__.boolean('${args.figmaPropName}')`
+      return `figma.properties.boolean('${args.figmaPropName}')`
     }
     case IntrinsicKind.Enum: {
       const mappingString = valueMappingToString(args.valueMapping)
 
       // Outputs: `const propName = figma.properties.enum('propName', { ... mapping object from above ... })`
-      return `${selector}.__properties__.enum('${args.figmaPropName}', ${mappingString})`
+      return `figma.properties.enum('${args.figmaPropName}', ${mappingString})`
     }
     case IntrinsicKind.Children: {
       // Outputs: `const propName = figma.properties.children(["Layer 1", "Layer 2"])`
-      return `${selector}.__properties__.children([${args.layers.map((layerName) => `"${layerName}"`).join(',')}])`
-    }
-    case IntrinsicKind.ClassName: {
-      // Outputs: `const propName = ['btn-base', figma.currentLayer.__properties__.enum('Size, { Large: 'btn-large' })].join(" ")`
-      return `[${args.className.map((className) => (typeof className === 'string' ? `"${className}"` : `${intrinsicToString(className, childLayer)}`)).join(', ')}].filter(v => !!v).join(' ')`
-    }
-    case IntrinsicKind.TextContent: {
-      return `${selector}.__findChildWithCriteria__({ name: '${args.layer}', type: "TEXT" }).textContent`
-    }
-    case IntrinsicKind.NestedProps: {
-      throw new ParserError(
-        `Deeply nested props should be expressed on the root level by passing the name of the inner layer`,
-      )
+      return `figma.properties.children([${args.layers.map((layerName) => `"${layerName}"`).join(',')}])`
     }
     default:
       throw new InternalError(`Unknown intrinsic: ${kind}`)
   }
 }
-
-function expressionToFccEnumValue(valueNode: ts.Expression, sourceFile: ts.SourceFile): FCCValue {
-  if (ts.isParenthesizedExpression(valueNode)) {
-    return expressionToFccEnumValue(valueNode.expression, sourceFile)
-  }
-
-  if (ts.isJsxElement(valueNode) || ts.isJsxSelfClosingElement(valueNode)) {
-    return _fcc_jsxElement(valueNode.getText())
-  }
-
-  if (ts.isArrowFunction(valueNode) || ts.isFunctionExpression(valueNode)) {
-    return _fcc_function(valueNode.getText())
-  }
-
-  if (ts.isObjectLiteralExpression(valueNode)) {
-    return _fcc_object(valueNode.getText())
-  }
-
-  if (ts.isTemplateLiteral(valueNode)) {
-    const str = valueNode.getText().replaceAll('`', '')
-    return _fcc_templateString(str)
-  }
-
-  if (ts.isPropertyAccessExpression(valueNode)) {
-    return _fcc_identifier(valueNode.getText())
-  }
-
-  // Fall back to the default conversion in `convertObjectLiteralToJs`
-  return undefined
-}
-
-/**
- * Parses the `props` field in a `figma.connect()` call, returning a mapping of
- * prop names to their respective intrinsic types
- *
- * @param objectLiteral An object literal expression
- * @param parserContext Parser context
- * @returns
- */
-export function parsePropsObject(
-  objectLiteral: ts.ObjectLiteralExpression,
-  parserContext: ParserContext,
-): PropMappings {
-  const { sourceFile, checker } = parserContext
-  return convertObjectLiteralToJs(objectLiteral, sourceFile, checker, (valueNode) => {
-    if (ts.isCallExpression(valueNode)) {
-      return parseIntrinsic(valueNode, parserContext)
-    }
-    return expressionToFccEnumValue(valueNode, sourceFile)
-  }) as PropMappings
-}
-
-export type PropMappings = Record<string, Intrinsic>
