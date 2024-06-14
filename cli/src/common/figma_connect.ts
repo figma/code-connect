@@ -1,21 +1,24 @@
 import { FigmaConnectLink } from './api'
-import { Intrinsic } from './intrinsics'
+import { Intrinsic, IntrinsicBase } from './intrinsics'
 
-export interface CodeConnectJSON {
+export type BaseCodeConnectObject = {
   figmaNode: string
   component?: string
   variant?: Record<string, any>
-  source: string
-  sourceLocation: { line: number }
   template: string
   templateData: {
-    props: Record<string, Intrinsic> | undefined
+    props?: Record<string, IntrinsicBase>
     imports?: string[]
     nestable?: boolean
   }
-  language: 'typescript'
+  language: string
   label: string
   links?: FigmaConnectLink[]
+  source?: string
+  sourceLocation?: { line: number }
+}
+
+export type CodeConnectJSON = BaseCodeConnectObject & {
   metadata: {
     cliVersion: string
   }

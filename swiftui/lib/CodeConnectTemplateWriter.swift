@@ -4,7 +4,62 @@ import SwiftFormat
 import SwiftParser
 import SwiftSyntax
 
-extension DictionaryValue {
+struct JSTemplateHelpers {
+    /// Helper function for rendering children -- Reads in the prefix which is passed from the parser and applies it to
+    /// all non-empty new lines, and then trims the trailing newline.
+    ///
+    /// For nested instances that render in pills, manually add spacing in between so that they appear on separate lines.
+    static let swiftChildrenRenderFn: String =
+        """
+        function __fcc_renderSwiftChildren(children, prefix) {
+          if (children === undefined) {
+            return children
+          }
+          return children.flatMap((child, index) => {
+            if (child.type === 'CODE') {
+              let code = child.code.split('\\n').map((line) => {
+                return line.trim() !== '' ? `${prefix}${line}` : line;
+              }).join('\\n')
+              if (index !== children.length - 1) {
+                code = code + '\\n'
+              }
+              return {
+                ...child,
+                code: code,
+              }
+            } else {
+                let elements = []
+                const shouldAddNewline = index > 0 && children[index - 1].type === 'CODE' && !children[index - 1].code.endsWith('\\n')
+                elements.push({ type: 'CODE', code: `${shouldAddNewline ? '\\n' : ''}${prefix}` })
+                elements.push(child)
+                if (index !== children.length - 1) {
+                    elements.push({ type: 'CODE', code: '\\n' })
+                }
+                return elements
+            }
+          })
+        }
+        """
+
+    static func swiftChildrenCall(variableName: String, prefix: String) -> String {
+        return "${__fcc_renderSwiftChildren(\(variableName), \'\(prefix)\')}"
+    }
+}
+
+fileprivate extension JSONPrimitive {
+    var keyValue: String {
+        switch self {
+        case .string(let string):
+            return "\(string)"
+        case .bool(let bool):
+            return "\(bool)"
+        case .number(let double):
+            return "\(double)"
+        case .null:
+            return "undefined"
+        }
+    }
+    
     var jsValue: String {
         switch self {
         case .string(let string):
@@ -19,10 +74,7 @@ extension DictionaryValue {
     }
 }
 
-extension PropMap {
-    static let namespace = "figma.properties"
-
-    var qualifiedFunctionName: String { PropMap.namespace + "." + jsFunctionName }
+fileprivate extension PropMap {
     var jsFunctionName: String {
         switch kind {
         case .boolean:
@@ -39,31 +91,79 @@ extension PropMap {
     var functionParams: String {
         switch kind {
         case .boolean:
-            return """
-            '\(args.figmaPropName)', {
-            'true': true,
-            'false': false
+            guard let params = valueMappedParams() else {
+                return """
+                '\(args.figmaPropName)', {
+                'true': true,
+                'false': false
+                }
+                """
             }
-            """
+            return params
         case .string, .instance:
             return "'\(args.figmaPropName)'"
         case .enumerable:
-            if let valueMapping = args.valueMapping {
-                return """
-                '\(args.figmaPropName)', {
-                \(valueMapping.compactMap { "'\($0.key)': \($0.value.jsValue)" }.sorted().joined(separator: ",\n"))
-                }
-                """
+            if let params = valueMappedParams() {
+                return params
             } else {
                 return "'\(args.figmaPropName)'"
             }
         }
     }
+    
+    func valueMappedParams() -> String? {
+        guard let valueMapping = args.valueMapping else {
+            return nil
+        }
+        return """
+        '\(args.figmaPropName)', {
+        \(valueMapping.compactMap { "'\($0.key.keyValue)': \($0.value.jsValue)" }.sorted().joined(separator: ",\n"))
+        }
+        """
+    }
 }
 
-struct FigmaConditionalTemplate {
+fileprivate extension FigmaChildren {
+    var jsFunctionName: String {
+        "children"
+    }
+    
+    var functionParams: String {
+        return "[\(args.layerNames.map { "\"\($0)\"" }.joined(separator: ", "))]"
+    }
+    
+}
+
+fileprivate extension TemplateDataProp {
+    static let namespace = "figma.properties"
+
+    var qualifiedFunctionName: String { TemplateDataProp.namespace + "." + jsFunctionName }
+    var jsFunctionName: String {
+        switch self {
+        case .children(let children):
+            return children.jsFunctionName
+        case .propMap(let propMap):
+            return propMap.jsFunctionName
+        }
+    }
+    
+    var functionParams: String {
+        switch self {
+        case .children(let children):
+            return children.functionParams
+        case .propMap(let propMap):
+            return propMap.functionParams
+        }
+    }
+
+    var functionCall: String {
+        return "\(qualifiedFunctionName)(\(functionParams))"
+    }
+}
+
+fileprivate struct FigmaConditionalTemplate {
     enum Condition {
-        case equalsDefault(propName: String, defaultValue: DictionaryValue)
+        case equalsDefault(propName: String, defaultValue: JSONPrimitive)
         case boolean(propName: String)
 
         var templatedDescription: String {
@@ -80,18 +180,22 @@ struct FigmaConditionalTemplate {
     let apply: String?
     let elseApply: String?
 
-    func templateStringWithLeadingTrivia(_ trivia: String) -> String {
+    /// Returns a string formatted at a JS template string, prepending a prefix to the `apply` and `elseApply` cases if necessary. The prefix is used to add whitespace in order to format properly when rendered in Dev Mode.
+    /// For example, if `apply` is `.tint(.blue)` and `elseApply` is `.tint(.blue).disabled(true)`, with prefix = `\t`
+    /// the resultant template will be
+    /// `${some_condition ? '\t.tint(.blue)' : '\t.tint(.blue).disabled(true)'}`
+    func templateStringWithPrefix(_ prefix: String) -> String {
         // Double escape newline characters
-        let jsParseableTrivia = trivia.replacingOccurrences(of: "\n", with: "\\n")
+        let jsParseablePrefix = prefix.replacingOccurrences(of: "\n", with: "\\n")
 
-        var applyString: String = "undefined"
+        var applyString = "undefined"
         if let apply {
-            applyString = "`\(jsParseableTrivia + apply)`"
+            applyString = "`\(jsParseablePrefix + apply)`"
         }
 
-        var elseApplyString: String = "undefined"
+        var elseApplyString = "undefined"
         if let elseApply {
-            elseApplyString = "`\(jsParseableTrivia + elseApply)`"
+            elseApplyString = "`\(jsParseablePrefix + elseApply)`"
         }
 
         return "${\(condition.templatedDescription) ? \(applyString) : \(elseApplyString)}"
@@ -105,6 +209,7 @@ struct CodeConnectTemplateWriter {
     func createTemplate() -> String? {
         var lines = [String]()
         lines.append("const figma = require('figma')\n")
+        lines.append(JSTemplateHelpers.swiftChildrenRenderFn)
         lines.append(contentsOf: createPropDefinitions())
         lines.append(rewriteCodeBlockWithTemplate())
         return lines.joined(separator: "\n")
@@ -112,8 +217,8 @@ struct CodeConnectTemplateWriter {
 
     private func createPropDefinitions() -> [String] {
         var propDefinitions = [String]()
-        templateData.props.forEach { key, value in
-            propDefinitions.append("const \(key) = \(value.qualifiedFunctionName)(\(value.functionParams))")
+        for (key, value) in templateData.props {
+            propDefinitions.append("const \(key) = \(value.functionCall)")
         }
         return propDefinitions.sorted()
     }
@@ -137,20 +242,29 @@ struct CodeConnectTemplateWriter {
             newSyntaxTree = rewriter.visit(newSyntaxTree)
         }
 
-        let rewrittenCode = replaceConditionalTemplates(
-            code: newSyntaxTree.description,
+        let rewrittenCode = newSyntaxTree.description.replaceConditionalTemplates(
             conditionalTemplates: rewriter.conditionalTemplates
-        )
+        ).replaceNestedInstancePlaceholders(
+            nestedInstanceCalls: rewriter.nestedInstanceCalls
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        
         return "export default figma.swift`\(rewrittenCode)`"
     }
+}
 
-    private func replaceConditionalTemplates(
-        code: String,
+fileprivate extension String {
+    
+    /// In order to replace `figmaApply` and `hideDefault` calls, we use string substitution to find replacement strings and
+    /// Insert the appropriate ternary expression.
+    ///
+    /// - Parameter conditionalTemplates: The conditional templates that should be rendered in place of placeholders
+    /// - Returns: An updated string replacing `replacementFunctionNameForApplyAndDefaults(withDotAndParens:)` calls.
+    func replaceConditionalTemplates(
         conditionalTemplates: [FigmaConditionalTemplate]
     ) -> String {
-        var currentCode = code
+        var currentCode = self
         for (replaceIndex, conditionalTemplate) in conditionalTemplates.enumerated() {
-            let replacementString = replaceIndex.replacementFunctionNameForApply(withDotAndParens: true)
+            let replacementString = replaceIndex.replacementFunctionNameForApplyAndDefaults(withDotAndParens: true)
             guard let replacementStringLoc = currentCode.range(of: replacementString) else {
                 return currentCode
             }
@@ -158,54 +272,129 @@ struct CodeConnectTemplateWriter {
             let startReplacementIndex =
                 currentCode.prefix(upTo: replacementStringLoc.lowerBound).lastIndex(of: "\n")
                     ?? replacementStringLoc.lowerBound
-            let trivia = String(currentCode[startReplacementIndex ..< replacementStringLoc.lowerBound])
+            let prefix = String(currentCode[startReplacementIndex ..< replacementStringLoc.lowerBound])
+
             currentCode.replaceSubrange(
                 startReplacementIndex ..< replacementStringLoc.upperBound,
-                with: conditionalTemplate.templateStringWithLeadingTrivia(trivia)
+                with: conditionalTemplate.templateStringWithPrefix(prefix)
             )
+        }
+        return currentCode
+    }
+    
+    
+    /// In order to support inline rendering of `Figma.children` and `Figma.instance` calls, we use a js helper to handle formatting once substitutions have been made.
+    /// Since Swift formatting isn't supported on the client side, this helps us add formatting at the parser level.
+    ///
+    /// Note: The logic here and `replaceConditionalTemplates` differ in that `replaceConditionalTemplate` captures the leading `\n` into the ternary expressions.
+    ///
+    /// - Parameter nestedInstanceCalls: The variable names for whenever a `@FigmaChildren` or `@FigmaInstance` property is called from code.
+    /// - Returns: An updated version of the string with placeholders replaced with the appropriate JS Template string.
+    func replaceNestedInstancePlaceholders(
+        nestedInstanceCalls: [String]
+    ) -> String {
+        var currentCode = self
+        for (replaceIndex, varName) in nestedInstanceCalls.enumerated() {
+            let replacementString = replaceIndex.replacementPropertyPlaceholders()
+            guard let replacementStringLoc = currentCode.range(of: replacementString) else {
+                return currentCode
+            }
+            
+            
+            var startReplacementIndex: Index
+            // Get the leading text after the nearest newline, preserving the existing newline.
+            // Only prepend the prefix if its whitespace only
+            if let lastNewline = currentCode.prefix(upTo: replacementStringLoc.lowerBound).lastIndex(of: "\n"),
+               String(currentCode[index(after: lastNewline) ..< replacementStringLoc.lowerBound]).isWhitespaceOnly
+            {
+                startReplacementIndex = index(after: lastNewline)
+            } else {
+                startReplacementIndex = replacementStringLoc.lowerBound
+            }
+            
+            let prefix = String(currentCode[startReplacementIndex ..< replacementStringLoc.lowerBound])
+            
+            currentCode.replaceSubrange(
+                startReplacementIndex ..< replacementStringLoc.upperBound,
+                with: JSTemplateHelpers.swiftChildrenCall(variableName: varName, prefix: prefix)
+            )
+
         }
         return currentCode
     }
 }
 
-class MappedPropertyRewriter: SyntaxRewriter {
+fileprivate class MappedPropertyRewriter: SyntaxRewriter {
     enum NodeNames {
         static let figmaApplyFunction = "figmaApply"
         static let elseApplyLabel = "elseApply"
     }
 
-    let propMaps: [String: PropMap]
+    let propMaps: [String: TemplateDataProp]
     var conditionalTemplates: [FigmaConditionalTemplate] = []
-
-    init(
-        propMaps: [String: PropMap]
-    ) {
+    var nestedInstanceCalls: [String] = []
+    
+    init(propMaps: [String: TemplateDataProp]) {
         self.propMaps = propMaps
     }
 
     override func visit(_ node: MemberAccessExprSyntax) -> ExprSyntax {
-        guard let parent = node.parent, parent.is(LabeledExprSyntax.self),
+        let nodeName = node.declName.baseName.text
+        guard let parent = node.parent, parent.is(LabeledExprSyntax.self) || parent.is(CodeBlockItemSyntax.self),
               let propMap =
-              propMaps[node.declName.baseName.text]
+              propMaps[nodeName]
         else {
             return super.visit(node)
         }
 
-        let template = propMap.transformTemplateString("${\(node.declName.baseName.text)}")
-        return ExprSyntax(stringLiteral: template)
-            .with(\.leadingTrivia, node.leadingTrivia)
-            .with(\.trailingTrivia, node.trailingTrivia)
+        if case .children(_) = propMap {
+            let replacement = nestedInstanceCalls.count.replacementPropertyPlaceholders()
+            nestedInstanceCalls.append(nodeName)
+            return ExprSyntax(stringLiteral: replacement)
+                .with(\.leadingTrivia, node.leadingTrivia)
+                .with(\.trailingTrivia, node.trailingTrivia)
+        } else if case .propMap(let instance) = propMap, instance.kind == .instance {
+            let replacement = nestedInstanceCalls.count.replacementPropertyPlaceholders()
+            nestedInstanceCalls.append(nodeName)
+            return ExprSyntax(stringLiteral: replacement)
+                .with(\.leadingTrivia, node.leadingTrivia)
+                .with(\.trailingTrivia, node.trailingTrivia)
+        } else {
+            let template = propMap.transformTemplateString(nodeName)
+            return ExprSyntax(stringLiteral: template)
+                .with(\.leadingTrivia, node.leadingTrivia)
+                .with(\.trailingTrivia, node.trailingTrivia)
+        }
+
     }
 
     // Finds usages of prop mapped variables and replaces them with the JavaScript template string.
     override func visit(_ node: DeclReferenceExprSyntax) -> ExprSyntax {
-        guard let parent = node.parent, parent.is(LabeledExprSyntax.self), let propMap =
+        let nodeName = node.baseName.text
+        guard let parent = node.parent, parent.is(LabeledExprSyntax.self) || parent.is(CodeBlockItemSyntax.self) || parent.is(InitializerClauseSyntax.self), 
+                let propMap =
             propMaps[node.baseName.text]
         else {
             return super.visit(node)
         }
-        let template = propMap.transformTemplateString("${\(node.baseName.text)}")
-        return ExprSyntax(stringLiteral: template)
+        if case .children(_) = propMap {
+            let replacement = nestedInstanceCalls.count.replacementPropertyPlaceholders()
+            nestedInstanceCalls.append(nodeName)
+            return ExprSyntax(stringLiteral: replacement)
+                .with(\.leadingTrivia, node.leadingTrivia)
+                .with(\.trailingTrivia, node.trailingTrivia)
+        } else if case .propMap(let instanceMap) = propMap, instanceMap.kind == .instance {
+            let replacement = nestedInstanceCalls.count.replacementPropertyPlaceholders()
+            nestedInstanceCalls.append(nodeName)
+            return ExprSyntax(stringLiteral: replacement)
+                .with(\.leadingTrivia, node.leadingTrivia)
+                .with(\.trailingTrivia, node.trailingTrivia)
+        } else {
+            let template = propMap.transformTemplateString(nodeName)
+            return ExprSyntax(stringLiteral: template)
+                .with(\.leadingTrivia, node.leadingTrivia)
+                .with(\.trailingTrivia, node.trailingTrivia)
+        }
     }
 
     override func visit(_ node: FunctionCallExprSyntax) -> ExprSyntax {
@@ -217,12 +406,12 @@ class MappedPropertyRewriter: SyntaxRewriter {
         // If this nodes argument contains a prop mapped value with hideDefault = true, rewrite it.
         if let propMappedArg = node.arguments.first(where: { labeledExprSyntax in
             guard let baseName = labeledExprSyntax.getArgumentBasename(),
-                  let propMap = propMaps[baseName],
+                  case .propMap(let propMap) = propMaps[baseName],
                   propMap.hideDefault
             else { return false }
             return true
         })?.getArgumentBasename(),
-            let propMap = propMaps[propMappedArg],
+            case .propMap(let propMap) = propMaps[propMappedArg],
             let defaultValue = propMap.defaultValue
         {
             return rewriteFunctionCallWithHideDefault(
@@ -233,7 +422,6 @@ class MappedPropertyRewriter: SyntaxRewriter {
         }
         return super.visit(node)
     }
-
 
     /// Rewrites a function call with a replacement string for function calls that use a property annotated with `hideDefault`.
     /// These calls are added to `conditionalTemplates` so that they can be replaced upon a second pass.
@@ -251,7 +439,7 @@ class MappedPropertyRewriter: SyntaxRewriter {
     func rewriteFunctionCallWithHideDefault(
         _ node: FunctionCallExprSyntax,
         defaultArgName: String,
-        defaultValue: DictionaryValue
+        defaultValue: JSONPrimitive
     ) -> ExprSyntax? {
         guard let calledExpression = node.calledExpression.as(MemberAccessExprSyntax.self) else {
             return nil
@@ -264,19 +452,19 @@ class MappedPropertyRewriter: SyntaxRewriter {
             ExprSyntax(MemberAccessExprSyntax(name: calledExpression.declName.baseName))
         ).with(
             \.arguments,
-             LabeledExprListSyntax(node.arguments.map({
-                 if $0.getArgumentBasename() == defaultArgName {
-                     return $0.with(\.expression, ExprSyntax(stringLiteral:"${\(defaultArgName)}"))
-                 }
-                 return $0
-             }))
+            LabeledExprListSyntax(node.arguments.map {
+                if $0.getArgumentBasename() == defaultArgName {
+                    return $0.with(\.expression, ExprSyntax(stringLiteral: "${\(defaultArgName)}"))
+                }
+                return $0
+            })
         )
 
         // Create a new called expression that can be easily found and replaced in a second pass.
         let newCalledExpression = calledExpression.with(
             \.declName,
             DeclReferenceExprSyntax(
-                baseName: "\(raw: conditionalTemplates.count.replacementFunctionNameForApply(withDotAndParens: false))"
+                baseName: "\(raw: conditionalTemplates.count.replacementFunctionNameForApplyAndDefaults(withDotAndParens: false))"
             )
         )
 
@@ -326,7 +514,7 @@ class MappedPropertyRewriter: SyntaxRewriter {
         let newCalledExpression = calledExpression.with(
             \.declName,
             DeclReferenceExprSyntax(
-                baseName: "\(raw: conditionalTemplates.count.replacementFunctionNameForApply(withDotAndParens: false))"
+                baseName: "\(raw: conditionalTemplates.count.replacementFunctionNameForApplyAndDefaults(withDotAndParens: false))"
             )
         )
 
@@ -350,8 +538,12 @@ class MappedPropertyRewriter: SyntaxRewriter {
 }
 
 fileprivate extension Int {
-    func replacementFunctionNameForApply(withDotAndParens: Bool) -> String {
+    func replacementFunctionNameForApplyAndDefaults(withDotAndParens: Bool) -> String {
         return withDotAndParens ? ".___FIGMA_APPLY_\(self)__()" : "___FIGMA_APPLY_\(self)__"
+    }
+
+    func replacementPropertyPlaceholders() -> String {
+        return "__FIGMA_REPLACE_\(self)__"
     }
 }
 

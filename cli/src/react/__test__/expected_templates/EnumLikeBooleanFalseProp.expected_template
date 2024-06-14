@@ -1,6 +1,6 @@
 const figma = require('figma')
 
-const icon = figma.properties.boolean('Prop', {
+const icon = figma.currentLayer.__properties__.boolean('Prop', {
 "true": 'yes',
 "false": 'no'})
 
