@@ -1,5 +1,4 @@
 .env
-figma.config.json
 .DS_Store
 node_modules
 dist/
@@ -10,3 +9,5 @@ coverage
 bundle/
 .build/
 .swiftpm/
+bundle-cli
+webpack-dist

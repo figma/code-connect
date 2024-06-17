@@ -1,0 +1,6 @@
+{
+  "codeConnect": {
+    "parser": "does-not-exist",
+    "include": ["*.*"]
+  }
+}

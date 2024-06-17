@@ -15,46 +15,45 @@ class CodeConnectTemplateWriterTest: XCTestCase {
         )
         let templateData = TemplateData(
             props: [
-                "buttonVariant": PropMap(
+                "buttonVariant": .propMap(PropMap(
                     kind: .enumerable,
                     args: PropMapArgs(
                         figmaPropName: "Variant",
                         valueMapping: [
-                            "Primary": .string("ButtonVariant.primary"),
-                            "Destructive": .string("ButtonVariant.danger")
+                            .string("Primary"): .string("ButtonVariant.primary"),
+                            .string("Destructive"): .string("ButtonVariant.danger")
                         ]
                     ),
                     hideDefault: false,
-                    defaultValue: nil
-
+                    defaultValue: nil)
 
                 ),
-                "title": PropMap(
+                "title": .propMap(PropMap(
                     kind: .string,
                     args: PropMapArgs(
                         figmaPropName: "Label",
                         valueMapping: nil
                     ),
                     hideDefault: false,
-                    defaultValue: nil
+                    defaultValue: nil)
                 ),
-                "icon": PropMap(
+                "icon": .propMap(PropMap(
                     kind: .instance,
                     args: PropMapArgs(
                         figmaPropName: "Icon",
                         valueMapping: nil
                     ),
                     hideDefault: false,
-                    defaultValue: nil
+                    defaultValue: nil)
                 ),
-                "disabled": PropMap(
+                "disabled": .propMap(PropMap(
                     kind: .boolean,
                     args: PropMapArgs(
                         figmaPropName: "Disabled",
                         valueMapping: nil
                     ),
                     hideDefault: false,
-                    defaultValue: nil
+                    defaultValue: nil)
                 )
             ],
             imports: []
@@ -62,9 +61,7 @@ class CodeConnectTemplateWriterTest: XCTestCase {
 
         let writer = CodeConnectTemplateWriter(code: code, templateData: templateData)
 
-        let expectedTempate = """
-        const figma = require('figma')
-
+        let expectedTemplate = """
         const buttonVariant = figma.properties.enum('Variant', {
         'Destructive': 'ButtonVariant.danger',
         'Primary': 'ButtonVariant.primary'
@@ -75,9 +72,9 @@ class CodeConnectTemplateWriterTest: XCTestCase {
         })
         const icon = figma.properties.instance('Icon')
         const title = figma.properties.string('Label')
-        export default figma.swift`Button(variant: ${buttonVariant})\n    .disabled(${disabled})\n    .title("${title}")\n`
+        export default figma.swift`Button(variant: ${buttonVariant})\n    .disabled(${disabled})\n    .title("${title.replace(/\\n/g, \'\\\\n\')}")`
         """
-        XCTAssertEqual(writer.createTemplate(), expectedTempate)
+        XCTAssertEqual(writer.createTemplate(), JSTemplateTestHelpers.templateWithInitialBoilerplate(expectedTemplate))
     }
 
     func test_figmaApply_withNoElse() {
@@ -93,16 +90,16 @@ class CodeConnectTemplateWriterTest: XCTestCase {
         )
         let templateData = TemplateData(
             props: [
-                "isPrimary": PropMap(
+                "isPrimary": .propMap(PropMap(
                     kind: .enumerable,
                     args: PropMapArgs(
                         figmaPropName: "Type",
                         valueMapping: [
-                            "Primary": .bool(true)
+                            .string("Primary"): .bool(true)
                         ]
                     ),
                     hideDefault: false,
-                    defaultValue: nil
+                    defaultValue: nil)
                 )
             ],
             imports: []
@@ -110,15 +107,13 @@ class CodeConnectTemplateWriterTest: XCTestCase {
 
         let writer = CodeConnectTemplateWriter(code: code, templateData: templateData)
 
-        let expectedTempate = """
-        const figma = require('figma')
-
+        let expectedTemplate = """
         const isPrimary = figma.properties.enum('Type', {
         'Primary': true
         })
-        export default figma.swift`Button()\n    .someModifier()${isPrimary ? `\\n    .tint(.blue)` : undefined} \n    .someOtherModifier()\n`
+        export default figma.swift`Button()\n    .someModifier()${isPrimary ? `\\n    .tint(.blue)` : undefined} \n    .someOtherModifier()`
         """
-        XCTAssertEqual(writer.createTemplate(), expectedTempate)
+        XCTAssertEqual(writer.createTemplate(), JSTemplateTestHelpers.templateWithInitialBoilerplate(expectedTemplate))
     }
 
     func test_figmaApply_withElse() {
@@ -136,16 +131,16 @@ class CodeConnectTemplateWriterTest: XCTestCase {
         )
         let templateData = TemplateData(
             props: [
-                "isPrimary": PropMap(
+                "isPrimary": .propMap(PropMap(
                     kind: .enumerable,
                     args: PropMapArgs(
                         figmaPropName: "Type",
                         valueMapping: [
-                            "Primary": .bool(true)
+                            .string("Primary"): .bool(true)
                         ]
                     ),
                     hideDefault: false,
-                    defaultValue: nil
+                    defaultValue: nil)
                 )
             ],
             imports: []
@@ -153,15 +148,13 @@ class CodeConnectTemplateWriterTest: XCTestCase {
 
         let writer = CodeConnectTemplateWriter(code: code, templateData: templateData)
 
-        let expectedTempate = """
-        const figma = require('figma')
-
+        let expectedTemplate = """
         const isPrimary = figma.properties.enum('Type', {
         'Primary': true
         })
-        export default figma.swift`Button()\n    .someModifier()${isPrimary ? `\\n    .tint(.blue)` : `\\n    .tint(.clear)`} \n    .someOtherModifier()\n`
+        export default figma.swift`Button()\n    .someModifier()${isPrimary ? `\\n    .tint(.blue)` : `\\n    .tint(.clear)`} \n    .someOtherModifier()`
         """
-        XCTAssertEqual(writer.createTemplate(), expectedTempate)
+        XCTAssertEqual(writer.createTemplate(), JSTemplateTestHelpers.templateWithInitialBoilerplate(expectedTemplate))
     }
 
     func test_figmaApply_withMultiple() {
@@ -182,28 +175,28 @@ class CodeConnectTemplateWriterTest: XCTestCase {
         )
         let templateData = TemplateData(
             props: [
-                "isPrimary": PropMap(
+                "isPrimary": .propMap(PropMap(
                     kind: .enumerable,
                     args: PropMapArgs(
                         figmaPropName: "Type",
                         valueMapping: [
-                            "Primary": .bool(true)
+                            .string("Primary"): .bool(true)
                         ]
                     ),
                     hideDefault: false,
-                    defaultValue: nil
+                    defaultValue: nil)
                 ),
-                "isDisabled": PropMap(
+                "isDisabled": .propMap(PropMap(
                     kind: .enumerable,
                     args: PropMapArgs(
                         figmaPropName: "State",
                         valueMapping: [
-                            "Disabled": .bool(true),
-                            "Enabled": .bool(false)
+                            .string("Disabled"): .bool(true),
+                            .string("Enabled"): .bool(false)
                         ]
                     ),
                     hideDefault: false,
-                    defaultValue: nil
+                    defaultValue: nil)
                 )
             ],
             imports: []
@@ -211,9 +204,7 @@ class CodeConnectTemplateWriterTest: XCTestCase {
 
         let writer = CodeConnectTemplateWriter(code: code, templateData: templateData)
 
-        let expectedTempate = """
-        const figma = require('figma')
-
+        let expectedTemplate = """
         const isDisabled = figma.properties.enum('State', {
         'Disabled': true,
         'Enabled': false
@@ -221,9 +212,9 @@ class CodeConnectTemplateWriterTest: XCTestCase {
         const isPrimary = figma.properties.enum('Type', {
         'Primary': true
         })
-        export default figma.swift`Button()\n    .someModifier()${isPrimary ? `\\n    .tint(.blue)` : `\\n    .tint(.clear)`} \n    .someOtherModifier()${isDisabled ? `\\n    .disabled(true)` : undefined} \n`
+        export default figma.swift`Button()\n    .someModifier()${isPrimary ? `\\n    .tint(.blue)` : `\\n    .tint(.clear)`} \n    .someOtherModifier()${isDisabled ? `\\n    .disabled(true)` : undefined}`
         """
-        XCTAssertEqual(writer.createTemplate(), expectedTempate)
+        XCTAssertEqual(writer.createTemplate(), JSTemplateTestHelpers.templateWithInitialBoilerplate(expectedTemplate))
     }
 
     func test_hideDefault() {
@@ -240,33 +231,85 @@ class CodeConnectTemplateWriterTest: XCTestCase {
 
         let templateData = TemplateData(
             props: [
-                "disabled": PropMap(
+                "disabled": .propMap(PropMap(
                     kind: .enumerable,
                     args: PropMapArgs(
                         figmaPropName: "State",
                         valueMapping: [
-                            "Disabled": .bool(true),
-                            "Enabled": .bool(false)
+                            .string("Disabled"): .bool(true),
+                            .string("Enabled"): .bool(false)
                         ]
                     ),
                     hideDefault: true,
                     defaultValue: .bool(false)
-                )
+                ))
             ],
             imports: []
         )
 
         let writer = CodeConnectTemplateWriter(code: code, templateData: templateData)
 
-        let expectedTempate = """
-        const figma = require('figma')
-
+        let expectedTemplate = """
         const disabled = figma.properties.enum('State', {
         'Disabled': true,
         'Enabled': false
         })
-        export default figma.swift`Button()\n    .someModifier()${disabled === false ? undefined : `\\n    .disabled(${disabled}) {\n        // Some trailing closure\n    }`} \n    .someOtherModifier()\n`
+        export default figma.swift`Button()\n    .someModifier()${disabled === false ? undefined : `\\n    .disabled(${disabled}) {\n        // Some trailing closure\n    }`} \n    .someOtherModifier()`
         """
-        XCTAssertEqual(writer.createTemplate(), expectedTempate)
+        XCTAssertEqual(writer.createTemplate(), JSTemplateTestHelpers.templateWithInitialBoilerplate(expectedTemplate))
+    }
+
+    func test_figmaChildren() {
+        let code = CodeBlockItemListSyntax(stringLiteral:
+            """
+            VStack {
+                self.contents
+            }
+            """
+        )
+
+        let templateData = TemplateData(
+            props: [
+                "contents": .children(FigmaChildren(layerNames: ["A", "B"]))
+            ],
+            imports: []
+        )
+
+        let writer = CodeConnectTemplateWriter(code: code, templateData: templateData)
+
+        let expectedTemplate = """
+        const contents = figma.properties.children(["A", "B"])
+        export default figma.swift`VStack {\n${__fcc_renderSwiftChildren(contents, '    ')}\n}`
+        """
+        XCTAssertEqual(writer.createTemplate(), JSTemplateTestHelpers.templateWithInitialBoilerplate(expectedTemplate))
+    }
+
+    func test_propInClosure() {
+        let code = CodeBlockItemListSyntax(stringLiteral:
+            """
+            VStack {
+                self.icon
+            }
+            """
+        )
+
+        let templateData = TemplateData(
+            props: [
+                "icon": .propMap(PropMap(
+                    kind: .instance,
+                    args: PropMapArgs(figmaPropName: "Icon", valueMapping: nil),
+                    hideDefault: false, defaultValue: nil
+                ))
+            ],
+            imports: []
+        )
+
+        let writer = CodeConnectTemplateWriter(code: code, templateData: templateData)
+
+        let expectedTemplate = """
+        const icon = figma.properties.instance('Icon')
+        export default figma.swift`VStack {\n${__fcc_renderSwiftChildren(icon, '    ')}\n}`
+        """
+        XCTAssertEqual(writer.createTemplate(), JSTemplateTestHelpers.templateWithInitialBoilerplate(expectedTemplate))
     }
 }

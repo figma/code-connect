@@ -1,4 +1,12 @@
-type EnumValue = string | boolean | number | symbol | undefined | JSX.Element
+export type EnumValue =
+  | string
+  | boolean
+  | number
+  | symbol
+  | undefined
+  | JSX.Element
+  | Function
+  | Object
 
 export interface FigmaConnectAPI {
   /**
@@ -124,9 +132,67 @@ export interface FigmaConnectAPI {
    * Would show the nested code example for the child instance named 'Icon'. This also supports
    * an array: `tabs: figma.children(['Tab 1', 'Tab 2'])` to map multiple nested examples.
    *
+   * You can pass a single wildcard '*' character to match partial names. For example:
+   * ```ts
+   * props: {
+   *   icon: figma.children('Icon*')
+   * }
+   * ```
+   * Would show the nested code example for any child instance which name starts with "Icon"
+   *
    * @param figmaPropName The name of the property on the Figma component
    */
   children(layerNames: string | string[]): JSX.Element
+
+  /**
+   * Maps nested properties from a Figma instance layer. The first argument
+   * should be the layer name of the nested instance. The mapping object passed
+   * in is in the same format as the `props` object in the `connect` function.
+   * For example:
+   * ```ts
+   * props: {
+   *   nested: figma.nestedProps('Nested', {
+   *     label: figma.string('Text'),
+   *     icon: figma.instance('Icon'),
+   *   }),
+   * }
+   * Which would then allow you to access the nested properties in the `example` function like so:
+   * ```ts
+   * (props) => <Button label={props.nested.label} icon={props.nested.icon} />
+   * ```
+   */
+  nestedProps<T>(layer: string, props: PropMapping<T>): T
+
+  /**
+   * Creates a className string by joining an array of strings. The argument supports both
+   * string literals and nested functions like `figma.enum` and `figma.boolean` that return
+   * a string. For example:
+   * ```ts
+   * props: {
+   *   className: figma.className([
+   *     'btn-base',
+   *     figma.enum('Size', { Large: 'btn-large' }),
+   *     figma.boolean('Disabled', { true: 'btn-disabled', false: '' }),
+   *   ]),
+   * }
+   *
+   * @param className
+   */
+  className(className: (string | undefined)[]): string
+
+  /**
+   * Maps a Figma text layer to a string value representing the text content of that layer.
+   * This function takes the layer name within the original component as its parameter.
+   * For example:
+   * ```ts
+   * props: {
+   *  text: figma.textContent('Text Layer')
+   * }
+   * ```
+   *
+   * @param layer The name of the text layer in the Figma component
+   */
+  textContent(layer: string): string
 }
 
 export type ValueOf<T> = T[keyof T]

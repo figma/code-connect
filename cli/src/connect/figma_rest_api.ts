@@ -1,5 +1,16 @@
+
+const version = require('../../package.json').version
+
 export function getApiUrl(figmaNode: string) {
   return 'https://api.figma.com/v1'
+}
+
+export function getHeaders(accessToken: string) {
+  return {
+    'X-Figma-Token': accessToken,
+    'Content-Type': 'application/json',
+    'User-Agent': `code-connect-cli/${version}`,
+  }
 }
 
 // These typings are a subset of the Figma REST API

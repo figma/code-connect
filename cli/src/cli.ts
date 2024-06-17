@@ -2,6 +2,7 @@
 
 import * as commander from 'commander'
 import { addConnectCommandToProgram } from './commands/connect'
+import { updateCli } from './common/updates'
 
 require('dotenv').config()
 
@@ -10,6 +11,13 @@ async function run() {
   program.enablePositionalOptions()
 
   addConnectCommandToProgram(program)
+
+  program
+    .command('update')
+    .description('Updates to the latest version of the Figma CLI')
+    .action(() => {
+      updateCli()
+    })
 
   program.parse(process.argv)
   if (program.args.length < 1) {

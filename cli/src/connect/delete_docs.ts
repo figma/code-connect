@@ -1,7 +1,8 @@
 import { CodeConnectJSON } from '../common/figma_connect'
 import { logger, underline, highlight } from '../common/logging'
 import axios, { isAxiosError } from 'axios'
-import { getApiUrl } from './figma_rest_api'
+import { getApiUrl, getHeaders } from './figma_rest_api'
+import { get } from 'lodash'
 
 interface NodesToDeleteInfo {
   figmaNode: string
@@ -20,10 +21,7 @@ export async function delete_docs({ accessToken, docs }: Args) {
     logger.info(`Unpublishing Code Connect files from Figma...`)
 
     const response = await axios.delete(apiUrl, {
-      headers: {
-        'X-Figma-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
+      headers: getHeaders(accessToken),
       data: { nodes_to_delete: docs },
     })
 

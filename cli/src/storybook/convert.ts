@@ -7,7 +7,6 @@ import {
 } from '../typescript/compiler'
 import {
   ParserContext,
-  parsePropsObject,
   ParserError,
   parseComponentMetadata,
   InternalError,
@@ -15,16 +14,17 @@ import {
   getDefaultTemplate,
 } from '../react/parser'
 import {
-  CodeConnectConfig,
-  ProjectInfo,
+  CodeConnectReactConfig,
+  ReactProjectInfo,
   getRemoteFileUrl,
   getStorybookUrl,
-} from '../common/project'
+} from '../connect/project'
 import { logger } from '../common/logging'
 import { CodeConnectJSON } from '../common/figma_connect'
 import ts from 'typescript'
 import { FigmaConnectMeta } from '../common/api'
 import { minimatch } from 'minimatch'
+import { parsePropsObject } from '../common/intrinsics'
 
 interface ConvertStorybookFilesArgs {
   /**
@@ -36,7 +36,7 @@ interface ConvertStorybookFilesArgs {
   /**
    * Information about the project
    */
-  projectInfo: ProjectInfo
+  projectInfo: ReactProjectInfo
 }
 
 /**
@@ -57,7 +57,9 @@ export async function convertStorybookFiles({
   logger.debug(`Story files found:\n${storyFiles.map((f) => `- ${f}`).join('\n')}`)
 
   return Promise.all(
-    storyFiles.map((path) => convertStorybookFile({ path, tsProgram, config, remoteUrl })),
+    storyFiles.map((path) =>
+      convertStorybookFile({ path, tsProgram, config, remoteUrl, absPath: projectInfo.absPath }),
+    ),
   )
     .then((f) => f.filter((x): x is NonNullable<typeof x> => Boolean(x)))
     .then((f) => f.flat())
@@ -72,7 +74,8 @@ interface ConvertStorybookFileArgs {
   path: string
   tsProgram: ts.Program
   remoteUrl: string
-  config?: CodeConnectConfig
+  config: CodeConnectReactConfig
+  absPath: string
 }
 
 type MappedPropType = 'FigmaString' | 'FigmaBoolean' | 'Mapped'
@@ -83,6 +86,7 @@ async function convertStorybookFile({
   tsProgram,
   remoteUrl,
   config,
+  absPath,
 }: ConvertStorybookFileArgs): Promise<CodeConnectJSON[] | undefined> {
   const checker = tsProgram.getTypeChecker()
   const sourceFile = tsProgram.getSourceFile(path)
@@ -95,6 +99,7 @@ async function convertStorybookFile({
     checker,
     config,
     sourceFile,
+    absPath,
   }
 
   let source = readFileSync(path).toString()

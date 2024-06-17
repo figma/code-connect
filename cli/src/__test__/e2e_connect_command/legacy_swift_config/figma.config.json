@@ -1,0 +1,7 @@
+{
+  "codeConnect": {
+    "swift": {
+      "include": ["src/components/**/*.swift"]
+    }
+  }
+}

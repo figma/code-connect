@@ -16,11 +16,13 @@ enum ParserError: LocalizedError {
     case figmaMacroDefinitionVariantDictionaryFailedToParse
     case failedToParseExampleDefinition(connectionName: String)
     case figmaPropMissingComponentPropertyName(variable: String)
+    case figmaEnumMissingMissingMapping(variable: String)
     case missingUrlDefinition(connectionName: String)
     case missingCodeBlock(connectionName: String)
     case missingComponentDefinition(connectionName: String)
     case variantDefinitionWasNotAVariantDict
     case failedToFindPath(description: String)
+    case failedToParseAPropertyMapping(variable: String)
 
     var errorDescription: String? {
         switch self {
@@ -31,7 +33,9 @@ enum ParserError: LocalizedError {
         case .failedToParseExampleDefinition(let connectionName):
             return "Failed to parse the example definition from \(connectionName)"
         case .figmaPropMissingComponentPropertyName(let variable):
-            return "The variable \(variable) is missing a the Figma component property name."
+            return "The variable \(variable) is missing the Figma component property name."
+        case .figmaEnumMissingMissingMapping(let variable):
+            return "The variable \(variable) is missing a mapping argument."
         case .missingUrlDefinition(let connectionName):
             return "\(connectionName) is missing a URL to the node in Figma."
         case .missingCodeBlock(let connectionName):
@@ -42,6 +46,8 @@ enum ParserError: LocalizedError {
             return "The variant map could not be parsed. (This might be because there is a `variant` variable that will need to be renamed). Variant values must be either a String or Bool literal."
         case .failedToFindPath(let description):
             return "Failed to find the path of the repository: \(description)"
+        case .failedToParseAPropertyMapping(let variable):
+            return "The variable \(variable) could not be parsed as a Figma Property Mapping.."
         }
     }
 }
@@ -52,10 +58,21 @@ enum NodeNames {
     static let component = "component"
     static let figmaNodeUrl = "figmaNodeUrl"
     static let body = "body"
+
+    // Prop mappings & parameters
     static let figmaProp = "FigmaProp"
-    static let figmaPropMapping = "mapping"
+    static let figmaEnum = "FigmaEnum"
+    static let figmaBoolean = "FigmaBoolean"
+    static let figmaInstance = "FigmaInstance"
+    static let figmaString = "FigmaString"
+
+    static let figmaPropMappingArg = "mapping"
     static let hideDefault = "hideDefault"
     static let variant = "variant"
+    static let children = "FigmaChildren"
+    static let layers = "layers"
+
+    static let propertyMappingDefinitionNames = [figmaProp, figmaEnum, figmaBoolean, figmaInstance, figmaString]
 }
 
 class StructDefinitionFinder: SyntaxVisitor {
@@ -80,8 +97,8 @@ class StructDefinitionFinder: SyntaxVisitor {
 class FigmaConnectStructVisitor: SyntaxVisitor {
     let importMapping: [String: String]
     let baseUrl: URL
-    var docs: [CodeConnectRequestBody] = []
-    var errors: Int = 0
+    var docs: [CodeConnectDoc] = []
+    var messages: [ParserResultMessage] = []
 
     init(importMapping: [String: String], baseUrl: URL) {
         self.importMapping = importMapping
@@ -94,10 +111,120 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
         return nameDecl?.expression.as(StringLiteralExprSyntax.self)?.concatenateSegments()
     }
 
-    func extractMappingFromFigmaPropDecl(_ decl: AttributeSyntax) -> [String: DictionaryValue]? {
-        return try? decl.arguments?.as(LabeledExprListSyntax.self)?.first(where: {
-            $0.label?.text == NodeNames.figmaPropMapping
-        })?.expression.as(DictionaryExprSyntax.self)?.reconstructDictionary()
+    func extractStringMappingFromFigmaPropDecl(_ decl: AttributeSyntax) throws -> [String: JSONPrimitive]? {
+        return try decl.arguments?.as(LabeledExprListSyntax.self)?.first(where: {
+            $0.label?.text == NodeNames.figmaPropMappingArg
+        })?.expression.as(DictionaryExprSyntax.self)?.reconstructStringKeyedDictionary()
+    }
+
+    func extractBoolMappingFromFigmaPropDecl(_ decl: AttributeSyntax) throws -> [Bool: JSONPrimitive]? {
+        return try decl.arguments?.as(LabeledExprListSyntax.self)?.first(where: {
+            $0.label?.text == NodeNames.figmaPropMappingArg
+        })?.expression.as(DictionaryExprSyntax.self)?.reconstructBooleanKeyedDictionary()
+    }
+
+    func extractFigmaPropMapping(varName: String, attribute: AttributeSyntax, varDecl: VariableDeclSyntax) throws -> TemplateDataProp? {
+        guard let attributeType = attribute.attributeName.as(IdentifierTypeSyntax.self)?.name.text else { return nil }
+
+        if attributeType == NodeNames.figmaProp {
+            return try extractLegacyFigmaPropMap(varName: varName, attribute: attribute, varDecl: varDecl)
+        } else if attributeType == NodeNames.figmaEnum {
+            return try extractEnumPropMap(varName: varName, attribute: attribute, varDecl: varDecl)
+        } else if attributeType == NodeNames.figmaBoolean {
+            return try extractBooleanPropMap(varName: varName, attribute: attribute, varDecl: varDecl)
+        } else if attributeType == NodeNames.figmaString {
+            return try extractPropMapWithPropNameOnly(varName: varName, attribute: attribute, varDecl: varDecl, kind: .string)
+        } else if attributeType == NodeNames.figmaInstance {
+            return try extractPropMapWithPropNameOnly(varName: varName, attribute: attribute, varDecl: varDecl, kind: .instance)
+        } else {
+            throw ParserError.failedToParseAPropertyMapping(variable: varName)
+        }
+    }
+
+    func extractPropMapWithPropNameOnly(
+        varName: String,
+        attribute: AttributeSyntax,
+        varDecl: VariableDeclSyntax,
+        kind: PropKind
+    )  throws -> TemplateDataProp {
+        guard let name = extractNameFromFigmaPropDecl(attribute) else {
+            throw ParserError.figmaPropMissingComponentPropertyName(variable: varName)
+        }
+        return .propMap(PropMap(
+            kind: kind,
+            args: PropMapArgs(figmaPropName: name, valueMapping: nil),
+            hideDefault: false,
+            defaultValue: extractDefaultValueFromFigmaPropDecl(varDecl))
+        )
+    }
+
+    func extractBooleanPropMap(
+        varName: String,
+        attribute: AttributeSyntax,
+        varDecl: VariableDeclSyntax
+    ) throws -> TemplateDataProp {
+        guard let name = extractNameFromFigmaPropDecl(attribute) else {
+            throw ParserError.figmaPropMissingComponentPropertyName(variable: varName)
+        }
+        let mapping = try extractBoolMappingFromFigmaPropDecl(attribute)?.reduce(into: [:], { partialResult, element in
+            partialResult[JSONPrimitive.bool(element.key)] = element.value
+        })
+        return .propMap(PropMap(
+            kind: .boolean,
+            args: PropMapArgs(figmaPropName: name, valueMapping: mapping),
+            hideDefault: shouldHideDefaultFromFigmaPropDecl(attribute),
+            defaultValue: extractDefaultValueFromFigmaPropDecl(varDecl))
+        )
+    }
+
+    func extractEnumPropMap(
+        varName: String,
+        attribute: AttributeSyntax,
+        varDecl: VariableDeclSyntax
+    ) throws -> TemplateDataProp {
+        guard let name = extractNameFromFigmaPropDecl(attribute) else {
+            throw ParserError.figmaPropMissingComponentPropertyName(variable: varName)
+        }
+        guard let mapping = try extractStringMappingFromFigmaPropDecl(attribute)?.reduce(into: [:], { partialResult, element in
+            partialResult[JSONPrimitive.string(element.key)] = element.value
+        }) else {
+            throw ParserError.figmaPropMissingComponentPropertyName(variable: varName)
+        }
+        return .propMap(PropMap(
+            kind: .enumerable,
+            args: PropMapArgs(figmaPropName: name, valueMapping: mapping),
+            hideDefault: shouldHideDefaultFromFigmaPropDecl(attribute),
+            defaultValue: extractDefaultValueFromFigmaPropDecl(varDecl))
+        )
+    }
+
+    func extractLegacyFigmaPropMap(
+        varName: String,
+        attribute: AttributeSyntax,
+        varDecl: VariableDeclSyntax
+    ) throws -> TemplateDataProp {
+        guard let name = extractNameFromFigmaPropDecl(attribute) else {
+            throw ParserError.figmaPropMissingComponentPropertyName(variable: varName)
+        }
+        if let mapping = try extractStringMappingFromFigmaPropDecl(attribute)?.reduce(into: [:], { partialResult, element in
+            partialResult[JSONPrimitive.string(element.key)] = element.value
+        }) {
+            return .propMap(PropMap(
+                kind: .enumerable,
+                args: PropMapArgs(figmaPropName: name, valueMapping: mapping),
+                hideDefault: shouldHideDefaultFromFigmaPropDecl(attribute),
+                defaultValue: extractDefaultValueFromFigmaPropDecl(varDecl))
+
+            )
+        } else {
+            let kind = extractPropKindFromFigmaPropDecl(varDecl)
+            return .propMap(PropMap(
+                kind: kind,
+                args: PropMapArgs(figmaPropName: name, valueMapping: nil),
+                hideDefault: shouldHideDefaultFromFigmaPropDecl(attribute),
+                defaultValue: extractDefaultValueFromFigmaPropDecl(varDecl)
+            ))
+        }
     }
 
     func extractPropKindFromFigmaPropDecl(_ decl: VariableDeclSyntax) -> PropKind {
@@ -113,7 +240,13 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
         return .instance
     }
 
-    func extractDefaultValueFromFigmaPropDecl(_ decl: VariableDeclSyntax) -> DictionaryValue? {
+    func extractLayerNamesFromFigmaChildrenDecl(_ decl: AttributeSyntax) -> [String]? {
+        return try? decl.arguments?.as(LabeledExprListSyntax.self)?.first(where: {
+            $0.label?.text == NodeNames.layers
+        })?.expression.as(ArrayExprSyntax.self)?.reconstructArray()
+    }
+
+    func extractDefaultValueFromFigmaPropDecl(_ decl: VariableDeclSyntax) -> JSONPrimitive? {
         return decl.bindings.first?.initializer?.value.extractLiteralOrNamedValue()
     }
 
@@ -126,11 +259,11 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
         return booleanValue
     }
 
-    func extractFigmaConnectFromNode(_ node: StructDeclSyntax) throws -> CodeConnectRequestBody? {
+    func extractFigmaConnectFromNode(_ node: StructDeclSyntax) throws -> CodeConnectDoc? {
         let members = node.memberBlock.members
         var component: String?
         var figmaNodeUrl: String?
-        var propMaps: [String: PropMap] = [:]
+        var templateDataProps: [String: TemplateDataProp] = [:]
         var variant: [String: VariantValue]?
         var codeBlock: CodeBlockItemListSyntax?
 
@@ -152,29 +285,12 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
                           let code = body.accessorBlock?.accessors.as(CodeBlockItemListSyntax.self)
                 {
                     codeBlock = code
-                } else if let figmaProp = varDecl.attributes.first(where: { element in
-                    element.as(AttributeSyntax.self)?.attributeName.as(IdentifierTypeSyntax.self)?.name.text == NodeNames.figmaProp
-                })?.as(AttributeSyntax.self) {
-                    // Parse out the name, mapping, and name of the variable
-                    guard let name = extractNameFromFigmaPropDecl(figmaProp) else {
-                        throw ParserError.figmaPropMissingComponentPropertyName(variable: varName)
-                    }
-                    if let mapping = extractMappingFromFigmaPropDecl(figmaProp) {
-                        propMaps[varName] = PropMap(
-                            kind: .enumerable,
-                            args: PropMapArgs(figmaPropName: name, valueMapping: mapping),
-                            hideDefault: shouldHideDefaultFromFigmaPropDecl(figmaProp),
-                            defaultValue: extractDefaultValueFromFigmaPropDecl(varDecl)
-
-                        )
-                    } else {
-                        let kind = extractPropKindFromFigmaPropDecl(varDecl)
-                        propMaps[varName] = PropMap(
-                            kind: kind,
-                            args: PropMapArgs(figmaPropName: name, valueMapping: nil),
-                            hideDefault: shouldHideDefaultFromFigmaPropDecl(figmaProp),
-                            defaultValue: extractDefaultValueFromFigmaPropDecl(varDecl)
-                        )
+                } else if let figmaProp = varDecl.firstAttributeMatching(NodeNames.propertyMappingDefinitionNames),
+                    let propMap = try extractFigmaPropMapping(varName: varName, attribute: figmaProp, varDecl: varDecl) {
+                        templateDataProps[varName] = propMap
+                } else if let children = varDecl.firstAttributeNamed(NodeNames.children) {
+                    if let layerNames = extractLayerNamesFromFigmaChildrenDecl(children) {
+                        templateDataProps[varName] = .children(FigmaChildren(layerNames: layerNames))
                     }
                 }
             }
@@ -202,19 +318,20 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
         }
 
         let templateData = TemplateData(
-            props: propMaps,
-            imports: imports
+            props: templateDataProps,
+            imports: imports,
+            nestable: codeBlock.nestable
         )
         let templateWriter = CodeConnectTemplateWriter(code: codeBlock, templateData: templateData)
         guard let template = templateWriter.createTemplate() else {
             throw ParserError.failedToParseExampleDefinition(connectionName: node.name.text)
         }
-        
+
         // TODO: Find the source location
-        return CodeConnectRequestBody(
+        return CodeConnectDoc(
             figmaNode: figmaNodeUrl,
             source: "",
-            sourceLocation: CodeConnectRequestBody.SourceLocation(line: 0),
+            sourceLocation: CodeConnectDoc.SourceLocation(line: 0),
             component: component,
             variant: variant ?? [:],
             template: template,
@@ -231,12 +348,11 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
         {
             do {
                 if let doc = try extractFigmaConnectFromNode(node) {
-                    print("✅ Parsed connected component: \(node.name.text)")
+                    messages.append(ParserResultMessage(level: .info, message: "Successfully connected component: \(node.name.text)"))
                     docs.append(doc)
                 }
             } catch {
-                writeError("❌ Couldn't parse conected component \(node.name.text) with error: \(error.localizedDescription)")
-                errors += 1
+                messages.append(ParserResultMessage(level: .error, message: "Couldn't parse connected component \(node.name.text) with error: \(error.localizedDescription)"))
             }
 
             // Skip once connect code has been found
@@ -247,22 +363,14 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
 }
 
 public enum CodeConnectParser {
-    public static func getFilesMatching(_ globs: [String]) -> [String] {
-        return Array(Set(globs.flatMap { pattern in
-            let glob = Glob(pattern: pattern)
-            return glob.paths
-        }))
-    }
-
     // Generate code connect files based on files in paths.
     public static func createCodeConnects(
         _ paths: [URL],
-        importMapping: [String: String],
-        sourceControlPath: String?
+        importMapping: [String: String]
     ) -> CodeConnectParserResult {
         // Maps a set of component names to Code Connect files, one component may have multiple.
-        var docs: [String: [CodeConnectRequestBody]] = [:]
-        var errors = 0
+        var docs: [String: [CodeConnectDoc]] = [:]
+        var messages: [ParserResultMessage] = []
         // First pass: Find all FCC definitions
         paths.forEach { url in
             do {
@@ -275,7 +383,7 @@ public enum CodeConnectParser {
                     docsForComponent.append(doc)
                     docs[doc.component] = docsForComponent
                 }
-                errors += finder.errors
+                messages += finder.messages
             }
         }
 
@@ -294,11 +402,8 @@ public enum CodeConnectParser {
                 docs[structName] = newDocs.map { body in
                     var newDoc = body
                     newDoc.update(
-                        source: CodeConnectParser.buildRemoteFileUrl(
-                            with: sourceLocation.file,
-                            and: sourceControlPath
-                        ) ?? "",
-                        sourceLocation: CodeConnectRequestBody.SourceLocation(
+                        source: sourceLocation.file,
+                        sourceLocation: CodeConnectDoc.SourceLocation(
                             line: sourceLocation.line
                         )
                     )
@@ -306,30 +411,7 @@ public enum CodeConnectParser {
                 }
             }
         }
-        return CodeConnectParserResult(codeConnectFiles: Array(docs.values).flatMap { $0 }, errors: errors)
-    }
-
-    // Gets the remote file URL for a given file and a source control path
-    private static func buildRemoteFileUrl(with filePath: String, and sourceControlPath: String?) -> String? {
-        guard let sourceControlPath else { return nil }
-        let fileDir = URL(fileURLWithPath: filePath).deletingLastPathComponent()
-
-        guard let absolutePath = try? shell(command: "git rev-parse --show-toplevel", directoryUrl: fileDir)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              let range = filePath.range(of: absolutePath),
-              !range.isEmpty
-        else {
-            return nil
-        }
-
-        let relativeFilePath = String(filePath[range.upperBound...])
-
-        let path = sourceControlPath
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: ":", with: "/")
-            .replacingOccurrences(of: "git@", with: "https://")
-            .replacingOccurrences(of: "\\.git$", with: "", options: .regularExpression)
-
-        return "\(path)/tree/master\(relativeFilePath)"
+        return CodeConnectParserResult(docs: Array(docs.values).flatMap { $0 }, messages: messages)
     }
 }
 
@@ -356,8 +438,9 @@ public func shell(command: String, directoryUrl: URL?) throws -> String? {
     return String(data: data, encoding: .utf8)
 }
 
-public struct CodeConnectParserResult {
-    public var codeConnectFiles: [CodeConnectRequestBody]
-    public var errors: Int
+public struct CodeConnectParserResult: Encodable {
+    public var docs: [CodeConnectDoc]
+    public var messages: [ParserResultMessage]
 }
+
 #endif

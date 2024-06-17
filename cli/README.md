@@ -1,6 +1,6 @@
 # Code Connect (React)
 
-For more information about Code Connect as well as guides for other platforms and frameworks, please [go here](../../README.md).
+For more information about Code Connect as well as guides for other platforms and frameworks, please [go here](../README.md).
 
 This documentation will help you connect your React components with Figma components using Code Connect. We'll cover basic setup to display your first connected code snippet, followed by making snippets dynamic by using property mappings. Code Connect for React works as both a standalone implementation and as an integration with existing Storybook files to enable easily maintaining both systems in parallel.
 
@@ -14,7 +14,7 @@ npm install @figma/code-connect
 
 ## Basic setup
 
-To connect your first component go to Dev Mode in Figma and right-click on the component you want to connect, then choose `Copy link to selection` from the menu. Make sure you are copying the link to a main component and not an instance of the component. The main component will typically be located in a centralized design system library file. Using this link, run `figma connect create`. Note that depending on what terminal software you're using, you might need to wrap the URL in quotes.
+To connect your first component go to Dev Mode in Figma and right-click on the component you want to connect, then choose `Copy link to selection` from the menu. Make sure you are copying the link to a main component and not an instance of the component. The main component will typically be located in a centralized design system library file. Using this link, run `figma connect create` from inside your React project. Note that depending on what terminal software you're using, you might need to wrap the URL in quotes.
 
 ```sh
 npx figma connect create "https://..." --token <auth token>
@@ -98,32 +98,24 @@ npx figma connect unpublish --token <token>
 
 ## Configuration
 
-To configure the behaviour of the CLI and Code Connect you can create a `figma.config.json` file. This config file will automatically be picked up by the CLI if it's in the same folder where you run the commands, but you can also specify a path to the config file via the `--config` flag.
+To configure the behaviour of the CLI and Code Connect you can create a `figma.config.json` file. This file must be located in the project root, i.e. alongside your `package.json` file. This config file will automatically be picked up by the CLI if it's in the same folder where you run the commands, but you can also specify a path to the config file via the `--config` flag.
 
-In addition to the [general configuration](../README.md) for the CLI there is React-specific project configuration that can be specified in the configuration file. This configuration is mainly used to ensure Code Connect can correctly locate your imports as well as display the correct imports within Dev Mode.
+In addition to the [general configuration](../README.md#general-configuration) for the CLI, there is React-specific project configuration that can be specified in the configuration file. This configuration is mainly used to ensure Code Connect can correctly locate your imports as well as display the correct imports within Dev Mode.
 
 ```jsonp
 {
   "codeConnect": {
     "include": [],
     "exclude": ["test/**", "docs/**", "build/**"],
-
-    "react": {
-      "importPaths": {
-        "src/components/*": "@ui/components"
-      },
-
-      "paths": {
-        "@ui/components/*": ["src/components/*"]
-      }
+    "importPaths": {
+      "src/components/*": "@ui/components"
+    },
+    "paths": {
+      "@ui/components/*": ["src/components/*"]
     }
   }
 }
 ```
-
-### `include` and `exclude`
-
-`include` and `exclude` are lists of globs for where to parse Code Connect files. `include` and `exclude` paths must be relative to the location of the config file.
 
 ### `importPaths`
 
@@ -140,10 +132,8 @@ consider the full absolute path of the source file `Button.tsx`.
 ```
 {
   "codeConnect": {
-    "react": {
-      "importPaths": {
-        "src/components/*": "@ui/components"
-      }
+    "importPaths": {
+      "src/components/*": "@ui/components"
     }
   }
 }
@@ -158,6 +148,16 @@ import { Button } from '@ui/components'
 ### `paths`
 
 This is needed if you're using path aliases in your TypeScript project configuration, so Code Connect can know how to resolve your imports. It should match the `paths` object used in your tsconfig.json.
+
+## Custom imports
+
+You can override the generated import statements for a connected component by passing an array of `imports`. This might be useful if the automatic resolution does not work well for your use case.
+
+```
+figma.connect(Button, "https://...", {
+  imports: ["import { Button } from '@lib'"]
+})
+```
 
 ## Dynamic code snippets
 
@@ -179,10 +179,10 @@ figma.connect(Button, 'https://...', {
       Secondary: 'secondary',
     }),
   },
-  example: ({ disabled, text, type }) => {
+  example: ({ disabled, label, type }) => {
     return (
       <Button disabled={disabled} type={type}>
-        {text}
+        {label}
       </Button>
     )
   },
@@ -234,6 +234,27 @@ export function ButtonExample({ label, disabled, type }) {
 ```
 
 The `figma` import contains helpers for mapping all sorts of properties from design to code. They work for simple mappings where only the naming differs between Figma and code, as well as more complex mappings where the type differs. See the below reference for all the helpers that exist and the ways you can use them to connect Figma and code components using Code Connect.
+
+
+### figma.connect
+
+`figma.connect()` has two signatures for connecting components.
+
+```
+// connect a component in code to a Figma component
+figma.connect(Button, "https://...")
+
+// connect a Figma component to e.g a native element
+figma.connect("https://...")
+```
+
+The second option is useful if you want to just render a HTML tag instead of a React component. The first argument is used to determine where your component lives in code, in order to generate an import statement for the component. This isn't needed if you just want to render e.g a `button` tag.
+
+```
+figma.connect("https://...", {
+  example: () => <button>click me</button>
+})
+```
 
 ### Strings
 
@@ -331,7 +352,19 @@ figma.connect(Icon32Add, 'https://...')
 
 ### Instance children
 
-It's common for components in Figma to have child instances that aren't bound to an instance-swap prop. Similarly to `figma.instance`, we can render the code snippets for these nested instances with `figma.children`. This helper takes the _name of the instance layer_ as it's parameter, rather than a Figma prop name. Note that the nested instance also must be connected separately.
+It's common for components in Figma to have child instances that aren't bound to an instance-swap prop. Similarly to `figma.instance`, we can render the code snippets for these nested instances with `figma.children`. This helper takes the _name of the instance layer within the parent component_ as its parameter, rather than a Figma prop name.
+
+To illustrate this, consider the layer hierarchy in a component vs an instance of that component:
+
+Button (Component)
+  Icon (Instance) -- "Icon" is the original name of the layer, this is what you should pass to `figma.children()`
+
+Button (Instance)
+  RenamedIcon (Instance) -- here the instance layer was renamed, which won't break the mapping since we're not using this name
+
+Note that the nested instance also must be connected separately.
+
+> Layer names may differ between variants in a component set. To ensure the component (Button) can render a nested instance (Icon) for any of those variants, you must either use the wildcard option `figma.children("*")` or ensure that the layer name representing the instance (Icon) is the same across all variants of your component set (Button).
 
 ```tsx
 // map one child instance with the layer name "Tab"
@@ -341,11 +374,76 @@ figma.children('Tab')
 figma.children(['Tab 1', 'Tab 2'])
 ```
 
+### Wildcard match
+
+`figma.children()` can be used with a single wildcard '*' character, to partially match names or to render any nested child. Wildcards cannot be used with the array argument. Matches are case sensitive.
+
+```tsx
+// map any (all) child instances
+figma.children('*')
+
+// map any child instances that starts with "Icon"
+figma.children('Icon*')
+```
+
+### Nested properties
+
+In cases where you don't want to connect a child component, but instead map its properties on the parent level, you can use
+`figma.nestedProps()` to achieve this. This helper takes the name of the layer as it's first parameter (similar to `figma.children`),
+and a mapping object as the second parameter. These props can then be referenced in the example function.
+
+```tsx
+// map the properties of a nested instance named "Button Shape"
+figma.connect(Button, "https://...", {
+  props: {
+    buttonShape: figma.nestedProps('Button Shape', {
+      size: figma.enum({ ... }),
+    })
+  },
+  example: ({ buttonShape }) => <Button size={buttonShape.size} />
+}
+```
+
+### Text Content
+
+A common pattern for design systems in Figma is to not use props for texts, but rather rely on instances overriding the text content. `figma.textContent()` allows you to select a child text layer and render its content. It takes a single parameter which is the name of the layer in the original component.
+
+```tsx
+figma.connect(Button, "https://...", {
+  props: {
+    label: figma.textContent("Text Layer")
+  },
+  example: ({ label }) => <Button>{label}</Button>
+}
+```
+
+### className
+
+For mapping figma properties to a className string, you can use the `figma.className` helper. It takes an array of strings and returns the concatenated string. Any other helper that returns a string (or undefined) can be used in conjunction with this. Undefined values or empty strings will be filtered out from the result
+
+```tsx
+figma.connect("https://...", {
+  props: {
+    className: figma.className([
+      'btn-base',
+      figma.enum("Size", { Large: 'btn-large' }),
+      figma.boolean("Disabled", { true: 'btn-disabled', false: '' }),
+    ])
+  },
+  example: ({ className }) => <button className={className} />
+}
+```
+
+In Dev Mode this will display as:
+```
+<button className="btn-base btn-large btn-disabled" />
+```
+
 ## Variant restrictions
 
 Sometimes a component in Figma is represented by more than one component in code. For example you may have a single `Button` in your Figma design system with a `type` property to switch between primary, secondary, and danger variants. However, in code this may be represented by three different components, a `PrimaryButton`, `SecondaryButton` and `DangerButton`.
 
-To model this behaviour with Code Connect we can make use of something called variant restrictions. Variant restrictions allow you to provide entirely different code samples for different variants of a single Figma component. The keys and values used should match the name of the variant (or [roperty) in Figma and it's options respectively.
+To model this behaviour with Code Connect we can make use of something called variant restrictions. Variant restrictions allow you to provide entirely different code samples for different variants of a single Figma component. The keys and values used should match the name of the variant (or property) in Figma and it's options respectively.
 
 ```tsx
 figma.connect(PrimaryButton, 'https://...', {
