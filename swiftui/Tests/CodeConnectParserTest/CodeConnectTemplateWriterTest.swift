@@ -270,7 +270,7 @@ class CodeConnectTemplateWriterTest: XCTestCase {
 
         let templateData = TemplateData(
             props: [
-                "contents": .children(FigmaChildren(layerNames: ["A", "B"]))
+                "contents": .children(FigmaChildren(layers: ["A", "B"]))
             ],
             imports: []
         )

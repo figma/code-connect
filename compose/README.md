@@ -10,30 +10,30 @@ This documentation guide will help you connect your Jetpack Compose components w
 
 Refer to [the instructions here](../README.md#CLI-installation) to install the `figma` CLI tool.
 
-### Add the gradle plugin to your project
+### Add the Gradle plugin to your project
 
-Add the gradle plugin to your module `build.gradle.kts` file.
+Add the Gradle plugin to your module `build.gradle.kts` file.
 
 ```
 plugins {
-   id("com.figma.code.connect") version "0.2.0"
+   id("com.figma.code.connect") version "0.2.1"
 }
 ```
 
-## Add the SDK Dependency to your Module
+## Add the SDK dependency to your module
 
-In order to start authoring Code Connect files, add the following dependencies to the `build.gradle.kts` file in the module that will contain them.
+In order to start authoring Code Connect files, add the following dependencies to the `build.gradle.kts` file in the module in the module that will contain the files.
 
 ```
 dependencies {
-    implementation("com.figma.code.connect:plugin:0.2.0")
+    implementation("com.figma.code.connect:plugin:0.2.1")
 }
 ```
 
 
 ## Basic setup
 
-To keep things simple, we're going to start by replacing the contents of the generated file with the most basic Code Connect configuration possible to make sure everything is set up and working as expected. Replace the contents of the file with the following, replacing the `Button` reference with a reference to whatever component you are trying to connect.
+To keep things simple, we're going to start by replacing the contents of the generated file with a basic Code Connect configuration to make sure everything is set up and working. Replace the contents of your file with the following, swapping the `Button` reference with a reference to whatever component you want to connect.
 
 ```kotlin
 package com.your.app.directory
@@ -51,7 +51,7 @@ class ButtonDoc {
 }
 ```
 
-Once you've made the edits you want to the Code Connect file you can simply publish it to Figma to have it show up when the corresponding component or instance is selected in Dev Mode.
+Once you've made the edits you want to the Code Connect file you can simply publish it to Figma.
 
 ```sh
 figma connect publish --token <auth token>
@@ -61,7 +61,7 @@ Now go back to Dev Mode in Figma and select the component that you just connecte
 
 ## Co-locating Code Connect files
 
-By default Code Connect creates a new file which lives alongside the code components you want to connect to Figma components. However, Code Connect files may also be co-located with the code component it is connecting. To do this, simply move the contents of the `<component-name>.figma.kt` file into your component definition file. This is a great way to ensure Code Connectis always updating what appears in Dev Mode at the same times the code component itself is updated.
+By default, this setup will create a new Code Connect file that lives alongside your code component files. However, these two files can also be co-located. To do this, simply move the contents of the `.figma.kt` file into your original component definition file. This is a great way to ensure Code Connect is always updating what appears in Dev Mode at the same time the code component itself is updated.
 
 ```kotlin
 package com.your.app.directory
@@ -96,15 +96,13 @@ To unpublish your connected components from Figma, you can run the `unpublish` c
 figma connect unpublish --token <token>
 ```
 
-TODO: Add linkage to CLI instructions
-
 ## Prop mapping
 
-With the basic setup as described above you should have your code components connected with Figma components, and code snippets should be visible within Dev Mode. However, the code snippets in Dev Mode don't yet reflect the entirety of the design. For example we see the same code snippet for a button whether has `type` set to `primary` or `secondary`.
+With the basic setup described above you should have your code components connected with Figma components, and code snippets should be visible within Dev Mode. However, the code snippets in Dev Mode don't yet reflect the entirety of the design. For example, we see the same code snippet for a button whether it has `type` set to `primary` or `secondary`.
 
-To ensure the connected code accurately reflects the design we need to make use of prop mapping. Prop mapping enables you to link specific props in the design to props in code. In most cases design & code props do not match 1:1 so it's necesarry for us to configure this manually to ensure the correct code is shown in Dev Mode.
+To ensure the connected code accurately reflects the design we need to make use of prop mapping. Prop mapping enables you to link specific props in the design to props in code. In most cases, design and code props do not match exactly, so it's necessary to configure this manually to ensure the correct code is shown in Dev Mode.
 
-Here is a simple example for a button with a `label`, `disabled`, and `type` property.
+Here is a simple example for a button with `label`, `disabled`, and `type` properties.
 
 ```kotlin
 package com.your.app.directory
@@ -143,7 +141,7 @@ class ButtonDoc {
 
 ```
 
-`@FigmaProperty` is used to map property types in Figma. The first parameter of the annotation takes a FigmaType which corresponds to different Figma component property types.
+`@FigmaProperty` is used to map property types in Figma. The first parameter of the annotation takes a `FigmaType`, which corresponds to different Figma component property types.
 
 
 `FigmaType.Text` is used to map text properties. `FigmaType.Boolean` is used to map booleans. For nested instances, `FigmaType.Instance` should be used.
@@ -169,7 +167,7 @@ val icon : @Composable () -> Unit = { IconComponent() }
 
 ```
 
-For more advanced mapping where properties in Figma and code do not match 1:1 Code Connect also allows you to specify your own mapping. For example mapping a boolean from Figma to whether to display an icon or divider accessory
+For more advanced mapping—where properties in Figma and code do not match exactly—Code Connect also allows you to specify your own mapping. For example, you can map a boolean from Figma for displaying either an icon or divider accessory.
 
 ```kotlin
 @FigmaProperty(FigmaType.Boolean, "Has Icon")
@@ -207,7 +205,7 @@ fun ListExample() {
 
 Sometimes a component in Figma is represented by more than one component in code. For example you may have a single `Button` in your Figma design system with a `type` property to switch between primary, secondary, and danger variants. However, in code this may be represented by three different components, a `PrimaryButton`, `SecondaryButton` and `DangerButton`.
 
-To model this behaviour with Code Connect we can make use of something called variant mappings. Variant mappings allow you to provide entierly different code samples for different variants of a single Figma components.
+To model this behavior with Code Connect, we can make use of variant mappings. These allow you to provide different code samples for different variants of a single Figma component.
 
 ```Kotlin
 @FigmaConnect("https://...")

@@ -12,8 +12,5 @@
       "@components/*": ["*"] // enables us to use @components/MyComponent
     }
   },
-  "include": [
-    "*.ts",
-    "*.tsx",
-  ],
+  "include": ["*.ts", "*.tsx"]
 }

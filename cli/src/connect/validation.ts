@@ -73,7 +73,7 @@ function validateProps(doc: CodeConnectJSON, document: any): boolean {
     const codeConnectProps = Object.keys(doc.templateData.props ?? {})
 
     for (let i = 0; i < codeConnectProps.length; i++) {
-      const codeConnectProp: any = doc.templateData?.props[codeConnectProps[i]]
+      const codeConnectProp = doc.templateData?.props[codeConnectProps[i]]
       if (codeConnectProp.kind === 'children') {
         const codeConnectLayerNames = codeConnectProp.args.layers
         // Get all layer names in the figma doc
@@ -89,7 +89,8 @@ function validateProps(doc: CodeConnectJSON, document: any): boolean {
         getLayerNames(document)
         // And make sure that the layer names in the code connect file are present in the figma doc
         for (const codeConnectLayerName of codeConnectLayerNames) {
-          if (!figmaLayerNames.includes(codeConnectLayerName)) {
+          const regex = new RegExp('^' + codeConnectLayerName.replace('*', '.*'))
+          if (figmaLayerNames.every((name) => !regex.test(name))) {
             logger.error(
               `Validation failed for ${doc.component} (${doc.figmaNode}): The layer "${codeConnectLayerName}" does not exist on the Figma component`,
             )
@@ -98,18 +99,24 @@ function validateProps(doc: CodeConnectJSON, document: any): boolean {
         }
         continue
       }
-      const codeConnectFigmaPropName = codeConnectProp?.args?.figmaPropName
-
       if (
-        !document.componentPropertyDefinitions ||
-        !Object.keys(document.componentPropertyDefinitions).find((figmaProp) =>
-          propMatches(figmaProp, codeConnectFigmaPropName, document.componentPropertyDefinitions),
-        )
+        codeConnectProp.kind === 'boolean' ||
+        codeConnectProp.kind === 'enum' ||
+        codeConnectProp.kind === 'string'
       ) {
-        logger.error(
-          `Validation failed for ${doc.component} (${doc.figmaNode}): The property "${codeConnectFigmaPropName}" does not exist on the Figma component`,
-        )
-        propsValid = false
+        const codeConnectFigmaPropName = codeConnectProp?.args?.figmaPropName
+
+        if (
+          !document.componentPropertyDefinitions ||
+          !Object.keys(document.componentPropertyDefinitions).find((figmaProp) =>
+            propMatches(figmaProp, codeConnectFigmaPropName, document.componentPropertyDefinitions),
+          )
+        ) {
+          logger.error(
+            `Validation failed for ${doc.component} (${doc.figmaNode}): The property "${codeConnectFigmaPropName}" does not exist on the Figma component`,
+          )
+          propsValid = false
+        }
       }
     }
 

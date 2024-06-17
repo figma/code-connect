@@ -290,7 +290,7 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
                         templateDataProps[varName] = propMap
                 } else if let children = varDecl.firstAttributeNamed(NodeNames.children) {
                     if let layerNames = extractLayerNamesFromFigmaChildrenDecl(children) {
-                        templateDataProps[varName] = .children(FigmaChildren(layerNames: layerNames))
+                        templateDataProps[varName] = .children(FigmaChildren(layers: layerNames))
                     }
                 }
             }

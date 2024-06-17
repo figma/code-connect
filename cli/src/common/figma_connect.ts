@@ -1,5 +1,5 @@
 import { FigmaConnectLink } from './api'
-import { Intrinsic, IntrinsicBase } from './intrinsics'
+import { Intrinsic } from './intrinsics'
 
 export type BaseCodeConnectObject = {
   figmaNode: string
@@ -7,7 +7,7 @@ export type BaseCodeConnectObject = {
   variant?: Record<string, any>
   template: string
   templateData: {
-    props?: Record<string, IntrinsicBase>
+    props?: Record<string, Intrinsic>
     imports?: string[]
     nestable?: boolean
   }

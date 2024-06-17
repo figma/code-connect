@@ -21,6 +21,9 @@ plugins {
 
     // Json serialization plugin.
     kotlin("plugin.serialization") version "2.0.0"
+
+    // Publishing plugin
+    id("com.gradle.plugin-publish") version "1.2.1"
 }
 
 repositories {
@@ -50,8 +53,7 @@ gradlePlugin {
         version = property("VERSION").toString()
         displayName = property("DISPLAY_NAME").toString()
         description = property("DESCRIPTION").toString()
-        // TODO: Update tags
-        //  tags.set(listOf("ktfmt", "kotlin", "formatter", "reformat", "style", "code", "linter"))
+        tags = listOf("kotlin", "figma", "compose", "android")
     }
 
     website.set(property("WEBSITE").toString())

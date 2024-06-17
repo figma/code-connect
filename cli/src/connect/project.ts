@@ -359,6 +359,8 @@ export function getRemoteFileUrl(filePath: string, repoURL?: string) {
     return ''
   }
 
+  filePath = filePath.replaceAll(path.sep, '/')
+
   let url = repoURL.trim()
   if (url.startsWith('git@')) {
     url = url.replace(':', '/')
@@ -370,16 +372,16 @@ export function getRemoteFileUrl(filePath: string, repoURL?: string) {
   // so we need to find the relative path of the file to the root of the repo
   // and append that to the remote URL
   const repoAbsPath = getGitRepoAbsolutePath(filePath)
+    // Windows uses \ as the path separator, so replace with /
+    .replaceAll(path.sep, '/')
+
   const defaultBranch = getGitRepoDefaultBranchName(repoAbsPath)
   const index = filePath.indexOf(repoAbsPath)
   if (index === -1) {
     return ''
   }
 
-  const relativeFilePath = filePath
-    .substring(index + repoAbsPath.length)
-    // Windows uses \ as the path separator, so replace with /
-    .replaceAll('\\', '/')
+  const relativeFilePath = filePath.substring(index + repoAbsPath.length)
 
   return `${url}/blob/${defaultBranch}${relativeFilePath}`
 }
@@ -388,7 +390,7 @@ export function getStorybookUrl(filePath: string, storybookUrl: string) {
   // the folder of the git repo on disk could be named differently,
   // so we need to find the relative path of the file to the root of the repo
   // and append that to the remote URL
-  const repoAbsPath = getGitRepoAbsolutePath(filePath)
+  const repoAbsPath = getGitRepoAbsolutePath(filePath).replaceAll(path.sep, '/')
   const index = filePath.indexOf(repoAbsPath)
   if (index === -1) {
     return ''

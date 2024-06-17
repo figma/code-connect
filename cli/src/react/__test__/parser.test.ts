@@ -12,7 +12,8 @@ async function testParse(
   const program = ts.createProgram(
     [
       path.join(__dirname, file),
-      path.join(__dirname, 'TestComponents.tsx'),
+      path.join(__dirname, './TestTopLevelComponent.tsx'),
+      path.join(__dirname, './components/TestComponents.tsx'),
       ...extraFiles.map((file) => path.join(__dirname, file)),
     ],
     {
@@ -45,11 +46,28 @@ describe('Parser (JS templates)', () => {
       {
         figmaNode: 'ui/button',
         source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/TestComponents.tsx',
+          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/components/TestComponents.tsx',
         sourceLocation: { line: 12 },
         template: getExpectedTemplate('Button'),
         templateData: {
-          imports: ["import { Button } from './TestComponents'"],
+          imports: ["import { Button } from './components/TestComponents'"],
+        },
+      },
+    ])
+  })
+
+  it('handles components in the top level directory as well as a subdirectory', async () => {
+    const result = await testParse('TopLevelComponent.figma.tsx')
+
+    expect(result).toMatchObject([
+      {
+        figmaNode: 'ui/button',
+        source:
+          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/TestTopLevelComponent.tsx',
+        sourceLocation: { line: 12 },
+        template: getExpectedTemplate('Button'),
+        templateData: {
+          imports: ["import { Button } from './TestTopLevelComponent'"],
         },
       },
     ])
@@ -64,7 +82,7 @@ describe('Parser (JS templates)', () => {
         template:
           'const figma = require("figma")\n\nexport default figma.tsx`<ButtonArrowFunction />`',
         templateData: {
-          imports: ["import { ButtonArrowFunction } from './TestComponents'"],
+          imports: ["import { ButtonArrowFunction } from './components/TestComponents'"],
         },
       },
     ])
@@ -82,7 +100,7 @@ describe('Parser (JS templates)', () => {
         figmaNode: 'ui/button',
         template: getExpectedTemplate('Button'),
         templateData: {
-          imports: ["import { Button } from './TestComponents'"],
+          imports: ["import { Button } from './components/TestComponents'"],
         },
       },
       {
@@ -90,7 +108,7 @@ describe('Parser (JS templates)', () => {
         variant: { HasIcon: true },
         template: getExpectedTemplate('ButtonWithIcon'),
         templateData: {
-          imports: ["import { Button } from './TestComponents'"],
+          imports: ["import { Button } from './components/TestComponents'"],
         },
       },
     ])
@@ -106,7 +124,7 @@ describe('Parser (JS templates)', () => {
         template:
           'const figma = require("figma")\n\nexport default figma.tsx`<ForwardRefButton />`',
         templateData: {
-          imports: ["import { ForwardRefButton } from './TestComponents'"],
+          imports: ["import { ForwardRefButton } from './components/TestComponents'"],
         },
       },
     ])
@@ -121,7 +139,7 @@ describe('Parser (JS templates)', () => {
         sourceLocation: { line: 22 },
         template: getExpectedTemplate('MemoizedComponent'),
         templateData: {
-          imports: ["import { MemoButton } from './TestComponents'"],
+          imports: ["import { MemoButton } from './components/TestComponents'"],
         },
       },
     ])
@@ -186,7 +204,7 @@ describe('Parser (JS templates)', () => {
       {
         template: 'const figma = require("figma")\n\nexport default figma.tsx`<RenamedButton />`',
         templateData: {
-          imports: ["import RenamedButton from './TestComponents'"],
+          imports: ["import RenamedButton from './components/TestComponents'"],
         },
       },
     ])
@@ -254,7 +272,7 @@ describe('Parser (JS templates)', () => {
         component: 'Button',
         template: getExpectedTemplate('ComponentWithLogic'),
         templateData: {
-          imports: ["import { Button } from './TestComponents'"],
+          imports: ["import { Button } from './components/TestComponents'"],
         },
       },
     ])
@@ -274,7 +292,7 @@ describe('Parser (JS templates)', () => {
         language: 'typescript',
         component: 'Button',
         source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/TestComponents.tsx',
+          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/components/TestComponents.tsx',
         sourceLocation: { line: 12 },
         template: getExpectedTemplate(indented ? 'PropMappings_indented' : 'PropMappings'),
         templateData: {
@@ -331,7 +349,7 @@ describe('Parser (JS templates)', () => {
             },
             label: { kind: 'string', args: { figmaPropName: '🎛️ Label' } },
           },
-          imports: ["import { Button } from './TestComponents'"],
+          imports: ["import { Button } from './components/TestComponents'"],
         },
       }
     }
@@ -357,7 +375,7 @@ describe('Parser (JS templates)', () => {
         language: 'typescript',
         component: 'Button',
         source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/TestComponents.tsx',
+          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/components/TestComponents.tsx',
         sourceLocation: { line: 12 },
         template: getExpectedTemplate('EnumLikeBooleanFalseProp'),
         templateData: {
@@ -370,7 +388,7 @@ describe('Parser (JS templates)', () => {
               },
             },
           },
-          imports: ["import { Button } from './TestComponents'"],
+          imports: ["import { Button } from './components/TestComponents'"],
           nestable: true,
         },
       },
@@ -530,14 +548,14 @@ describe('Parser (JS templates)', () => {
     // with `paths` set the import should resolve correctly
     const withAlias = await testParse('PathAliasImport.figma.tsx', [], {
       paths: {
-        '@components/*': [path.join(__dirname, '*')],
+        '@components/*': [path.join(__dirname, 'components', '*')],
       },
     })
     expect(withAlias).toMatchObject([
       {
         component: 'Button',
         source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/TestComponents.tsx',
+          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/components/TestComponents.tsx',
       },
     ])
   })
@@ -604,7 +622,7 @@ describe('Parser (JS templates)', () => {
               },
             },
           },
-          imports: ["import { Button } from './TestComponents'"],
+          imports: ["import { Button } from './components/TestComponents'"],
         },
       },
       {
@@ -619,7 +637,7 @@ describe('Parser (JS templates)', () => {
               },
             },
           },
-          imports: ["import { Button } from './TestComponents'"],
+          imports: ["import { Button } from './components/TestComponents'"],
         },
       },
       {
@@ -634,7 +652,7 @@ describe('Parser (JS templates)', () => {
               },
             },
           },
-          imports: ["import { Button } from './TestComponents'"],
+          imports: ["import { Button } from './components/TestComponents'"],
         },
       },
     ])

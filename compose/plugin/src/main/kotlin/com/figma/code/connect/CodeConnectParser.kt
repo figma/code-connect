@@ -182,7 +182,7 @@ object CodeConnectParser {
         }
 
         FigmaBooleanVariant::class.simpleName?.let { annotationName ->
-            klass.getAnnotation(annotationName)?.let {
+            klass.getAllAnnotations(annotationName).forEach {
                 val key =
                     it.getAnnotationValue("key", 0)?.removeSurrounding("\"")
                         ?: throw CodeConnectParserException(

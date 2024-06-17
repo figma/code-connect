@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { figma } from '../..'
-import { Button } from './TestComponents'
+import { Button } from './components/TestComponents'
 
 figma.connect(Button, 'instanceSwap', {
   props: {

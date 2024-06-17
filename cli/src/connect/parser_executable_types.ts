@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { BaseCodeConnectObject } from '../common/figma_connect'
-import { IntrinsicBase } from '../common/intrinsics'
 
 export type ParseRequestPayload = {
   mode: 'PARSE'
@@ -84,7 +83,7 @@ export const ParseResponsePayload = z.object({
         // TODO We could look to extract this from the template somehow instead,
         // (e.g. run it with figma.properties.* stubbed to record accesses) to
         // avoid needing this duplication.
-        props: z.record(z.object({ kind: z.string(), args: z.any() }) as z.ZodType<IntrinsicBase>),
+        props: z.record(z.object({ kind: z.string(), args: z.any() }) as any),
         // Optional array of imports for this component. These are prepended
         // to the example code, but it's useful to keep them separate e.g. if
         // we ever want to auto-insert imports in VS Code. If more control

@@ -1,3 +1,14 @@
+# Code Connect v0.2.1 (17th June 2024)
+
+## Fixed
+
+### React
+- Fixed a bug in v0.2.0 where source paths for components could be incorrect
+- Fixed a bug in v0.2.0 where Code Connect files using the new prop types failed to validate
+
+### SwiftUI
+- Fixed parsing of Code Connect files using `@FigmaChildren` annotations
+
 # Code Connect v0.2.0 (14th June 2024)
 
 ## Breaking changes

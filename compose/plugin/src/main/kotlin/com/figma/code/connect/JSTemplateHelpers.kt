@@ -9,7 +9,7 @@ object JSTemplateHelpers {
               let code = child.code.split('\n').map((line, lineIndex) => {
                 return line.trim() !== '' ? `${'$'}{prefix}${'$'}{line}` : line;
               }).join('\n')
-              if (index !== children.length - 1) {
+              if (index !== children.length - 1 && !code.replace(/^ +| +${'$'}/g, '').endsWith('\n')) {
                 code = code + '\n'
               }
               return {
@@ -18,10 +18,10 @@ object JSTemplateHelpers {
               }
             } else {
               let elements = []
-              const shouldAddNewline = index > 0 && children[index - 1].type === 'CODE' && !children[index - 1].code.endsWith('\n')
+              const shouldAddNewline = index > 0 && children[index - 1].type === 'CODE' && !(children[index - 1].code.replace(/^ +| +${'$'}/g, '').endsWith('\n'));
               elements.push({ type: 'CODE', code: `${'$'}{shouldAddNewline ? '\n' : ''}${'$'}{prefix}` })
               elements.push(child)
-              if (index !== children.length - 1) {
+              if (index < children.length - 1 && !(children[index + 1].type === 'CODE' && children[index + 1].code.replace(/^ +| +${'$'}/g, '').startsWith('\n'))) {
                 elements.push({ type: 'CODE', code: '\n' })
               }
               return elements

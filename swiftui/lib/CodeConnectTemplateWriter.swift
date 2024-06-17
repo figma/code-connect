@@ -129,7 +129,7 @@ fileprivate extension FigmaChildren {
     }
     
     var functionParams: String {
-        return "[\(args.layerNames.map { "\"\($0)\"" }.joined(separator: ", "))]"
+        return "[\(args.layers.map { "\"\($0)\"" }.joined(separator: ", "))]"
     }
     
 }

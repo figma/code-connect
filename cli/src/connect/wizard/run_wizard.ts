@@ -89,7 +89,7 @@ async function askQuestionWithExitConfirmation<T extends string = string>(
 
 function formatComponentTitle(componentName: string, path: string, pad: number) {
   const nameLabel = `${chalk.dim('Figma component:')} ${componentName.padEnd(pad, ' ')}`
-  const linkedLabel = `${chalk.dim('Linked to:')} ${path ?? '-'}`
+  const linkedLabel = `↔️ ${path ?? '-'}`
   return `${nameLabel}  ${linkedLabel}`
 }
 
@@ -167,7 +167,7 @@ async function runManualLinking({
     const { nodeId } = await prompts({
       type: 'select',
       name: 'nodeId',
-      message: `Pick a link to edit (or press ${chalk.green('esc')} to continue)`,
+      message: `Select a link to edit (Press ${chalk.green('esc')} when you're ready to continue on)`,
       choices: getComponentChoicesForPrompt(
         unconnectedComponents,
         linkedNodeIdsToPaths,
@@ -183,7 +183,7 @@ async function runManualLinking({
     const { pathToComponent } = await prompts({
       type: 'autocomplete',
       name: 'pathToComponent',
-      message: 'Choose a path to your component (type to filter results)',
+      message: 'Choose a path to your code component (type to filter results)',
       choices: pathChoices,
       // default suggest uses .startsWith(input) which isn't very useful for full paths
       suggest: (input, choices) =>
@@ -215,7 +215,7 @@ async function runManualLinkingWithConfirmation(manualLinkingArgs: ManualLinking
       const { outputDirectory } = await askQuestionWithExitConfirmation({
         type: 'text',
         name: 'outputDirectory',
-        message: `By default, Code Connect files are created alongside the component files they link to. Press ${chalk.green('enter')} to proceed or enter an output directory.`,
+        message: `What directory should Code Connect files be created in? (Press ${chalk.green('enter')} to co-locate your files alongside your component files)`,
       })
       hasAskedOutDirQuestion = true
       outDir = outputDirectory
@@ -245,14 +245,14 @@ async function runManualLinkingWithConfirmation(manualLinkingArgs: ManualLinking
       const { confirmation } = await askQuestionWithExitConfirmation({
         type: 'select',
         name: 'confirmation',
-        message: `You're about to create ${chalk.green(linkedNodes.length)} Code Connect file${linkedNodes.length == 1 ? '' : 's'}. Continue?`,
+        message: `You're ready to create ${chalk.green(linkedNodes.length)} Code Connect file${linkedNodes.length == 1 ? '' : 's'}. Continue?`,
         choices: [
           {
-            title: 'Create',
+            title: 'Create files',
             value: 'create',
           },
           {
-            title: 'Back to edit',
+            title: 'Back to editing',
             value: 'backToEdit',
           },
         ],
@@ -444,7 +444,7 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
     if (!hasConfigFile) {
       const { componentDirectory } = await askQuestionWithExitConfirmation({
         type: 'text',
-        message: `Which top-level directory contains the code to be linked to your Figma design system? (Press ${chalk.green('enter')} to use current directory)`,
+        message: `Which top-level directory contains the code to be connected to your Figma design system? (Press ${chalk.green('enter')} to use current directory)`,
         name: 'componentDirectory',
         format: (val) => val || process.cwd(),
         validate: (value) => {
@@ -495,12 +495,13 @@ export async function runWizard(cmd: BaseCommand) {
   )
   logger.info(
     boxen(
-      `${chalk.bold(`Welcome to ${chalk.green('Code Connect')}.`)}\n\n` +
-        `Code Connect helps you link your Figma design system to your\n` +
-        `codebase, so you can see code for your components in Figma Dev Mode.\n` +
-        `Find out more at ${chalk.cyan('figma.com/developers/code-connect')}.\n\n` +
-        `${chalk.red.bold('Important: ')}This CLI will create and modify Code Connect files.\n` +
-        `Please ensure you've committed any changes.`,
+      `${chalk.bold(`Welcome to ${chalk.green('Code Connect')}`)}\n\n` +
+        `Follow a few simple steps to connect your Figma design system to your codebase.\n` +
+        `When you're done, you'll be able to see your component code while inspecting in\n` +
+        `Figma's Dev Mode.\n\n` +
+        `Learn more at ${chalk.cyan('https://www.figma.com/developers/code-connect')}.\n\n` +
+        `${chalk.red.bold('Note: ')}This process will create and modify Code Connect files. Make sure you've\n` +
+        `committed necessary changes in your codebase first.`,
       {
         padding: 1,
         margin: 1,
@@ -551,7 +552,7 @@ export async function runWizard(cmd: BaseCommand) {
 
   const { figmaFileUrl } = await askQuestionWithExitConfirmation({
     type: 'text',
-    message: 'What is the URL of the Figma file which contains your design system?',
+    message: 'What is the URL of the Figma file containing your design system library?',
     name: 'figmaFileUrl',
   })
 
@@ -568,7 +569,8 @@ export async function runWizard(cmd: BaseCommand) {
     const { createConfigFile } = await askQuestionWithExitConfirmation({
       type: 'select',
       name: 'createConfigFile',
-      message: `Would you like to generate a Code Connect config file from your provided answers?`,
+      message:
+        "It looks like you don't have a Code Connect config file. Would you like to generate one now from your provided answers?",
       choices: [
         {
           title: 'Yes',
@@ -604,13 +606,13 @@ export async function runWizard(cmd: BaseCommand) {
 
   logger.info(
     boxen(
-      `${chalk.bold(`Connect your components`)}\n\n` +
-        `Choose how your Figma components should connect to your codebase. Once confirmed,\n` +
-        `Code Connect files will be created for all new links.\n\n` +
+      `${chalk.bold(`Connecting your components`)}\n\n` +
         `${chalk.green(
-          `${chalk.bold(Object.keys(linkedNodeIdsToPaths).length)} ${Object.keys(linkedNodeIdsToPaths).length === 1 ? 'component was automatically connected based on its name' : 'components were automatically connected based on their names'}`,
+          `${chalk.bold(Object.keys(linkedNodeIdsToPaths).length)} ${Object.keys(linkedNodeIdsToPaths).length === 1 ? 'component was automatically matched based on its name' : 'components were automatically matched based on their names'}`,
         )}\n` +
-        `${chalk.yellow(`${chalk.bold(unconnectedComponents.length)} ${unconnectedComponents.length === 1 ? 'component has not been connected' : 'components have not been connected'}`)}`,
+        `${chalk.yellow(`${chalk.bold(unconnectedComponents.length)} ${unconnectedComponents.length === 1 ? 'component has not been matched' : 'components have not been matched'}`)}\n\n` +
+        `Match up Figma components with their code definitions. When you're finished, you\n` +
+        `can specify the directory you want to create Code Connect files in.`,
       {
         padding: 1,
         margin: 1,

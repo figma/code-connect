@@ -46,7 +46,9 @@ export class ParserError extends Error {
   toString() {
     let msg = `${highlight(error(this.name))}: ${this.message}\n`
     if (this.sourceFileName && this.sourceFilePosition) {
-      msg += ` -> ${reset(this.sourceFileName)}:${this.sourceFilePosition.line}:${this.sourceFilePosition.character}\n`
+      msg += ` -> ${reset(this.sourceFileName)}:${this.sourceFilePosition.line}:${
+        this.sourceFilePosition.character
+      }\n`
     }
     return msg
   }
@@ -294,12 +296,7 @@ export async function parseComponentMetadata(
     componentDeclaration = componentSymbol?.declarations?.[0]
   }
 
-  // On Windows, fileName is relative whereas on Mac it's absolute, so we need
-  // to use path.resolve to build an absolute path
-  const source = path.join(
-    path.resolve(componentSourceFile.fileName, absPath),
-    path.basename(componentSourceFile.fileName),
-  )
+  const source = componentSourceFile.fileName
 
   if (!source) {
     throw new InternalError(
@@ -999,7 +996,7 @@ async function parseDoc(
       // If no imports were found, it might mean that the component is not imported, or
       // that the `figma.connect` call is in the same file as the component. In the latter
       // case - we'll want to generate one
-      const fileName = metadata.source.split(path.sep).pop()?.split('.')[0]
+      const fileName = metadata.source.split('/').pop()?.split('.')[0]
       imports = [
         {
           statement: `import { ${metadata.component} } from './${fileName}'`,
@@ -1044,7 +1041,7 @@ async function parseDoc(
     language: 'typescript',
     component: metadata?.component,
     source: metadata?.source ? getRemoteFileUrl(metadata.source, repoUrl) : '',
-    sourceLocation: metadata?.line ? { line: metadata.line } : { line: -1 },
+    sourceLocation: metadata?.line !== undefined ? { line: metadata.line } : { line: -1 },
     variant,
     template,
     templateData: {
