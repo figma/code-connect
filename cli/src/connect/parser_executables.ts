@@ -151,6 +151,7 @@ export function handleMessages(messages: z.infer<typeof ParserExecutableMessages
         break
       case 'ERROR':
         logger.error(message.message)
+        hasErrors = true
         break
     }
   })

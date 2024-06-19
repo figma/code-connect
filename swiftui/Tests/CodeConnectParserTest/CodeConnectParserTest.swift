@@ -4,12 +4,10 @@ import XCTest
 @testable import CodeConnectParser
 
 class CodeConnectParserTest: XCTestCase {
-    let currentDirectory = FileManager.default.currentDirectoryPath
-
     func testParser() throws {
         let expectedDoc = CodeConnectDoc(
             figmaNode: "https://figma.com/file/abc/Test?node-id=123",
-            source: currentDirectory + "/CodeConnectParserTest.xctest/Contents/Resources/Figma_CodeConnectParserTest.bundle/Contents/Resources/Button.figma.test",
+            source: "See below",
             sourceLocation: CodeConnectDoc.SourceLocation(line: 14),
             component: "FigmaButton",
             variant: ["Has Icon": .bool(true)],
@@ -100,9 +98,15 @@ class CodeConnectParserTest: XCTestCase {
         )
 
         let url = try XCTUnwrap(Bundle.module.url(forResource: "Button.figma", withExtension: "test"))
-        let figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:]).docs.first(where: {
+        var figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:]).docs.first(where: {
             $0.component == "FigmaButton"
         }))
+
+        // The source is not easily predictable as it depends on the location on disk,
+        // so instead check it looks sensible, then set the doc's source to match the
+        // expectation so we can still XCTAssertEqual instead of manually testing each field
+        XCTAssertTrue(figmadoc.source.hasSuffix("/Button.figma.test"))
+        figmadoc.source = expectedDoc.source
 
         XCTAssertEqual(figmadoc, expectedDoc)
     }
@@ -110,7 +114,7 @@ class CodeConnectParserTest: XCTestCase {
     func testLegacyParser() throws {
         let expectedDoc = CodeConnectDoc(
             figmaNode: "https://figma.com/file/abc/Test?node-id=123",
-            source: currentDirectory + "/CodeConnectParserTest.xctest/Contents/Resources/Figma_CodeConnectParserTest.bundle/Contents/Resources/Button.figma.test",
+            source: "See below",
             sourceLocation: CodeConnectDoc.SourceLocation(line: 68),
             component: "LegacyFigmaButton",
             variant: ["Has Icon": .bool(true)],
@@ -175,7 +179,13 @@ class CodeConnectParserTest: XCTestCase {
         )
 
         let url = try XCTUnwrap(Bundle.module.url(forResource: "Button.figma", withExtension: "test"))
-        let figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:]).docs.first(where: { $0.component == "LegacyFigmaButton"}))
+        var figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:]).docs.first(where: { $0.component == "LegacyFigmaButton"}))
+
+        // The source is not easily predictable as it depends on the location on disk,
+        // so instead check it looks sensible, then set the doc's source to match the
+        // expectation so we can still XCTAssertEqual instead of manually testing each field
+        XCTAssertTrue(figmadoc.source.hasSuffix("/Button.figma.test"))
+        figmadoc.source = expectedDoc.source
 
         XCTAssertEqual(figmadoc, expectedDoc)
     }

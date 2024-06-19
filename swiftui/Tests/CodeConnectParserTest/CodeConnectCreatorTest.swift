@@ -41,15 +41,15 @@ class CodeConnectUploaderTest: XCTestCase {
                 let figmaNodeUrl = "https://www.figma.com/file/123/456"
 
                 /*
-                Use @FigmaProp property wrappers to connect Figma properties to code
+                Use @FigmaString, @FigmaEnum, @FigmaBoolean and @FigmaInstance property wrappers to connect Figma properties to code
 
-                @FigmaProp("isDisabled")
+                @FigmaBoolean("isDisabled")
                 var isDisabled: Bool = false
 
-                @FigmaProp("text")
+                @FigmaString("text")
                 var text: String = "Submit"
 
-                @FigmaProp("variant", mapping: ["primary": primary, "secondary": secondary])
+                @FigmaEnum("variant", mapping: ["primary": primary, "secondary": secondary])
                 var variant: Any
                 */
 

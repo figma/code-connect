@@ -1,3 +1,29 @@
+# Code Connect v1.0.0 (19th June 2024)
+
+## Features
+
+### General
+- Added [documentUrlSubstitutions](README.md#documenturlsubstitutions) config option
+
+### Jetpack Compose
+- Added support for Android Jetpack Compose. See the [README](compose/README.md) to get started
+
+### React
+- Interactive setup flow, launched by running `figma connect`, which guides you through the setup process and auto-connects your components
+
+## Fixed
+
+### General
+- Automatic config migration (added in v0.2.0) now correctly preserves `include`/`exclude` config options
+- Icon script helpers moved to a named export so they can be imported correctly (see [README](cli/scripts/README.md))
+
+### React
+- Nested helpers within `figma.nestedProps` now work as expected
+- Props can now be rendered in nested object props
+
+### SwiftUI
+- `create` now outputs Swift files with the correct syntax
+
 # Code Connect v0.2.1 (17th June 2024)
 
 ## Fixed

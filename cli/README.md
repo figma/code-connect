@@ -2,7 +2,7 @@
 
 For more information about Code Connect as well as guides for other platforms and frameworks, please [go here](../README.md).
 
-This documentation will help you connect your React components with Figma components using Code Connect. We'll cover basic setup to display your first connected code snippet, followed by making snippets dynamic by using property mappings. Code Connect for React works as both a standalone implementation and as an integration with existing Storybook files to enable easily maintaining both systems in parallel.
+This documentation will help you connect your React (or React Native) components with Figma components using Code Connect. We'll cover basic setup to display your first connected code snippet, followed by making snippets dynamic by using property mappings. Code Connect for React works as both a standalone implementation and as an integration with existing Storybook files to enable easily maintaining both systems in parallel.
 
 ## Installation
 
@@ -47,6 +47,16 @@ Now go back to Dev Mode in Figma and select the component that you just connecte
 
 > [!NOTE]
 > Code Connect files are not executed. While they're written using real components from your codebase, the Figma CLI essentially treats code snippets as strings. This means you can use, for example, hooks without needing to mock data. However, this also means that logical operators such as ternaries or conditionals will be output verbatim in your example code rather than executed to show the result. You also won't be able to dynamically construct `figma.connect` calls in a for-loop, as an example. If something you're trying to do is not possible because of this restriction in the API, we'd love to hear your feedback.
+
+## Interactive setup
+
+A step-by-step interactive flow is provided which makes it easier to connect a large codebase. Code Connect will attempt to automatically connect your codebase to your Figma design system components based on name, which you can then make any edits to before batch-creating Code Connect files.
+
+To start the interactive setup, enter `figma connect` without any subcommands:
+
+```sh
+npx figma connect
+```
 
 ## Integrating with Storybook
 
@@ -291,7 +301,7 @@ figma.boolean('Has Icon', {
 
 ### Enums
 
-Variants (or enums) in Figma are commonly used to control the look and feel of components that require more complex options than a simple boolean toggle. Variant properties are always strings in Figma but they can be mapped to any type in code.
+Variants (or enums) in Figma are commonly used to control the look and feel of components that require more complex options than a simple boolean toggle. Variant properties are always strings in Figma but they can be mapped to any type in code. The first parameter is the name of the Variant in Figma, and the second parameter is a value mapping. The _keys_ in this object should match the different options of that Variant in Figma, and the _value_ is whatever you want to output instead.
 
 ```tsx
 // maps the 'Options' variant in Figma to enum values in code
@@ -388,9 +398,7 @@ figma.children('Icon*')
 
 ### Nested properties
 
-In cases where you don't want to connect a child component, but instead map its properties on the parent level, you can use
-`figma.nestedProps()` to achieve this. This helper takes the name of the layer as it's first parameter (similar to `figma.children`),
-and a mapping object as the second parameter. These props can then be referenced in the example function.
+In cases where you don't want to connect a child component, but instead map its properties on the parent level, you can use `figma.nestedProps()` to achieve this. This helper takes the name of the layer as it's first parameter, and a mapping object as the second parameter. These props can then be referenced in the example function. `nestedProps` will always select a **single** instance, and cannot be used to map multiple children.
 
 ```tsx
 // map the properties of a nested instance named "Button Shape"

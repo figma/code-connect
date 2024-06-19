@@ -68,6 +68,42 @@ export function _fcc_templateString(value: string) {
   } as const
 }
 
+// Render a prop value passed to an object literal based on its type.
+// for example: <Button sx={{ key: value }} />
+function _fcc_renderPropValue(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) {
+  if (Array.isArray(prop)) {
+    return prop
+  }
+
+  if (prop === undefined) {
+    return 'undefined'
+  }
+
+  // Replace any newlines or quotes in the string with escaped versions
+  if (typeof prop === 'string') {
+    return `"${prop.replaceAll('\n', '\\n').replaceAll('"', '\\"')}"`
+  }
+
+  if (typeof prop === 'boolean' || typeof prop === 'number') {
+    return prop
+  }
+
+  if (
+    prop.type === 'function' ||
+    prop.type === 'identifier' ||
+    prop.type === 'object' ||
+    prop.type === 'jsx-element'
+  ) {
+    return prop.value
+  }
+
+  if (prop.type === 'template-string') {
+    return `\`${prop.value}\``
+  }
+
+  return 'undefined'
+}
+
 // Render a React prop correctly, based on its type
 function _fcc_renderReactProp(name: string, prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) {
   // If the value is an array, then it's an array of objects representing React
@@ -160,6 +196,7 @@ export function getParsedTemplateHelpersString() {
     _fcc_identifier,
     _fcc_object,
     _fcc_templateString,
+    _fcc_renderPropValue,
   ]
     .map((fn) => fn.toString())
     .join('\n')

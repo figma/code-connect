@@ -1,77 +1,59 @@
 # Code Connect for icons
 
-`import-icons.ts` is a node script that uses the [Figma API](https://www.figma.com/developers/api) to pull icons from a Figma file and generate a Code Connect file for your icons. This template is meant to be used as a starting point - some parts will need to be edited to work with your design system and code base. These areas are marked with "EDIT THIS" in the file.
+This folder includes example scripts for generating Code Connect files for your components. This is useful for icons, where you might have tons of icons that you don't want to manually connect one by one.
 
 ## Usage
 
-Run the script with e.g `npx tsx`:
+To run the scripts, you'll need to set the `FIGMA_ACCESS_TOKEN` env variable. [See here](https://www.figma.com/developers/api#access-tokens) for how to get this token.
+
+Run the scripts with e.g `npx tsx`:
 ```
 FIGMA_ACCESS_TOKEN=<my token> npx tsx import-icons.ts
 ```
 
-## Modifying the script
-
-There are many ways your icons can be setup in Figma and in code. This base template assumes that:
-* Your icons in Figma include the string "icon" in the name
-* Your icon components in code are named similarly and include the size, e.g `Icon32Search`
-
-Here are some examples of how you can modify the script to work with your setup.
-
-### Icons with size as a prop
-
-If your icons in Figma has properties/variants for size, you can modify the script to handle this.
-
-Change the `generateCodeConnectIcons` function:
-
-```ts
-// ...
-
-let name = figmaName
-  .split(/[.-]/g)
-  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-  .join('')
-
-// added line: remove the size from the component name
-name = name.replace(/[0-9]+/g, '')
-
-// added line: extract the size from the figma name.
-// default to 16 if no size specified in the Figma name
-const [_match, size] = figmaName.match(/([0-9]+)/) ?? [null, '16']
-
-const info: IconInfo = {
-  id,
-  name,
-  figmaName,
-  figmaUrl,
-  size,
-}
-icons.push(info)
-
-// ...
+or, if you have the access token in an `.env` file, Code Connect will pick that up:
+```
+npx tsx import-icons.ts
 ```
 
-Change the `writeCodeConnectFile` function to include an `example` that passes the size to your icon component:
+## Code Connect Client
 
-```ts
-async function writeCodeConnectFile(dir: string, icons: IconInfo[]) {
-  const uniqueNames = new Set([...icons.map((icon) => icon.name)])
-  fs.writeFileSync(
-    path.join(dir, ICONS_CODE_CONNECT_FILE),
-    `\
-import figma from '@figma/code-connect'
-import {
-${Array.from(uniqueNames)
-  .map((iconName) => `  ${iconName},`)
-  .join('\n')}
-} from '${ICONS_IMPORT_PATH}'
-${icons
-  .map(
-    (icon) => `figma.connect(${icon.name}, '${icon.figmaUrl}', {
-  example: () => <${icon.name} size={${icon.size}} />,
-})`,
-  )
-  .join('\n')}
-`,
-  )
+`client` includes helper functions for interacting with Figma files and generating Code Connect files. It uses the [Figma REST API](https://www.figma.com/developers/api) under the hood. This folder includes a few example scripts that can be modified to fit your needs.
+
+`getComponents` will fetch any components in a file, or if a node-id query parameter is provided, any nodes within that frame. The result can then be used to dynamically connect components with `figma.connect()` and write this to a file that can be published with `figma connect publish`.
+
+```
+import { client } from '@figma/code-connect'
+
+async function getIcons() {
+  const components = await client.getComponents('https://figma.com/file/ABc123IjkLmnOPq?node-id=41-41')
+  const icons = components.filter(({ name }) => name.startsWith('icon'))
+  // ... write code connect file
 }
 ```
+
+`getComponents` returns an array of `Component` objects with the following type:
+
+```
+interface Component {
+  // the type of component (only COMPONENT_SET nodes can have variant properties)
+  type: 'COMPONENT' | 'COMPONENT_SET'
+  // the name of the component in Figma
+  name: string
+  // a unique ID for this node
+  id: string
+  // file key for the file containing this node
+  fileKey: string
+  // URL to this node
+  figmaUrl: string
+  // Properties for this component, keyed by the name of the property
+  componentPropertyDefinitions: Record<string, {
+    defaultValue: boolean | string
+    type: 'BOOLEAN' | 'INSTANCE_SWAP' | 'TEXT' | 'VARIANT'
+
+    // All possible values for this property. Only exists on VARIANT properties
+    variantOptions?: string[]
+  }>
+}
+```
+

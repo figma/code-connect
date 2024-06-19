@@ -3,7 +3,6 @@ import * as prettier from 'prettier'
 import fs from 'fs'
 import z from 'zod'
 import { CreateRequestPayload, CreateResponsePayload } from '../connect/parser_executable_types'
-import { FigmaRestApi } from '../connect/figma_rest_api'
 import path from 'path'
 
 function isBooleanKind(propValue: string) {
@@ -125,6 +124,13 @@ figma.connect(${normalizedName}, "${figmaNodeUrl}", {
     semi: false,
     trailingComma: 'all',
   })
+
+  if (fs.existsSync(filePath)) {
+    return {
+      createdFiles: [],
+      messages: [{ message: `File ${filePath} already exists, skipping creation`, level: 'ERROR' }],
+    }
+  }
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
   fs.writeFileSync(filePath, formatted)
 

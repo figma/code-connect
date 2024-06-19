@@ -1,8 +1,12 @@
-import { findComponentsInDocument, parseFileKey, parseNodeIds } from './helpers'
+import {
+  exitWithFeedbackMessage,
+  findComponentsInDocument,
+  parseFileKey,
+  parseNodeIds,
+} from './helpers'
 import axios, { isAxiosError } from 'axios'
 import fs from 'fs'
 import { getApiUrl, getHeaders } from './figma_rest_api'
-import { camelCase } from 'lodash'
 import { exitWithError, logger } from '../common/logging'
 import { callParser, handleMessages } from './parser_executables'
 import { CodeConnectExecutableParserConfig, ProjectInfo } from './project'
@@ -10,38 +14,12 @@ import { createReactCodeConnect } from '../react/create'
 import { z } from 'zod'
 import { CreateRequestPayload, CreateResponsePayload } from './parser_executable_types'
 import { fromError } from 'zod-validation-error'
-
 interface GenerateDocsArgs {
   accessToken: string
   figmaNodeUrl: string
   outFile: string
   outDir: string
   projectInfo: ProjectInfo
-}
-
-function isBooleanKind(propValue: string) {
-  const normalized = propValue.toLowerCase()
-  return (
-    normalized === 'true' ||
-    normalized === 'false' ||
-    normalized === 'yes' ||
-    normalized === 'no' ||
-    normalized === 'on' ||
-    normalized === 'off'
-  )
-}
-
-function normalizePropName(name: string) {
-  return name.replace(/#[0-9:]*/g, '')
-}
-
-function generateCodePropName(name: string) {
-  return camelCase(name.replace(/[^a-zA-Z]/g, ''))
-}
-
-function normalizePropValue(name: string) {
-  // Convert the string to kebab-case
-  return name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
 }
 
 export function normalizeComponentName(name: string) {
@@ -61,12 +39,23 @@ export async function createCodeConnectFromUrl({
   outDir,
   projectInfo,
 }: GenerateDocsArgs) {
-  const fileKey = parseFileKey(figmaNodeUrl)
-  const nodeIds = parseNodeIds([figmaNodeUrl])
-
-  const apiUrl = getApiUrl(figmaNodeUrl ?? '') + `/files/${fileKey}?ids=${nodeIds.join(',')}`
-
   try {
+    const fileKey = parseFileKey(figmaNodeUrl)
+    const nodeIds = parseNodeIds([figmaNodeUrl])
+
+    const apiUrl =
+      getApiUrl(figmaNodeUrl ?? '') + `/code_connect/${fileKey}/cli_data?ids=${nodeIds.join(',')}`
+
+    if (nodeIds.length === 0) {
+      exitWithError(
+        `Invalid figma node URL: the provided url "${figmaNodeUrl}" does not contain a node-id`,
+      )
+    } else if (nodeIds.length > 1) {
+      exitWithError(
+        `Invalid figma node URL: the provided url "${figmaNodeUrl}" contains more than one node-id`,
+      )
+    }
+
     logger.info('Fetching component information from Figma...')
     const response = process.env.CODE_CONNECT_MOCK_CREATE_API_RESPONSE
       ? {
@@ -148,6 +137,6 @@ export async function createCodeConnectFromUrl({
     } else {
       logger.error(`Failed to create: ${err}`)
     }
-    process.exit(1)
+    exitWithFeedbackMessage(1)
   }
 }

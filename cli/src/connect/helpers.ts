@@ -12,7 +12,7 @@ export const validateNodeId = function (id: string): string {
   const newId = id.replace('-', ':')
   if (!guidRegex.test(newId)) {
     logger.error(`Invalid figma node URL: the provided node-id "${id}" is invalid`)
-    process.exit(1)
+    exitWithFeedbackMessage(1)
   }
   return newId
 }
@@ -25,14 +25,11 @@ export function parseNodeIds(figmaNodeUrls: string[]): string[] {
     if (nodeId && typeof nodeId === 'string') {
       const figmaNodeId = validateNodeId(nodeId)
       nodeIds.push(figmaNodeId)
-    } else if (!nodeId) {
-      exitWithError(
-        `Invalid figma node URL: the provided url "${nodeURL}" does not contain a node-id`,
-      )
-    } else {
-      exitWithError(
-        `Invalid figma node URL: the provided url "${nodeURL}" contains more than one node-id`,
-      )
+    } else if (Array.isArray(nodeId)) {
+      for (const id of nodeId) {
+        const figmaNodeId = validateNodeId(id)
+        nodeIds.push(figmaNodeId)
+      }
     }
   }
   return nodeIds
@@ -66,10 +63,39 @@ export function findComponentsInDocument(
     if (!nodeIds && isComponent(node)) {
       components.push(node)
     }
-    if (Array.isArray(node.children)) {
+    // don't traverse into component sets
+    if (Array.isArray(node.children) && !isComponent(node)) {
       stack.push(...node.children)
     }
   }
 
   return components
+}
+
+/**
+ * Gets the URL of a figma component
+ *
+ * @param component a published figma component
+ * @returns a URL to the figma component
+ */
+export function figmaUrlOfComponent(component: FigmaRestApi.Component, fileKey: string) {
+  const fileUrl = process.env.FILE_URL || `https://figma.com/file/`
+  const nodeId = component.id.replace(':', '-')
+  const urlId = nodeId.replace(':', '-')
+  return `${fileUrl}${fileKey}/?node-id=${urlId}`
+}
+
+/**
+ * removes the ID part of a component property name
+ */
+export function normalizePropName(name: string) {
+  return name.replace(/#[0-9:]*/g, '')
+}
+
+/**
+ * Displays a feedback/bugs issues link before exiting
+ */
+export function exitWithFeedbackMessage(exitCode: number): never {
+  logger.info('Please raise any bugs or feedback at https://github.com/figma/code-connect/issues.')
+  process.exit(exitCode)
 }

@@ -2,6 +2,7 @@ import { CodeConnectJSON } from '../common/figma_connect'
 import { logger, underline, highlight } from '../common/logging'
 import axios, { isAxiosError } from 'axios'
 import { getApiUrl, getHeaders } from './figma_rest_api'
+import { exitWithFeedbackMessage } from './helpers'
 
 interface Args {
   accessToken: string
@@ -38,6 +39,6 @@ export async function upload({ accessToken, docs }: Args) {
     } else {
       logger.error(`Failed to upload to Figma: ${err}`)
     }
-    process.exit(1)
+    exitWithFeedbackMessage(1)
   }
 }

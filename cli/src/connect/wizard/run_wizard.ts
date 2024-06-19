@@ -1,9 +1,9 @@
 import { BaseCommand, getAccessToken, getCodeConnectObjects, getDir } from '../../commands/connect'
 import prompts from 'prompts'
 import fs from 'fs'
-import { findComponentsInDocument, parseFileKey } from '../helpers'
+import { exitWithFeedbackMessage, findComponentsInDocument, parseFileKey } from '../helpers'
 import { FigmaRestApi, getApiUrl } from '../figma_rest_api'
-import { logger, success } from '../../common/logging'
+import { logger, success, warn } from '../../common/logging'
 import axios, { isAxiosError } from 'axios'
 import {
   ReactProjectInfo,
@@ -16,7 +16,7 @@ import {
 import { parseFigmaNode } from '../validation'
 import chalk from 'chalk'
 import path from 'path'
-import { CreateRequestPayload } from '../parser_executable_types'
+import { CreateRequestPayload, CreateResponsePayload } from '../parser_executable_types'
 import { normalizeComponentName } from '../create'
 import { createReactCodeConnect } from '../../react/create'
 import { CodeConnectJSON } from '../../common/figma_connect'
@@ -24,6 +24,8 @@ import boxen from 'boxen'
 import { Searcher } from 'fast-fuzzy'
 import { isFigmaConnectFile } from '../../react/parser'
 import { createCodeConnectConfig } from './helpers'
+import z from 'zod/lib'
+import { handleMessages } from '../parser_executables'
 
 type ConnectedComponentMappings = { componentName: string; path: string }[]
 
@@ -40,7 +42,7 @@ async function fetchTopLevelComponentsFromFile({
   // TODO enter create flow if node-id specified
   const fileKey = parseFileKey(figmaUrl)
 
-  const apiUrl = getApiUrl(figmaUrl ?? '') + `/files/${fileKey}`
+  const apiUrl = getApiUrl(figmaUrl ?? '') + `/code_connect/${fileKey}/cli_data`
 
   try {
     logger.info('Fetching component information from Figma...')
@@ -71,18 +73,72 @@ async function fetchTopLevelComponentsFromFile({
       }
       logger.debug(JSON.stringify(err.response?.data))
     }
-    process.exit(1)
+    exitWithFeedbackMessage(1)
   }
 }
 
+/**
+ * Asks a Prompts question and adds spacing
+ * @param question Prompts question
+ * @returns Prompts answer
+ */
+async function askQuestion<T extends string = string>(
+  question: prompts.PromptObject<T>,
+): Promise<prompts.Answers<T>> {
+  const answers = await prompts(question)
+  logger.info('')
+  return answers
+}
+
+/**
+ * Asks a Prompts question and exits the process if user cancels
+ * @param question Prompts question
+ * @returns Prompts answer
+ */
+async function askQuestionOrExit<T extends string = string>(
+  question: prompts.PromptObject<T>,
+): Promise<prompts.Answers<T>> {
+  const answers = await askQuestion(question)
+  if (!Object.keys(answers).length) {
+    return process.exit(0)
+  }
+  return answers
+}
+
+/**
+ * Asks a Prompts question and shows an exit confirmation if user cancels.
+ * This should be used for questions further along in the wizard.
+ * @param question Prompts question
+ * @returns Prompts answer
+ */
 async function askQuestionWithExitConfirmation<T extends string = string>(
   question: prompts.PromptObject<T>,
 ): Promise<prompts.Answers<T>> {
   while (true) {
-    const answers = await prompts(question, { onCancel: () => process.exit(0) })
+    const answers = await askQuestion(question)
+
     if (Object.keys(answers).length) {
-      logger.info('')
       return answers
+    }
+
+    const { shouldExit } = await askQuestion({
+      type: 'select',
+      name: 'shouldExit',
+      message: 'Are you sure you want to exit?',
+      choices: [
+        {
+          title: 'Yes',
+          value: 'yes',
+        },
+        {
+          title: 'No',
+          value: 'no',
+        },
+      ],
+    })
+    // also exit if no answer provided (esc / ctrl+c)
+    if (!shouldExit || shouldExit === 'yes') {
+      process.exit(0)
     }
   }
 }
@@ -223,7 +279,7 @@ async function runManualLinkingWithConfirmation(manualLinkingArgs: ManualLinking
 
     const linkedNodes = Object.keys(manualLinkingArgs.linkedNodeIdsToPaths)
     if (!linkedNodes.length) {
-      const { confirmation } = await askQuestionWithExitConfirmation({
+      const { confirmation } = await askQuestionOrExit({
         type: 'select',
         name: 'confirmation',
         message: `No Code Connect files linked. Are you sure you want to exit?`,
@@ -349,8 +405,12 @@ async function createCodeConnectFiles({
       config: {},
     }
 
-    await createReactCodeConnect(payload)
-    logger.info(success(`Created ${outFile}`))
+    const result = await createReactCodeConnect(payload)
+    const { hasErrors } = handleMessages(result.messages)
+
+    if (!hasErrors) {
+      logger.info(success(`Created ${outFile}`))
+    }
   }
 }
 
@@ -416,7 +476,7 @@ async function getUnconnectedComponentsAndConnectedComponentMappings(
       })
       connectedComponentsMappings.push({
         componentName: c.name,
-        path: relativePath ?? '(Unknown)',
+        path: relativePath ?? '(Unknown file)',
       })
     } else {
       unconnectedComponents.push(c)
@@ -442,7 +502,7 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
 
   while (true) {
     if (!hasConfigFile) {
-      const { componentDirectory } = await askQuestionWithExitConfirmation({
+      const { componentDirectory } = await askQuestionOrExit({
         type: 'text',
         message: `Which top-level directory contains the code to be connected to your Figma design system? (Press ${chalk.green('enter')} to use current directory)`,
         name: 'componentDirectory',
@@ -464,16 +524,16 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
       (await getProjectInfoFromConfig(dirToSearchForFiles, config)) as ReactProjectInfo,
     )
 
-    const componentPaths = projectInfo.files.filter(
-      (f: string) => !isFigmaConnectFile(projectInfo.tsProgram, f),
-    )
+    const componentPaths = projectInfo.files
+      .filter((f: string) => !isFigmaConnectFile(projectInfo.tsProgram, f))
+      .map((filePath) => path.relative(dirToSearchForFiles, filePath))
 
     if (!componentPaths.length) {
       if (hasConfigFile) {
         logger.error(
           'No jsx/tsx files found. Please update the include/exclude globs in your config file and try again.',
         )
-        process.exit(1)
+        exitWithFeedbackMessage(1)
       } else {
         logger.error(
           'No jsx/tsx files could be found in that directory. Please enter a different directory.',
@@ -490,9 +550,6 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
 }
 
 export async function runWizard(cmd: BaseCommand) {
-  logger.warn(
-    'The Code Connect assistant is under construction! Please use one of the other commands.',
-  )
   logger.info(
     boxen(
       `${chalk.bold(`Welcome to ${chalk.green('Code Connect')}`)}\n\n` +
@@ -500,6 +557,7 @@ export async function runWizard(cmd: BaseCommand) {
         `When you're done, you'll be able to see your component code while inspecting in\n` +
         `Figma's Dev Mode.\n\n` +
         `Learn more at ${chalk.cyan('https://www.figma.com/developers/code-connect')}.\n\n` +
+        `Please raise bugs or feedback at ${chalk.cyan('https://github.com/figma/code-connect/issues')}.\n\n` +
         `${chalk.red.bold('Note: ')}This process will create and modify Code Connect files. Make sure you've\n` +
         `committed necessary changes in your codebase first.`,
       {
@@ -517,26 +575,18 @@ export async function runWizard(cmd: BaseCommand) {
     logger.error(
       'This flow currently only supports React projects. Please use one of the other commands.',
     )
-    process.exit(1)
+    exitWithFeedbackMessage(1)
   }
 
   let accessToken = getAccessToken(cmd)
 
   if (!accessToken) {
-    const { accessTokenEntered } = await askQuestionWithExitConfirmation({
+    const { accessTokenEntered } = await askQuestionOrExit({
       type: 'text',
       message: `No access token detected. Visit https://help.figma.com/hc/en-us/articles/8085703771159-Manage-personal-access-tokens
       for instructions on how to do this, ensuring you have both the File Content and Code Connect Write scopes \n\n  Please enter your access token:`,
       name: 'accessTokenEntered',
-      validate: (value) => {
-        if (!value) {
-          logger.info('')
-          logger.info('')
-          logger.info('No access token entered. Exiting...')
-          process.exit(1)
-        }
-        return true
-      },
+      validate: (value) => !!value || 'Please enter an access token.',
     })
     accessToken = accessTokenEntered
   }
@@ -550,7 +600,7 @@ export async function runWizard(cmd: BaseCommand) {
       config,
     })
 
-  const { figmaFileUrl } = await askQuestionWithExitConfirmation({
+  const { figmaFileUrl } = await askQuestionOrExit({
     type: 'text',
     message: 'What is the URL of the Figma file containing your design system library?',
     name: 'figmaFileUrl',
@@ -562,11 +612,11 @@ export async function runWizard(cmd: BaseCommand) {
   })
 
   if (!componentsFromFile) {
-    process.exit(1)
+    exitWithFeedbackMessage(1)
   }
 
   if (!hasConfigFile) {
-    const { createConfigFile } = await askQuestionWithExitConfirmation({
+    const { createConfigFile } = await askQuestionOrExit({
       type: 'select',
       name: 'createConfigFile',
       message:

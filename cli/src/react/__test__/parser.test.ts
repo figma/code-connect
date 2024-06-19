@@ -25,8 +25,10 @@ async function testParse(
     path.join(__dirname, file),
     { ...config, parser: 'react' },
     __dirname,
-    'git@github.com:figma/code-connect.git',
-    false,
+    {
+      repoUrl: 'git@github.com:figma/code-connect.git',
+      debug: false,
+    },
   )
 }
 

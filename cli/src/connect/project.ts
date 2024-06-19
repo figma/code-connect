@@ -8,6 +8,7 @@ import chalk from 'chalk'
 import readline from 'readline'
 // We use an old version of this dep as I couldn't get ES modules working
 import findUp from 'find-up'
+import { exitWithFeedbackMessage } from './helpers'
 
 const DEFAULT_CONFIG_FILE_NAME = 'figma.config.json'
 
@@ -100,8 +101,6 @@ interface FigmaConfig {
 }
 
 function determineConfigFromProject(dir: string): FigmaConfig | undefined {
-  logger.info('No config found, attempting to determine project type')
-
   const parser = determineParserFromProject(dir)
   if (parser) {
     return { codeConnect: { parser } }
@@ -135,9 +134,16 @@ export function determineParserFromProject(dir: string): FirstPartyParser | unde
 
       if (fs.existsSync(packageJsonPath)) {
         const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'))
-        if (packageJson.dependencies && packageJson.dependencies['react']) {
+        if (
+          (packageJson.dependencies && packageJson.dependencies['react']) ||
+          (packageJson.peerDependencies && packageJson.peerDependencies['react'])
+        ) {
           showParserMessage(
-            `Using "react" parser as package.json containing a "react" dependency was found in ${currentDir}`,
+            `Using "react" parser as package.json containing a "react" ${
+              packageJson.dependencies && packageJson.dependencies['react']
+                ? 'dependency'
+                : 'peer dependency'
+            } was found in ${currentDir}`,
           )
           parser = 'react'
           return findUp.stop
@@ -168,10 +174,23 @@ async function checkForLegacyConfig(
   config: FigmaConfig & { codeConnect: { swift?: any; react?: any } },
   configFilePath: string,
 ): Promise<FigmaConfig> | never {
-  const maybeNewReactConfig = { codeConnect: { parser: 'react', ...config.codeConnect.react } }
-  const maybeNewSwiftConfig = { codeConnect: { parser: 'swift', ...config.codeConnect.swift } }
+  const { codeConnect } = config
 
-  if (config.codeConnect.react && config.codeConnect.swift) {
+  const newConfigBase = {
+    ...(codeConnect.include ? { include: codeConnect.include } : {}),
+    ...(codeConnect.exclude ? { exclude: codeConnect.exclude } : {}),
+    ...(codeConnect.documentUrlSubstitutions
+      ? { documentUrlSubstitutions: codeConnect.documentUrlSubstitutions }
+      : {}),
+  }
+  const maybeNewReactConfig = {
+    codeConnect: { parser: 'react', ...codeConnect.react, ...newConfigBase },
+  }
+  const maybeNewSwiftConfig = {
+    codeConnect: { parser: 'swift', ...codeConnect.swift, ...newConfigBase },
+  }
+
+  if (codeConnect.react && codeConnect.swift) {
     logger.error(`${chalk.bold('⚠️  Your Code Connect configuration needs to be updated\n')}`)
 
     logger.infoForce(`Code Connect is migrating from a single configuration file for all supported languages, to individual configuration files for each language.
@@ -190,15 +209,13 @@ The Swift ${chalk.bold(
 
 ${JSON.stringify(maybeNewSwiftConfig, null, 2)}
 
-You will need to check any include/exclude paths are correct relative to the new locations.
-
-Please raise an issue at https://github.com/figma/code-connect/issues if you have any problems.`)
-    process.exit(1)
+You will need to check any include/exclude paths are correct relative to the new locations.`)
+    exitWithFeedbackMessage(1)
   }
 
-  if (config.codeConnect.react || config.codeConnect.swift) {
-    const platform = config.codeConnect.react ? 'React' : 'Swift'
-    const newConfig = config.codeConnect.react ? maybeNewReactConfig : maybeNewSwiftConfig
+  if (codeConnect.react || codeConnect.swift) {
+    const platform = codeConnect.react ? 'React' : 'Swift'
+    const newConfig = codeConnect.react ? maybeNewReactConfig : maybeNewSwiftConfig
 
     logger.infoForce(
       `${chalk.bold('⚠️  Your Code Connect configuration needs to be updated')}
@@ -261,7 +278,7 @@ async function parseConfig(configFilePath: string, dir: string): Promise<FigmaCo
         logger.error(
           `Code Connect was not able to determine your project type, and no \`parser\` was specified. Please ensure you are running Code Connect from your project root. You may need to add a \`parser\` key to your config file, specifying which parser to use. See https://github.com/figma/code-connect/ for instructions.`,
         )
-        process.exit(1)
+        exitWithFeedbackMessage(1)
       }
 
       if (!config.codeConnect) {
@@ -448,6 +465,14 @@ export async function parseOrDetermineConfig(dir: string, configPath: string) {
 
   const hasConfigFile = fs.existsSync(configFilePath)
 
+  if (!hasConfigFile) {
+    if (configPath) {
+      logger.warn(`${configPath} does not exist, proceeding with default options`)
+    } else {
+      logger.info(`No config file found in ${dir}, proceeding with default options`)
+    }
+  }
+
   const globalConfig = hasConfigFile
     ? await parseConfig(configFilePath, dir)
     : determineConfigFromProject(dir)
@@ -462,14 +487,14 @@ export async function parseOrDetermineConfig(dir: string, configPath: string) {
 
   const config = globalConfig.codeConnect
 
-  if (!hasConfigFile) {
-    logger.info(`No config file found in ${dir}, proceeding with default options`)
-  } else if (hasConfigFile && !config) {
-    logger.info(`Config file found, but no options specified under 'codeConnect'. Parsing ${dir}`)
-  } else if (config && !config.include) {
-    logger.info(`Config file found, but no include globs specified. Parsing ${dir}`)
-  } else {
-    logger.info(`Config file found, parsing ${dir} using specified include globs`)
+  if (hasConfigFile) {
+    if (!config) {
+      logger.info(`Config file found, but no options specified under 'codeConnect'. Parsing ${dir}`)
+    } else if (config && !config.include) {
+      logger.info(`Config file found, but no include globs specified. Parsing ${dir}`)
+    } else {
+      logger.info(`Config file found, parsing ${dir} using specified include globs`)
+    }
   }
 
   return {

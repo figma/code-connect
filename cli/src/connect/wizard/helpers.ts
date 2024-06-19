@@ -17,7 +17,8 @@ export async function createCodeConnectConfig({
   dirToSearchForFiles: string
   config: CodeConnectConfig
 }) {
-  const pathToComponentsDir = path.relative(dir, dirToSearchForFiles)
+  // use unix separators for config file globs
+  const pathToComponentsDir = path.relative(dir, dirToSearchForFiles).replaceAll(path.sep, '/')
 
   const includesGlob = pathToComponentsDir
     ? `${pathToComponentsDir}/${DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]}`

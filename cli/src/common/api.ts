@@ -89,10 +89,7 @@ export interface FigmaConnectAPI {
    * @param figmaPropName The name of the property on the Figma component
    * @param valueMapping A mapping of values for the Figma Variant
    */
-  enum<V extends EnumValue>(
-    figmaPropName: string,
-    valueMapping: PropMapping<Record<string, V>>,
-  ): ValueOf<Record<string, V>>
+  enum<V extends EnumValue>(figmaPropName: string, valueMapping: Record<string, V>): V
 
   /**
    * Maps a Figma property to a string value for the connected component. This prop is replaced
@@ -161,7 +158,7 @@ export interface FigmaConnectAPI {
    * (props) => <Button label={props.nested.label} icon={props.nested.icon} />
    * ```
    */
-  nestedProps<T>(layer: string, props: PropMapping<T>): T
+  nestedProps<V>(layer: string, input: V): V
 
   /**
    * Creates a className string by joining an array of strings. The argument supports both

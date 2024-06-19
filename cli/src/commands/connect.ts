@@ -5,6 +5,7 @@ import { upload } from '../connect/upload'
 import { validateDocs } from '../connect/validation'
 import { createCodeConnectFromUrl } from '../connect/create'
 import {
+  CodeConnectConfig,
   CodeConnectExecutableParserConfig,
   CodeConnectReactConfig,
   ProjectInfo,
@@ -22,6 +23,7 @@ import { fromError } from 'zod-validation-error'
 import { ParseRequestPayload, ParseResponsePayload } from '../connect/parser_executable_types'
 import z from 'zod'
 import { withUpdateCheck } from '../common/updates'
+import { exitWithFeedbackMessage } from '../connect/helpers'
 
 export type BaseCommand = commander.Command & {
   token: string
@@ -46,11 +48,17 @@ function addBaseCommand(command: commander.Command, name: string, description: s
     .option('-o --outDir <dir>', 'specify a directory to output generated Code Connect')
     .option('-c --config <path>', 'path to a figma config file')
     .option('--dry-run', 'tests publishing without actually publishing')
+    .addHelpText(
+      'before',
+      'For feedback or bugs, please raise an issue: https://github.com/figma/code-connect/issues',
+    )
 }
 
 export function addConnectCommandToProgram(program: commander.Command) {
   // Main command, invoked with `figma connect`
-  const connectCommand = addBaseCommand(program, 'connect', 'Figma Code Connect')
+  const connectCommand = addBaseCommand(program, 'connect', 'Figma Code Connect').action(
+    withUpdateCheck(runWizard),
+  )
 
   // Sub-commands, invoked with e.g. `figma connect publish`
   addBaseCommand(
@@ -92,7 +100,11 @@ export function addConnectCommandToProgram(program: commander.Command) {
 }
 
 export function getAccessToken(cmd: BaseCommand) {
-  const token = cmd.token ?? process.env.FIGMA_ACCESS_TOKEN
+  return cmd.token ?? process.env.FIGMA_ACCESS_TOKEN
+}
+
+function getAccessTokenOrExit(cmd: BaseCommand) {
+  const token = getAccessToken(cmd)
 
   if (!token) {
     exitWithError(
@@ -115,7 +127,11 @@ function setupHandler(cmd: BaseCommand) {
 
 type ParserDoc = z.infer<typeof ParseResponsePayload>['docs'][0]
 
-function transformDocFromParser(doc: ParserDoc, remoteUrl: string): ParserDoc {
+function transformDocFromParser(
+  doc: ParserDoc,
+  remoteUrl: string,
+  config: CodeConnectConfig,
+): ParserDoc {
   let source = doc.source
   if (source) {
     try {
@@ -128,9 +144,18 @@ function transformDocFromParser(doc: ParserDoc, remoteUrl: string): ParserDoc {
     }
   }
 
+  // TODO This logic is duplicated in parser.ts parseDoc due to some type issues
+  let figmaNode = doc.figmaNode
+  if (config.documentUrlSubstitutions) {
+    Object.entries(config.documentUrlSubstitutions).forEach(([from, to]) => {
+      figmaNode = figmaNode.replace(from, to)
+    })
+  }
+
   return {
     ...doc,
     source,
+    figmaNode,
   }
 }
 
@@ -181,7 +206,7 @@ export async function getCodeConnectObjects(
     }
 
     return parsed.docs.map((doc) => ({
-      ...transformDocFromParser(doc, projectInfo.remoteUrl),
+      ...transformDocFromParser(doc, projectInfo.remoteUrl, projectInfo.config),
       metadata: {
         cliVersion: require('../../package.json').version,
       },
@@ -208,14 +233,11 @@ async function getReactCodeConnectObjects(
 
   for (const file of files.filter((f: string) => isFigmaConnectFile(tsProgram, f))) {
     try {
-      const docs = await parse(
-        tsProgram,
-        file,
-        config,
-        reactProjectInfo.absPath,
-        remoteUrl,
-        cmd.verbose,
-      )
+      const docs = await parse(tsProgram, file, config, reactProjectInfo.absPath, {
+        repoUrl: remoteUrl,
+        debug: cmd.verbose,
+        silent,
+      })
       codeConnectObjects.push(...docs)
       if (!silent || cmd.verbose) {
         logger.info(success(file))
@@ -269,7 +291,7 @@ async function handlePublish(cmd: BaseCommand & { skipValidation: boolean }) {
     logger.info(codeConnectObjects.map((o) => `- ${o.component} (${o.figmaNode})`).join('\n'))
   }
 
-  const accessToken = getAccessToken(cmd)
+  const accessToken = getAccessTokenOrExit(cmd)
 
   if (cmd.skipValidation) {
     logger.info('Validation skipped')
@@ -278,7 +300,7 @@ async function handlePublish(cmd: BaseCommand & { skipValidation: boolean }) {
     var start = new Date().getTime()
     const valid = await validateDocs(cmd, accessToken, codeConnectObjects)
     if (!valid) {
-      process.exit(1)
+      exitWithFeedbackMessage(1)
     } else {
       var end = new Date().getTime()
       var time = end - start
@@ -326,7 +348,7 @@ async function handleUnpublish(cmd: BaseCommand & { node: string }) {
     }
   }
 
-  const accessToken = getAccessToken(cmd)
+  const accessToken = getAccessTokenOrExit(cmd)
 
   delete_docs({
     accessToken,
@@ -366,7 +388,7 @@ async function handleCreate(nodeUrl: string, cmd: BaseCommand) {
     process.exit(0)
   }
 
-  const accessToken = getAccessToken(cmd)
+  const accessToken = getAccessTokenOrExit(cmd)
 
   return createCodeConnectFromUrl({
     accessToken,

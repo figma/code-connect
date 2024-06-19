@@ -1,7 +1,14 @@
 {
   "codeConnect": {
     "react": {
-      "include": ["src/components/**/*.tsx"]
+      "paths": {
+        "a": "b"
+      }
+    },
+    "include": ["src/components/**/*.tsx"],
+    "exclude": ["src/components/**/*.test.tsx"],
+    "documentUrlSubstitutions": {
+      "c": "d"
     }
   }
 }

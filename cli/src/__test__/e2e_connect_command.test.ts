@@ -16,9 +16,8 @@ describe('e2e test for `connect` command', () => {
       })
 
       expect(tidyStdOutput(result.stderr)).toBe(
-        `No config found, attempting to determine project type
+        `No config file found in ${testPath}, proceeding with default options
 Using "react" parser as package.json containing a "react" dependency was found in ${testPath}. If this is incorrect, please check you are running Code Connect from your project root, or add a \`parser\` key to your config file. See https://github.com/figma/code-connect for more information.
-No config file found in ${testPath}, proceeding with default options
 ${path.join(testPath, 'ReactApiComponent.figmadoc.tsx')}`,
       )
       const json = JSON.parse(result.stdout)

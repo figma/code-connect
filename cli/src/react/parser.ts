@@ -219,6 +219,7 @@ function getImportsForIdentifiers({ sourceFile }: ParserContext, _identifiers: s
 export async function parseComponentMetadata(
   node: ts.PropertyAccessExpression | ts.Identifier | ts.Expression,
   { checker, sourceFile, absPath }: ParserContext,
+  silent?: boolean,
 ) {
   let componentSymbol = checker.getSymbolAtLocation(node)
   let componentSourceFile = sourceFile
@@ -261,9 +262,11 @@ export async function parseComponentMetadata(
     }
 
     if (!componentSymbol || !componentSymbol.declarations) {
-      logger.warn(
-        `Import for ${node.getText()} could not be resolved, make sure that your \`include\` globs in \`figma.config.json\` matches the component source file (in addition to the Code Connect file). If you're using path aliases, make sure to include the same aliases in \`figma.config.json\` with the \`paths\` option.`,
-      )
+      if (!silent) {
+        logger.warn(
+          `Import for ${node.getText()} could not be resolved, make sure that your \`include\` globs in \`figma.config.json\` matches the component source file (in addition to the Code Connect file). If you're using path aliases, make sure to include the same aliases in \`figma.config.json\` with the \`paths\` option.`,
+        )
+      }
       return {
         source: '',
         line: 0,
@@ -570,6 +573,34 @@ export function parseRenderFunction(
             const name = node.expression.getText()
             return createPropPlaceholder({ name, node, wrapInJsxExpression: true })
           }
+          // object assignment using destructured reference, e.g `prop={{ key: value }}`
+          // (`{{ key: props.value }}` syntax will be captured by the `props.` notation branch above)
+          if (
+            ts.isObjectBindingPattern(propsParameter.name) &&
+            ts.isPropertyAssignment(node) &&
+            ts.isIdentifier(node.initializer) &&
+            propsParameter.name.elements.find((el) =>
+              node.initializer.getText().startsWith(el.name.getText()),
+            )
+          ) {
+            return ts.factory.createPropertyAssignment(
+              node.name,
+              createPropPlaceholder({ name: node.initializer.getText(), node }),
+            )
+          }
+          // object assignment using destructured reference as a shorthand, e.g `prop={{ value }}`
+          if (
+            ts.isObjectBindingPattern(propsParameter.name) &&
+            ts.isShorthandPropertyAssignment(node) &&
+            propsParameter.name.elements.find((el) =>
+              node.name.getText().startsWith(el.name.getText()),
+            )
+          ) {
+            return ts.factory.createPropertyAssignment(
+              node.name,
+              createPropPlaceholder({ name: node.name.getText(), node }),
+            )
+          }
           // Replaces {...props} with all the prop mapped props we know about,
           // e.g. <Button {...props} /> becomes:
           // <Button prop1={__PROP__("prop1")} prop2={__PROP__("prop2")} />.
@@ -689,7 +720,7 @@ export function parseRenderFunction(
   exampleCode = exampleCode.replace(
     /([A-Za-z0-9]+):\s+__PROP__\("([A-Za-z_\.]+)"\)/g,
     (_match, objectKey, figmaPropName) => {
-      return `${objectKey}: \${${figmaPropName}}`
+      return `${objectKey}: \${_fcc_renderPropValue(${figmaPropName})}`
     },
   )
 
@@ -951,7 +982,7 @@ export function getDefaultTemplate(
 async function parseDoc(
   node: ts.CallExpression,
   parserContext: ParserContext,
-  repoUrl?: string,
+  { repoUrl, silent }: ParseOptions,
 ): Promise<CodeConnectJSON> {
   const { checker, sourceFile, config } = parserContext
 
@@ -966,13 +997,14 @@ async function parseDoc(
   )
 
   let figmaNode = stripQuotes(figmaNodeUrlArg)
+  // TODO This logic is duplicated in connect.ts transformDocFromParser due to some type issues
   if (config.documentUrlSubstitutions) {
     Object.entries(config.documentUrlSubstitutions).forEach(([from, to]) => {
       figmaNode = figmaNode.replace(from, to)
     })
   }
   const metadata = componentArg
-    ? await parseComponentMetadata(componentArg, parserContext)
+    ? await parseComponentMetadata(componentArg, parserContext, silent)
     : undefined
 
   const props = propsArg ? parsePropsObject(propsArg, parserContext) : undefined
@@ -1059,13 +1091,18 @@ async function parseDoc(
   }
 }
 
+type ParseOptions = {
+  repoUrl?: string
+  debug?: boolean
+  silent?: boolean
+}
+
 export async function parse(
   program: ts.Program,
   file: string,
   config: CodeConnectReactConfig,
   absPath: string,
-  repoUrl?: string,
-  debug?: boolean,
+  parseOptions: ParseOptions = {},
 ): Promise<any[]> {
   const sourceFile = program.getSourceFile(file)
   if (!sourceFile) {
@@ -1085,7 +1122,7 @@ export async function parse(
   while (nodes.length > 0) {
     const node = nodes.shift()!
     if (isFigmaConnectCall(node, parserContext.sourceFile)) {
-      const doc = await parseDoc(node, parserContext, repoUrl)
+      const doc = await parseDoc(node, parserContext, parseOptions)
       if (doc) {
         codeConnectObjects.push(doc)
       }

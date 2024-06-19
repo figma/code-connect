@@ -45,19 +45,43 @@ describe('e2e test for legacy config handling', () => {
   }
 
   describe('legacy react config', () => {
-    const expectedOutput = `⚠️  Your Code Connect configuration needs to be updated
+    function getExpectedOutput(minimal = false) {
+      return `⚠️  Your Code Connect configuration needs to be updated
 
 Code Connect is migrating from a single configuration file for all supported languages, to individual configuration files for each language.
 
 As part of this change, your Code Connect configuration file needs to be updated to remove the react key and add { parser: "react" }:
 
-{
+${
+  minimal
+    ? `{
   "codeConnect": {
     "parser": "react",
+    "paths": {
+      "a": "b"
+    },
     "include": [
       "src/components/**/*.tsx"
     ]
   }
+}`
+    : `{
+  "codeConnect": {
+    "parser": "react",
+    "paths": {
+      "a": "b"
+    },
+    "include": [
+      "src/components/**/*.tsx"
+    ],
+    "exclude": [
+      "src/components/**/*.test.tsx"
+    ],
+    "documentUrlSubstitutions": {
+      "c": "d"
+    }
+  }
+}`
 }
 
 Code Connect can make this change for you automatically, or you can do it manually.
@@ -69,13 +93,21 @@ Please raise an issue at https://github.com/figma/code-connect/issues if you hav
 ---
 
 Would you like Code Connect to update your configuration file for you? (y/n)`
+    }
 
-    const expectedSuccessOutput =
-      expectedOutput +
-      `\nConfiguration file updated
-Config file found, parsing ./e2e_connect_command/legacy_react_config using specified include globs`
+    function getExpectedSuccessOutput(minimal = false) {
+      return (
+        getExpectedOutput(minimal) +
+        `\nConfiguration file updated
+Config file found, parsing ./e2e_connect_command/legacy_react_${
+          minimal ? 'minimal_' : ''
+        }config using specified include globs`
+      )
+    }
 
-    const expectedErrorOutput = expectedOutput + `\nPlease update your configuration file manually`
+    function getExpectedErrorOutput(minimal = false) {
+      return getExpectedOutput(minimal) + `\nPlease update your configuration file manually`
+    }
 
     it(
       'displays a message and exits if a "react" config is defined and the user does not answer "y"',
@@ -84,7 +116,7 @@ Config file found, parsing ./e2e_connect_command/legacy_react_config using speci
           ({ code, stdout, stderr }) => {
             expect(code).toBe(1)
             expect(tidyStdOutput(stdout)).toBe('')
-            expect(tidyStdOutput(stderr)).toBe(expectedErrorOutput)
+            expect(tidyStdOutput(stderr)).toBe(getExpectedErrorOutput())
           },
         )
       },
@@ -113,16 +145,68 @@ Config file found, parsing ./e2e_connect_command/legacy_react_config using speci
       it(
         'displays a message and updates the config and proceeds if a "react" config is defined and the user answers "y"',
         async () => {
-          const testPath = path.join(__dirname, 'e2e_connect_command', 'legacy_react_config')
-
           await runCommandInteractively('legacy_react_config', 'y').then(
             ({ code, stdout, stderr }) => {
               expect(code).toBe(0)
               expect(tidyStdOutput(stdout)).toBe('[]')
-              expect(tidyStdOutput(stderr)).toBe(expectedSuccessOutput)
-              expect(readFileSync(configPath, 'utf8')).toBe(`{
+              expect(tidyStdOutput(stderr)).toBe(getExpectedSuccessOutput())
+              expect(readFileSync(configPath, 'utf8')).toBe(`\
+{
   "codeConnect": {
     "parser": "react",
+    "paths": {
+      "a": "b"
+    },
+    "include": [
+      "src/components/**/*.tsx"
+    ],
+    "exclude": [
+      "src/components/**/*.test.tsx"
+    ],
+    "documentUrlSubstitutions": {
+      "c": "d"
+    }
+  }
+}`)
+            },
+          )
+        },
+        LONG_TEST_TIMEOUT_MS,
+      )
+    })
+
+    describe('', () => {
+      const testPath = path.join(__dirname, 'e2e_connect_command', 'legacy_react_minimal_config')
+
+      const configPath = path.join(testPath, 'figma.config.json')
+      const configBackupPath = path.join(testPath, 'figma.config.json.backup')
+
+      beforeEach(() => {
+        copyFileSync(configPath, configBackupPath)
+      })
+
+      afterEach(() => {
+        copyFileSync(configBackupPath, configPath)
+        rmSync(configBackupPath)
+      })
+
+      it(
+        'displays a message and updates the config and proceeds if a more minimal "react" config is defined and the user answers "y"',
+        async () => {
+          await runCommandInteractively('legacy_react_minimal_config', 'y').then(
+            ({ code, stdout, stderr }) => {
+              expect(code).toBe(0)
+              expect(tidyStdOutput(stdout)).toBe('[]')
+              console.log({ stderr, stdout })
+
+              expect(tidyStdOutput(stderr)).toBe(getExpectedSuccessOutput(true))
+              expect(readFileSync(configPath, 'utf8')).toBe(`\
+{
+  "codeConnect": {
+    "parser": "react",
+    "paths": {
+      "a": "b"
+    },
     "include": [
       "src/components/**/*.tsx"
     ]
@@ -146,9 +230,18 @@ As part of this change, your Code Connect configuration file needs to be updated
 {
   "codeConnect": {
     "parser": "swift",
+    "importPaths": {
+      "a": "b"
+    },
     "include": [
       "src/components/**/*.swift"
-    ]
+    ],
+    "exclude": [
+      "src/components/**/*.test.swift"
+    ],
+    "documentUrlSubstitutions": {
+      "c": "d"
+    }
   }
 }
 
@@ -210,12 +303,22 @@ Config file found, parsing ./e2e_connect_command/legacy_swift_config using speci
               expect(tidyStdOutput(stdout)).toBe('')
               // We check startsWith because there will be some error output after this
               expect(tidyStdOutput(stderr).startsWith(expectedSuccessOutput)).toBe(true)
-              expect(readFileSync(configPath, 'utf8')).toBe(`{
+              expect(readFileSync(configPath, 'utf8')).toBe(`\
+{
   "codeConnect": {
     "parser": "swift",
+    "importPaths": {
+      "a": "b"
+    },
     "include": [
       "src/components/**/*.swift"
-    ]
+    ],
+    "exclude": [
+      "src/components/**/*.test.swift"
+    ],
+    "documentUrlSubstitutions": {
+      "c": "d"
+    }
   }
 }`)
             },
@@ -269,8 +372,7 @@ The Swift figma.config.json should be located in your Swift project root and con
 }
 
 You will need to check any include/exclude paths are correct relative to the new locations.
-
-Please raise an issue at https://github.com/figma/code-connect/issues if you have any problems.`)
+Please raise any bugs or feedback at https://github.com/figma/code-connect/issues.`)
       }
     },
     LONG_TEST_TIMEOUT_MS,

@@ -445,14 +445,14 @@ export function intrinsicToString({ kind, args }: Intrinsic, childLayer?: string
     }
     case IntrinsicKind.Boolean: {
       if (args.valueMapping) {
-        const mappingString = valueMappingToString(args.valueMapping)
+        const mappingString = valueMappingToString(args.valueMapping, childLayer)
         // Outputs: `const propName = figma.properties.boolean('propName', { ... mapping object from above ... })`
         return `${selector}.__properties__.boolean('${args.figmaPropName}', ${mappingString})`
       }
       return `${selector}.__properties__.boolean('${args.figmaPropName}')`
     }
     case IntrinsicKind.Enum: {
-      const mappingString = valueMappingToString(args.valueMapping)
+      const mappingString = valueMappingToString(args.valueMapping, childLayer)
 
       // Outputs: `const propName = figma.properties.enum('propName', { ... mapping object from above ... })`
       return `${selector}.__properties__.enum('${args.figmaPropName}', ${mappingString})`

@@ -15,6 +15,7 @@ import com.squareup.kotlinpoet.FunSpec
 import com.squareup.kotlinpoet.LambdaTypeName
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.TypeSpec
+import com.squareup.kotlinpoet.withIndent
 import java.io.File
 
 // Cleans up property names & values in figma which are appended with a # followed by the node id.
@@ -43,7 +44,7 @@ object CodeConnectTemplate {
                 "",
                 codeConnectParserCreateInput.destinationFile
                     ?: (codeConnectParserCreateInput.component.normalizedName + ".figma"),
-            )
+            ).indent("    ") // Sets the indent as 4 spaces.
 
         // Create the top level component class.
         val documentClass =
@@ -114,13 +115,14 @@ object CodeConnectTemplate {
 
                         val codeBlock =
                             CodeBlock.builder()
-                                .add("Figma.mapping(\n")
+                                .addStatement("Figma.mapping(")
+                                .withIndent {
+                                    value.variantOptions?.forEach { variantOption ->
+                                        addStatement("\"$variantOption\" to \"$variantOption\"")
+                                    }
+                                }
 
-                        value.variantOptions?.forEach { variantOption ->
-                            codeBlock.add("    \"$variantOption\" to \"$variantOption\",\n")
-                        }
-
-                        codeBlock.add(")\n")
+                        codeBlock.addStatement(")")
 
                         PropertySpec.builder(propertyName, String::class)
                             .addAnnotation(

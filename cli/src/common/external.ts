@@ -39,7 +39,7 @@ function childrenType(_layers: string | string[]) {
   return React.createElement('div')
 }
 
-function nestedPropsType<T>(_layer: string, props: PropMapping<T>) {
+function nestedPropsType<T>(_layer: string, props: T) {
   return props
 }
 

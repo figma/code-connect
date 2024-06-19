@@ -130,12 +130,35 @@ public struct CodeConnectCreator {
             }
         } catch {
             messages.append(ParserResultMessage(level: .error, message: error.localizedDescription))
-        } 
+        }
 
         return CodeConnectCreatorResult(createdFiles: createdFiles, messages: messages)
     }
 
     // MARK: - Private
+
+    static func attributeSyntaxForProperty(_ property: ComponentProperty, name: String) -> AttributeSyntax {
+        AttributeSyntax(
+            TypeSyntax(stringLiteral: property.type.correspondingAnnotationName),
+            argumentList: {
+                LabeledExprSyntax(expression: StringLiteralExprSyntax(content: name.normalizingPropName()))
+                if case .variant = property.type, let options = property.variantOptions {
+                    // Mapping dictionary
+                    LabeledExprSyntax(
+                        label: "mapping",
+                        expression: DictionaryExprSyntax {
+                            for option in options {
+                                DictionaryElementSyntax(
+                                    key: StringLiteralExprSyntax(content: option),
+                                    value: ExprSyntax(stringLiteral: "\(option.normalizingPropValue())")
+                                )
+                            }
+                        }
+                    )
+                }
+            }
+        )
+    }
 
     static func convertComponentToCodeConnectFile(_ component: Component, url: String) throws -> SourceFileSyntax {
         let componentName = component.name.normalizeComponentName()
@@ -162,28 +185,7 @@ public struct CodeConnectCreator {
                         leadingTrivia: [],
                         // Add the @FigmaProp property wrapper
                         attributes: AttributeListSyntax {
-                            .attribute(
-                                AttributeSyntax(
-                                    "FigmaProp",
-                                    argumentList: {
-                                        LabeledExprSyntax(expression: StringLiteralExprSyntax(content: name.normalizingPropName()))
-                                        if case .variant = property.type, let options = property.variantOptions {
-                                            // Mapping dictionary
-                                            LabeledExprSyntax(
-                                                label: "mapping",
-                                                expression: DictionaryExprSyntax {
-                                                    for option in options {
-                                                        DictionaryElementSyntax(
-                                                            key: StringLiteralExprSyntax(content: option),
-                                                            value: ExprSyntax(stringLiteral: "\(option.normalizingPropValue())")
-                                                        )
-                                                    }
-                                                }
-                                            )
-                                        }
-                                    }
-                                )
-                            )
+                            .attribute(self.attributeSyntaxForProperty(property, name: name))
                         }.with(\.trailingTrivia, .newline),
                         modifiers: [],
                         bindingSpecifier: .keyword(.var)
@@ -195,22 +197,27 @@ public struct CodeConnectCreator {
                             initializer: property.defaultValueExpr() != nil ? InitializerClauseSyntax(value: property.defaultValueExpr()!) : nil
                         )
                     }
-                    if i == 0 {
-                        varDecl.with(\.leadingTrivia, Trivia(pieces: [
-                            .blockComment("/*"),
-                            .newlines(1),
-                            .blockComment("Use @FigmaProp property wrappers to connect Figma properties to code"),
-                            .newlines(2),
-                        ])).with(\.trailingTrivia, .newlines(2))
-                    } else if i == properties.count - 1 {
-                        varDecl.with(\.trailingTrivia, Trivia(pieces: [
-                            .newlines(1),
-                            .lineComment("*/"),
-                            .newlines(2),
-                        ]))
-                    } else {
-                        varDecl.with(\.trailingTrivia, .newlines(2))
-                    }
+
+                    let leadingTrivia: Trivia = i == 0 ?
+                        Trivia(
+                            pieces: [
+                                .blockComment("/*"),
+                                .newlines(1),
+                                .blockComment("Use @FigmaString, @FigmaEnum, @FigmaBoolean and @FigmaInstance property wrappers to connect Figma properties to code"),
+                                .newlines(2)
+                            ]
+                        ) : Trivia()
+                    let trailingTrivia: Trivia = i == properties.count - 1
+                        ? Trivia(
+                            pieces: [
+                                .newlines(1),
+                                .lineComment("*/"),
+                                .newlines(2)
+                            ]
+                        ) : Trivia(pieces: [.newlines(2)])
+                    varDecl
+                        .with(\.leadingTrivia, Trivia(pieces: leadingTrivia))
+                        .with(\.trailingTrivia, trailingTrivia)
                 }
 
                 // Create example code definition
@@ -226,6 +233,21 @@ public struct CodeConnectCreator {
         return try SourceFileSyntax {
             try ImportDeclSyntax("import Figma").with(\.trailingTrivia, .newlines(2))
             structDecl
+        }
+    }
+}
+
+fileprivate extension ComponentPropertyType {
+    var correspondingAnnotationName: String {
+        switch self {
+        case .boolean:
+            "FigmaBoolean"
+        case .instanceSwap:
+            "FigmaInstance"
+        case .text:
+            "FigmaString"
+        case .variant:
+            "FigmaEnum"
         }
     }
 }

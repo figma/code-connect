@@ -32,9 +32,8 @@ describe('e2e test for `create` command', () => {
       )
 
       expect(tidyStdOutput(result.stderr)).toBe(
-        `No config found, attempting to determine project type
+        `No config file found in ${testPath}, proceeding with default options
 Using "react" parser as package.json containing a "react" dependency was found in ${testPath}. If this is incorrect, please check you are running Code Connect from your project root, or add a \`parser\` key to your config file. See https://github.com/figma/code-connect for more information.
-No config file found in ${testPath}, proceeding with default options
 Fetching component information from Figma...
 Parsing response
 Generating Code Connect files...
@@ -122,7 +121,8 @@ Invalid parser specified: "does-not-exist". Valid parsers are: swift, compose, _
       } catch (e: any) {
         expect(e.code).toBe(1)
         expect(tidyStdOutput(e.stderr)).toBe(`${getSuccessPreamble(testPath)}
-Failed to create: Validation error: Required at "createdFiles"`)
+Failed to create: Validation error: Required at "createdFiles"
+Please raise any bugs or feedback at https://github.com/figma/code-connect/issues.`)
       }
     })
   })

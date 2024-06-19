@@ -57,7 +57,7 @@ class JSTemplateCreator {
                         when (it.kind) {
                             PropertyMappingType.String -> {
                                 // String need to have additional quotes surrounding them
-                                replacements[rangeRelativeToBodyExpression] = "\"\${$text}\""
+                                replacements[rangeRelativeToBodyExpression] = "\"\${$text.replace(/\\n/g, \"\\\\n\")}\""
                             }
                             // Nested `Children` need to have leading spacing appended to each
                             // element. In order to do this, we need to find the last newline

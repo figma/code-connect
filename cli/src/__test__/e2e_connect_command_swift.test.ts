@@ -29,9 +29,8 @@ describe('e2e test for `connect` command (Swift)', () => {
       const tidiedStdErr = tidyStdOutput(result.stderr)
 
       expect(
-        tidiedStdErr.startsWith(`No config found, attempting to determine project type
-Using "swift" parser as a file matching *.xcodeproj or Package.swift was found in ${testPath}. If this is incorrect, please check you are running Code Connect from your project root, or add a \`parser\` key to your config file. See https://github.com/figma/code-connect for more information.
-No config file found in ${testPath}, proceeding with default option`),
+        tidiedStdErr.startsWith(`No config file found in ${testPath}, proceeding with default options
+Using "swift" parser as a file matching *.xcodeproj or Package.swift was found in ${testPath}. If this is incorrect, please check you are running Code Connect from your project root, or add a \`parser\` key to your config file. See https://github.com/figma/code-connect for more information.`),
       ).toBe(true)
 
       // xcodebuild sometimes outputs some messages to stderr here, I couldn't

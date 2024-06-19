@@ -3,6 +3,7 @@ import { logger, underline, highlight } from '../common/logging'
 import axios, { isAxiosError } from 'axios'
 import { getApiUrl, getHeaders } from './figma_rest_api'
 import { get } from 'lodash'
+import { exitWithFeedbackMessage } from './helpers'
 
 interface NodesToDeleteInfo {
   figmaNode: string
@@ -41,6 +42,6 @@ export async function delete_docs({ accessToken, docs }: Args) {
     } else {
       logger.error(`Failed to delete docs: ${err}`)
     }
-    process.exit(1)
+    exitWithFeedbackMessage(1)
   }
 }

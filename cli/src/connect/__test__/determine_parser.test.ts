@@ -25,6 +25,10 @@ describe('Determining parser from project', () => {
     it('determines a React project from within a subdirectory', () => {
       expect(getParserFromProject('react', ['components'])).toBe('react')
     })
+
+    it('determines a React project from a peer dependency', () => {
+      expect(getParserFromProject('react_peer_dependency', [])).toBe('react')
+    })
   })
 
   describe('Swift', () => {

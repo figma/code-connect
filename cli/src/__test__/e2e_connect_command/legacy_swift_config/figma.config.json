@@ -1,7 +1,14 @@
 {
   "codeConnect": {
     "swift": {
-      "include": ["src/components/**/*.swift"]
+      "importPaths": {
+        "a": "b"
+      }
+    },
+    "include": ["src/components/**/*.swift"],
+    "exclude": ["src/components/**/*.test.swift"],
+    "documentUrlSubstitutions": {
+      "c": "d"
     }
   }
 }

@@ -1,0 +1,10 @@
+{
+  "codeConnect": {
+    "react": {
+      "paths": {
+        "a": "b"
+      }
+    },
+    "include": ["src/components/**/*.tsx"]
+  }
+}

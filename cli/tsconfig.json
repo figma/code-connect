@@ -21,7 +21,6 @@
     "src/connect/__test__",
     "src/storybook/__test__",
     "src/components",
-    "scripts",
-    "react/scripts",
+    "scripts"
   ],
 }
