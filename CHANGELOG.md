@@ -1,3 +1,14 @@
+# Code Connect v1.0.1 (20th June 2024)
+
+## Fixed
+
+### General
+- The automatic update check introduced in v1.0.0 did not show the correct update command for React users with the `@figma/code-connect` package installed locally – it always showed the command for globally updating the package.
+
+  We now show both `npm install @figma/code-connect@latest` and `npm install -g @figma/code-connect@latest` as options. React users with the package installed locally should use `npm install @figma/code-connect@latest`, and users of other targets (or with the package installed globally) should use `npm install -g @figma/code-connect@latest`.
+
+  We have temporarily removed the `update` command added in v1.0.0.
+
 # Code Connect v1.0.0 (19th June 2024)
 
 ## Features

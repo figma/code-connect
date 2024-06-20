@@ -74,7 +74,7 @@ function maybeShowUpdateMessage() {
   if (updatedVersionAvailable) {
     logger.warn(`\nA new version of the Figma CLI is available. v${require('../../package.json').version} is currently installed, and the latest version available is v${updatedVersionAvailable}.
 
-To update, run ${chalk.whiteBright('figma update')}, or you can manually update by running ${chalk.white(getUpdateCommand())}.`)
+To update, run ${chalk.whiteBright('npm install @figma/code-connect@latest')} for React, or ${chalk.whiteBright('npm install -g @figma/code-connect@latest')} for other targets (or if you have Code Connect installed globally).`)
   }
 
   if (message) {

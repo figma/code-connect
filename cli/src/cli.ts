@@ -12,12 +12,16 @@ async function run() {
 
   addConnectCommandToProgram(program)
 
+  // Update command is temporarily disabled until we can show the correct update
+  // command to React vs non-React users
+  /*
   program
     .command('update')
     .description('Updates to the latest version of the Figma CLI')
     .action(() => {
       updateCli()
     })
+  */
 
   program.parse(process.argv)
   if (program.args.length < 1) {
