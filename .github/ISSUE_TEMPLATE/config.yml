@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Bug Report
+    url: https://help.figma.com/hc/en-us/requests/new?ticket_form_id=360001744374
+    about: For bugs or support related questions please reach out to the Figma support team via the contact form.
+  - name: Other
+    url: https://help.figma.com/hc/en-us/requests/new
+    about: For any other inquires please reach out to the Figma support team via the contact form.
