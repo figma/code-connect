@@ -115,6 +115,7 @@ In addition to the [general configuration](../README.md#general-configuration) f
 ```jsonp
 {
   "codeConnect": {
+    "parser": "react",
     "include": [],
     "exclude": ["test/**", "docs/**", "build/**"],
     "importPaths": {
