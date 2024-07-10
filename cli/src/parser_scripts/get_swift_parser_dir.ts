@@ -14,7 +14,7 @@ export async function getSwiftParserDir(cwd: string, xcodeprojPath?: string) {
   let figmaPackageDir: string | undefined
 
   // Check for the supported project types.
-  const xcodeProjFile = xcodeprojPath || getFileIfExists(cwd, '*.xcodeproj')
+  const xcodeProjFile = (xcodeprojPath || getFileIfExists(cwd, '*.xcodeproj')).replace(/\s/g, '\\ ')
   const packageSwiftFile = getFileIfExists(cwd, 'Package.swift')
 
   if (!(xcodeProjFile || packageSwiftFile)) {

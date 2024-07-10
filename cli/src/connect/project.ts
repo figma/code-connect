@@ -521,17 +521,20 @@ export async function getProjectInfoFromConfig(
     ? DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]
     : undefined
 
+  // always ignore any `node_modules` folders in react projects
   const defaultExcludeGlobs = config.parser
     ? {
-        react: [`${absPath}/node_modules/**`],
-        swift: [''],
-        compose: [''],
-        __unit_test__: [''],
-      }[config.parser]
-    : ''
+        react: ['node_modules/**'],
+        swift: [],
+        compose: [],
+        __unit_test__: [],
+      }[config.parser] ?? []
+    : []
 
   const includeGlobs = config.include || defaultIncludeGlobs
-  const excludeGlobs = config.exclude || defaultExcludeGlobs || []
+  const excludeGlobs = config.exclude
+    ? [...config.exclude, ...defaultExcludeGlobs]
+    : defaultExcludeGlobs
 
   if (!includeGlobs) {
     exitWithError('No include globs specified in config file')
@@ -543,6 +546,12 @@ export async function getProjectInfoFromConfig(
     // Otherwise this is true on *nix and false on Windows
     absolute: true,
   })
+
+  if (files.length > 10000) {
+    logger.warn(
+      `Matching number of files was excessively large (${files.length}) - consider using more specific include/exclude globs in your config file.`,
+    )
+  }
 
   return {
     absPath,
@@ -579,6 +588,7 @@ export function getReactProjectInfo(
     paths: projectInfo.config.paths ?? {},
     allowJs: true,
   }
+
   const tsProgram = ts.createProgram(projectInfo.files, compilerOptions)
 
   return {
@@ -588,9 +598,31 @@ export function getReactProjectInfo(
 }
 
 export function resolveImportPath(filePath: string, config: CodeConnectReactConfig): string | null {
+  // Takes the reversed path and pattern parts and check if they match
   function isMatch(patternParts: string[], pathParts: string[]) {
+    if (patternParts[0] === '*') {
+      // if the path is just a wildcard and nothing else, match any import
+      if (patternParts.length === 1) {
+        return true
+      }
+
+      // if the _next_ part in the pattern does not exist in the path, it's not
+      // a match.
+      const index = pathParts.indexOf(patternParts[1])
+      if (index === -1) {
+        return false
+      }
+
+      // Skip to the matching part in the path and match the rest of
+      // the pattern. E.g if the pattern is `*/ui/src` (reversed) and the path is
+      // `button.tsx/components/ui/src`, we skip to `ui` and match the rest of the
+      // pattern.
+      patternParts = patternParts.slice(1)
+      pathParts = pathParts.slice(index)
+    }
+
     for (let i = 0; i < patternParts.length; i++) {
-      if (patternParts[i] !== '*' && patternParts[i] !== pathParts[i]) {
+      if (patternParts[i] !== pathParts[i]) {
         return false
       }
     }

@@ -23,14 +23,27 @@ import { CodeConnectJSON } from '../../common/figma_connect'
 import boxen from 'boxen'
 import { Searcher } from 'fast-fuzzy'
 import { isFigmaConnectFile } from '../../react/parser'
-import { createCodeConnectConfig } from './helpers'
-import z from 'zod/lib'
+import { createCodeConnectConfig, getIncludesGlob } from './helpers'
+import stripAnsi from 'strip-ansi'
 import { handleMessages } from '../parser_executables'
+import ora from 'ora'
 
 type ConnectedComponentMappings = { componentName: string; path: string }[]
 
 const NONE = '(None)'
 const DELIMITERS_REGEX = /[\s-_]/g
+
+function clearQuestion(prompt: prompts.PromptObject<string>, answer: string) {
+  const displayedAnswer =
+    (Array.isArray(prompt.choices) && prompt.choices.find((c) => c.value === answer)?.title) ||
+    answer
+  const lengthOfDisplayedQuestion =
+    stripAnsi(prompt.message as string).length + stripAnsi(displayedAnswer).length + 5 // 2 chars before, 3 chars between Q + A
+  const rowsToRemove = Math.ceil(lengthOfDisplayedQuestion / process.stdout.columns)
+
+  process.stdout.moveCursor(0, -rowsToRemove)
+  process.stdout.clearScreenDown()
+}
 
 async function fetchTopLevelComponentsFromFile({
   accessToken,
@@ -45,12 +58,24 @@ async function fetchTopLevelComponentsFromFile({
   const apiUrl = getApiUrl(figmaUrl ?? '') + `/code_connect/${fileKey}/cli_data`
 
   try {
-    logger.info('Fetching component information from Figma...')
-    const response = await axios.get(apiUrl, {
-      headers: {
-        'X-Figma-Token': accessToken,
-        'Content-Type': 'application/json',
-      },
+    const spinner = ora({
+      text: 'Fetching component information from Figma...',
+      color: 'green',
+    }).start()
+    const response = await (
+      process.env.CODE_CONNECT_MOCK_DOC_RESPONSE
+        ? Promise.resolve({
+            status: 200,
+            data: JSON.parse(fs.readFileSync(process.env.CODE_CONNECT_MOCK_DOC_RESPONSE, 'utf-8')),
+          })
+        : axios.get(apiUrl, {
+            headers: {
+              'X-Figma-Token': accessToken,
+              'Content-Type': 'application/json',
+            },
+          })
+    ).finally(() => {
+      spinner.stop()
     })
 
     if (response.status === 200) {
@@ -66,7 +91,9 @@ async function fetchTopLevelComponentsFromFile({
     if (isAxiosError(err)) {
       if (err.response) {
         logger.error(
-          `Failed to fetch components from Figma (${err.code}): ${err.response?.status} ${err.response?.data?.err ?? err.response?.data?.message}`,
+          `Failed to fetch components from Figma (${err.code}): ${err.response?.status} ${
+            err.response?.data?.err ?? err.response?.data?.message
+          }`,
         )
       } else {
         logger.error(`Failed to fetch components from Figma: ${err.message}`)
@@ -143,16 +170,17 @@ async function askQuestionWithExitConfirmation<T extends string = string>(
   }
 }
 
-function formatComponentTitle(componentName: string, path: string, pad: number) {
+function formatComponentTitle(componentName: string, path: string | null, pad: number) {
   const nameLabel = `${chalk.dim('Figma component:')} ${componentName.padEnd(pad, ' ')}`
   const linkedLabel = `↔️ ${path ?? '-'}`
   return `${nameLabel}  ${linkedLabel}`
 }
 
-function getComponentChoicesForPrompt(
+export function getComponentChoicesForPrompt(
   components: FigmaRestApi.Component[],
   linkedNodeIdsToPaths: Record<string, string>,
   connectedComponentsMappings: ConnectedComponentMappings,
+  dir: string,
 ): prompts.Choice[] {
   const longestNameLength = [...components, ...connectedComponentsMappings].reduce(
     (longest, component) =>
@@ -169,11 +197,16 @@ function getComponentChoicesForPrompt(
   const linkedComponents = components.filter((c) => !!linkedNodeIdsToPaths[c.id]).sort(nameCompare)
   const unlinkedComponents = components.filter((c) => !linkedNodeIdsToPaths[c.id]).sort(nameCompare)
 
-  const formatComponentChoice = (c: FigmaRestApi.Component) => ({
-    title: formatComponentTitle(c.name, linkedNodeIdsToPaths[c.id], longestNameLength),
-    value: c.id,
-    description: `${chalk.green('Edit link')}`,
-  })
+  const formatComponentChoice = (c: FigmaRestApi.Component) => {
+    const componentPath = linkedNodeIdsToPaths[c.id]
+      ? path.relative(dir, linkedNodeIdsToPaths[c.id])
+      : null
+    return {
+      title: formatComponentTitle(c.name, componentPath, longestNameLength),
+      value: c.id,
+      description: `${chalk.green('Edit link')}`,
+    }
+  }
 
   return [
     ...linkedComponents.map(formatComponentChoice),
@@ -189,16 +222,16 @@ function getComponentChoicesForPrompt(
   ]
 }
 
-function getUnconnectedComponentChoices(componentPaths: string[]) {
+function getUnconnectedComponentChoices(componentPaths: string[], dir: string) {
   return [
     {
       title: NONE,
       value: NONE,
     },
-    ...componentPaths.map((path) => {
+    ...componentPaths.map((absPath) => {
       return {
-        title: path,
-        value: path,
+        title: path.relative(dir, absPath),
+        value: absPath,
       }
     }),
   ]
@@ -217,39 +250,56 @@ async function runManualLinking({
   linkedNodeIdsToPaths,
   componentPaths,
   connectedComponentsMappings,
+  cmd,
 }: ManualLinkingArgs) {
+  const dir = getDir(cmd)
   while (true) {
     // Don't show exit confirmation as we're relying on esc behavior
-    const { nodeId } = await prompts({
-      type: 'select',
-      name: 'nodeId',
-      message: `Select a link to edit (Press ${chalk.green('esc')} when you're ready to continue on)`,
-      choices: getComponentChoicesForPrompt(
-        unconnectedComponents,
-        linkedNodeIdsToPaths,
-        connectedComponentsMappings,
-      ),
-      warn: 'This component already has a local Code Connect file.',
-      hint: ' ',
-    })
+    const { nodeId } = await prompts(
+      {
+        type: 'select',
+        name: 'nodeId',
+        message: `Select a link to edit (Press ${chalk.green(
+          'esc',
+        )} when you're ready to continue on)`,
+        choices: getComponentChoicesForPrompt(
+          unconnectedComponents,
+          linkedNodeIdsToPaths,
+          connectedComponentsMappings,
+          dir,
+        ),
+        warn: 'This component already has a local Code Connect file.',
+        hint: ' ',
+      },
+      {
+        onSubmit: clearQuestion,
+      },
+    )
     if (!nodeId) {
       return
     }
-    const pathChoices = getUnconnectedComponentChoices(componentPaths)
-    const { pathToComponent } = await prompts({
-      type: 'autocomplete',
-      name: 'pathToComponent',
-      message: 'Choose a path to your code component (type to filter results)',
-      choices: pathChoices,
-      // default suggest uses .startsWith(input) which isn't very useful for full paths
-      suggest: (input, choices) =>
-        Promise.resolve(choices.filter((i) => i.value.toUpperCase().includes(input.toUpperCase()))),
-      // preselect if editing an existing choice
-      initial:
-        nodeId in linkedNodeIdsToPaths
-          ? pathChoices.findIndex(({ value }) => value === linkedNodeIdsToPaths[nodeId])
-          : 0,
-    })
+    const pathChoices = getUnconnectedComponentChoices(componentPaths, dir)
+    const { pathToComponent } = await prompts(
+      {
+        type: 'autocomplete',
+        name: 'pathToComponent',
+        message: 'Choose a path to your code component (type to filter results)',
+        choices: pathChoices,
+        // default suggest uses .startsWith(input) which isn't very useful for full paths
+        suggest: (input, choices) =>
+          Promise.resolve(
+            choices.filter((i) => i.value.toUpperCase().includes(input.toUpperCase())),
+          ),
+        // preselect if editing an existing choice
+        initial:
+          nodeId in linkedNodeIdsToPaths
+            ? pathChoices.findIndex(({ value }) => value === linkedNodeIdsToPaths[nodeId])
+            : 0,
+      },
+      {
+        onSubmit: clearQuestion,
+      },
+    )
     if (pathToComponent) {
       if (pathToComponent === NONE) {
         delete linkedNodeIdsToPaths[nodeId]
@@ -271,7 +321,9 @@ async function runManualLinkingWithConfirmation(manualLinkingArgs: ManualLinking
       const { outputDirectory } = await askQuestionWithExitConfirmation({
         type: 'text',
         name: 'outputDirectory',
-        message: `What directory should Code Connect files be created in? (Press ${chalk.green('enter')} to co-locate your files alongside your component files)`,
+        message: `What directory should Code Connect files be created in? (Press ${chalk.green(
+          'enter',
+        )} to co-locate your files alongside your component files)`,
       })
       hasAskedOutDirQuestion = true
       outDir = outputDirectory
@@ -301,7 +353,9 @@ async function runManualLinkingWithConfirmation(manualLinkingArgs: ManualLinking
       const { confirmation } = await askQuestionWithExitConfirmation({
         type: 'select',
         name: 'confirmation',
-        message: `You're ready to create ${chalk.green(linkedNodes.length)} Code Connect file${linkedNodes.length == 1 ? '' : 's'}. Continue?`,
+        message: `You're ready to create ${chalk.green(linkedNodes.length)} Code Connect file${
+          linkedNodes.length == 1 ? '' : 's'
+        }. Continue?`,
         choices: [
           {
             title: 'Create files',
@@ -325,7 +379,7 @@ async function runManualLinkingWithConfirmation(manualLinkingArgs: ManualLinking
  *
  * Matching is done by fast-fuzzy
  */
-function autoLinkComponents({
+export function autoLinkComponents({
   unconnectedComponents,
   linkedNodeIdsToPaths,
   componentPaths,
@@ -414,14 +468,14 @@ async function createCodeConnectFiles({
   }
 }
 
-function convertRemoteFileUrlToRelativePath({
+export function convertRemoteFileUrlToRelativePath({
   remoteFileUrl,
   gitRootPath,
-  componentDirectory,
+  dir,
 }: {
   remoteFileUrl: string
   gitRootPath: string
-  componentDirectory: string
+  dir: string
 }) {
   if (!gitRootPath) {
     return null
@@ -433,14 +487,13 @@ function convertRemoteFileUrlToRelativePath({
   }
   const absPath = path.join(gitRootPath, pathWithinRepo)
 
-  return path.relative(componentDirectory, absPath)
+  return path.relative(dir, absPath)
 }
 
-async function getUnconnectedComponentsAndConnectedComponentMappings(
+export async function getUnconnectedComponentsAndConnectedComponentMappings(
   cmd: BaseCommand,
   figmaFileUrl: string,
   componentsFromFile: FigmaRestApi.Component[],
-  componentDirectory: string,
   projectInfo: ReactProjectInfo,
 ) {
   const dir = getDir(cmd)
@@ -464,7 +517,7 @@ async function getUnconnectedComponentsAndConnectedComponentMappings(
   const unconnectedComponents: FigmaRestApi.Component[] = []
   const connectedComponentsMappings: ConnectedComponentMappings = []
 
-  const gitRootPath = getGitRepoAbsolutePath(componentDirectory)
+  const gitRootPath = getGitRepoAbsolutePath(dir)
 
   componentsFromFile.map((c) => {
     if (c.id in connectedNodeIdsInFileToCodeConnectObjectMap) {
@@ -472,7 +525,7 @@ async function getUnconnectedComponentsAndConnectedComponentMappings(
       const relativePath = convertRemoteFileUrlToRelativePath({
         remoteFileUrl: cc.source!,
         gitRootPath,
-        componentDirectory,
+        dir,
       })
       connectedComponentsMappings.push({
         componentName: c.name,
@@ -498,15 +551,17 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
   hasConfigFile: boolean
   config: CodeConnectConfig
 }) {
-  let dirToSearchForFiles = dir
+  let componentDirectory: string | null = null
 
   while (true) {
     if (!hasConfigFile) {
-      const { componentDirectory } = await askQuestionOrExit({
+      const { componentDirectory: componentDirectoryAnswer } = await askQuestionOrExit({
         type: 'text',
-        message: `Which top-level directory contains the code to be connected to your Figma design system? (Press ${chalk.green('enter')} to use current directory)`,
+        message: `Which top-level directory contains the code to be connected to your Figma design system? (Press ${chalk.green(
+          'enter',
+        )} to use current directory)`,
         name: 'componentDirectory',
-        format: (val) => val || process.cwd(),
+        format: (val) => val || process.cwd(), // should this be || dir?
         validate: (value) => {
           if (!value) {
             return true
@@ -517,16 +572,36 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
           return true
         },
       })
-      dirToSearchForFiles = componentDirectory
+      componentDirectory = componentDirectoryAnswer
     }
 
+    const configToUse: CodeConnectConfig = componentDirectory
+      ? {
+          ...config,
+          include: getIncludesGlob({
+            dir,
+            componentDirectory,
+            config,
+          }),
+        }
+      : config
+
+    const spinner = ora({
+      text: 'Parsing local files...',
+      color: 'green',
+      spinner: {
+        // Don't show spinner as ts.createProgram blocks thread
+        frames: [''],
+      },
+    }).start()
     const projectInfo = getReactProjectInfo(
-      (await getProjectInfoFromConfig(dirToSearchForFiles, config)) as ReactProjectInfo,
+      (await getProjectInfoFromConfig(dir, configToUse)) as ReactProjectInfo,
     )
 
-    const componentPaths = projectInfo.files
-      .filter((f: string) => !isFigmaConnectFile(projectInfo.tsProgram, f))
-      .map((filePath) => path.relative(dirToSearchForFiles, filePath))
+    const componentPaths = projectInfo.files.filter(
+      (f: string) => !isFigmaConnectFile(projectInfo.tsProgram, f),
+    )
+    spinner.stop()
 
     if (!componentPaths.length) {
       if (hasConfigFile) {
@@ -542,7 +617,7 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
     } else {
       return {
         projectInfo,
-        dirToSearchForFiles,
+        componentDirectory,
         componentPaths,
       }
     }
@@ -557,8 +632,12 @@ export async function runWizard(cmd: BaseCommand) {
         `When you're done, you'll be able to see your component code while inspecting in\n` +
         `Figma's Dev Mode.\n\n` +
         `Learn more at ${chalk.cyan('https://www.figma.com/developers/code-connect')}.\n\n` +
-        `Please raise bugs or feedback at ${chalk.cyan('https://github.com/figma/code-connect/issues')}.\n\n` +
-        `${chalk.red.bold('Note: ')}This process will create and modify Code Connect files. Make sure you've\n` +
+        `Please raise bugs or feedback at ${chalk.cyan(
+          'https://github.com/figma/code-connect/issues',
+        )}.\n\n` +
+        `${chalk.red.bold(
+          'Note: ',
+        )}This process will create and modify Code Connect files. Make sure you've\n` +
         `committed necessary changes in your codebase first.`,
       {
         padding: 1,
@@ -593,7 +672,7 @@ export async function runWizard(cmd: BaseCommand) {
 
   logger.info('')
 
-  const { dirToSearchForFiles, projectInfo, componentPaths } =
+  const { componentDirectory, projectInfo, componentPaths } =
     await askForTopLevelDirectoryOrDetermineFromConfig({
       dir,
       hasConfigFile,
@@ -604,6 +683,7 @@ export async function runWizard(cmd: BaseCommand) {
     type: 'text',
     message: 'What is the URL of the Figma file containing your design system library?',
     name: 'figmaFileUrl',
+    validate: (value: string) => !!parseFileKey(value) || 'Please enter a valid Figma file URL.',
   })
 
   const componentsFromFile = await fetchTopLevelComponentsFromFile({
@@ -633,7 +713,7 @@ export async function runWizard(cmd: BaseCommand) {
       ],
     })
     if (createConfigFile === 'yes') {
-      await createCodeConnectConfig({ dir, dirToSearchForFiles, config })
+      await createCodeConnectConfig({ dir, componentDirectory, config })
     }
   }
 
@@ -644,7 +724,6 @@ export async function runWizard(cmd: BaseCommand) {
       cmd,
       figmaFileUrl,
       componentsFromFile,
-      dirToSearchForFiles,
       projectInfo,
     )
 
@@ -658,9 +737,19 @@ export async function runWizard(cmd: BaseCommand) {
     boxen(
       `${chalk.bold(`Connecting your components`)}\n\n` +
         `${chalk.green(
-          `${chalk.bold(Object.keys(linkedNodeIdsToPaths).length)} ${Object.keys(linkedNodeIdsToPaths).length === 1 ? 'component was automatically matched based on its name' : 'components were automatically matched based on their names'}`,
+          `${chalk.bold(Object.keys(linkedNodeIdsToPaths).length)} ${
+            Object.keys(linkedNodeIdsToPaths).length === 1
+              ? 'component was automatically matched based on its name'
+              : 'components were automatically matched based on their names'
+          }`,
         )}\n` +
-        `${chalk.yellow(`${chalk.bold(unconnectedComponents.length)} ${unconnectedComponents.length === 1 ? 'component has not been matched' : 'components have not been matched'}`)}\n\n` +
+        `${chalk.yellow(
+          `${chalk.bold(unconnectedComponents.length)} ${
+            unconnectedComponents.length === 1
+              ? 'component has not been matched'
+              : 'components have not been matched'
+          }`,
+        )}\n\n` +
         `Match up Figma components with their code definitions. When you're finished, you\n` +
         `can specify the directory you want to create Code Connect files in.`,
       {

@@ -7,24 +7,47 @@ import {
 } from '../project'
 import { logger, success } from '../../common/logging'
 import path from 'path'
+import prompts from 'prompts'
 
-export async function createCodeConnectConfig({
+
+/**
+ *
+ * Gets the default include globs for config.parser with componentDirectory prepended
+ * @param args
+ * @param args.dir project root path
+ * @param args.componentDirectory optional path to where includes should be limited to
+ * @param args.config CodeConnectConfig
+ * @returns array of include globs
+ */
+export function getIncludesGlob({
   dir,
-  dirToSearchForFiles,
+  componentDirectory,
   config,
 }: {
   dir: string
-  dirToSearchForFiles: string
+  componentDirectory: string | null
   config: CodeConnectConfig
 }) {
-  // use unix separators for config file globs
-  const pathToComponentsDir = path.relative(dir, dirToSearchForFiles).replaceAll(path.sep, '/')
+  if (componentDirectory) {
+    // use unix separators for config file globs
+    const pathToComponentsDir = path.relative(dir, componentDirectory).replaceAll(path.sep, '/')
+    return DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser].map(
+      (defaultIncludeGlob) => `${pathToComponentsDir}/${defaultIncludeGlob}`,
+    )
+  }
+  return DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]
+}
 
-  const includesGlob = pathToComponentsDir
-    ? `${pathToComponentsDir}/${DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]}`
-    : DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]
-
-  const filePath = getDefaultConfigPath(dir)
+export async function createCodeConnectConfig({
+  dir,
+  componentDirectory,
+  config,
+}: {
+  dir: string
+  componentDirectory: string | null
+  config: CodeConnectConfig
+}) {
+  const includesGlob = getIncludesGlob({ dir, componentDirectory, config })
   const configJson = `
 {
   "codeConnect": {
@@ -32,9 +55,11 @@ export async function createCodeConnectConfig({
   }
 }
   `
-  let formatted = await prettier.format(configJson, {
+  const formatted = await prettier.format(configJson, {
     parser: 'json',
   })
+  const filePath = getDefaultConfigPath(dir)
+
   fs.writeFileSync(filePath, formatted)
 
   logger.info(success(`Created ${filePath}`))

@@ -112,6 +112,9 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
                     throw IllegalArgumentException("filePath property is required")
                 }
             }
+            task.notCompatibleWithConfigurationCache(
+                "This task is not compatible with configuration caching because it reads from a file path property.",
+            )
         }
 
         /**
@@ -140,6 +143,9 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
                     println(json.encodeToString(output))
                 }
             }
+            task.notCompatibleWithConfigurationCache(
+                "This task is not compatible with configuration caching because it reads from a file path property.",
+            )
         }
     }
 }

@@ -22,7 +22,7 @@ plugins {
 
 ## Add the SDK dependency to your module
 
-In order to start authoring Code Connect files, add the following dependencies to the `build.gradle.kts` file in the module in the module that will contain the files. Note that you may need to add `gradlePluginPortal()` to `repositories in your `dependencyResolutionManagement` block.
+In order to start authoring Code Connect files, add the following dependencies to the `build.gradle.kts` file in the module that will contain the files. Note that you may need to add `gradlePluginPortal()` to `repositories in your `dependencyResolutionManagement` block.
 
 ```
 dependencies {

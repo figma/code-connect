@@ -1,3 +1,20 @@
+# Code Connect v1.0.2 (10th July 2024)
+
+## Fixed
+
+### General
+- Improvements to CLI Assistant
+
+### React
+- Prevent rendering empty strings as prop values (Fixes: https://github.com/figma/code-connect/issues/67)
+- Fix output when there are multiple return statements
+- Fix wildcard importPaths mappings with nested folders
+- Fix boolean mappings for lowercase boolean-like strings (Fixes: https://github.com/figma/code-connect/issues/70)
+- Fix boolean-like keys in enums (Fixes: https://github.com/figma/code-connect/issues/74)
+
+### SwiftUI
+- Fix spaces in Xcode file path
+
 # Code Connect v1.0.1 (20th June 2024)
 
 ## Fixed

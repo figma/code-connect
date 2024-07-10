@@ -81,7 +81,12 @@ function _fcc_renderPropValue(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) 
 
   // Replace any newlines or quotes in the string with escaped versions
   if (typeof prop === 'string') {
-    return `"${prop.replaceAll('\n', '\\n').replaceAll('"', '\\"')}"`
+    const str = `"${prop.replaceAll('\n', '\\n').replaceAll('"', '\\"')}"`
+    if (str === '') {
+      return 'undefined'
+    } else {
+      return str
+    }
   }
 
   if (typeof prop === 'boolean' || typeof prop === 'number') {
@@ -136,7 +141,11 @@ function _fcc_renderReactProp(name: string, prop: FCCValue | { type: 'CODE' | 'I
 
   // Replace any newlines or quotes in the string with escaped versions
   if (typeof prop === 'string') {
-    return ` ${name}="${prop.replaceAll('\n', '\\n').replaceAll('"', '\\"')}"`
+    const str = prop.replaceAll('\n', '\\n').replaceAll('"', '\\"')
+    if (str === '') {
+      return ''
+    }
+    return ` ${name}="${str}"`
   }
 
   if (typeof prop === 'number') {

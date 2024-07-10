@@ -276,7 +276,7 @@ figma.string('Title')
 
 ### Booleans
 
-Booleans work similar to strings. However Code Connect also provides helpers for mapping booleans in Figma to more complex types in code. For example you may want to map a Figma boolean to the existence of a specific sublayer in code.
+Booleans work similar to strings. However Code Connect also provides helpers for mapping booleans in Figma to more complex types in code. For example you may want to map a Figma boolean to the existence of a specific sublayer in code. In addition to mapping boolean props, `figma.boolean` can be used to map boolean Variants in Figma. A boolean Variant is a Variant with only two options that are either "Yes"/"No", "True"/"False" or "On"/Off". For `figma.boolean` these values are normalized to `true` and `false`.
 
 ```tsx
 // simple mapping of boolean from figma to code
@@ -287,15 +287,16 @@ figma.boolean('Has Icon', {
   true: <Icon />,
   false: <Spacer />,
 })
+
 ```
 
 In some cases, you only want to render a certain prop if it matches some value in Figma. You can do this either by passing a partial mapping object, or setting the value to `undefined`.
 
 ```tsx
-// Don't render the prop if 'Has Icon' in figma is `false`
-figma.boolean('Has Icon', {
-  true: <Icon />,
-  false: undefined,
+// Don't render the prop if 'Has label' in figma is `false`
+figma.boolean("Has label", {
+  true: figma.string("Label"),
+  false: undefined
 })
 ```
 
@@ -327,6 +328,20 @@ Mapping objects for `figma.enum` as well as `figma.boolean` allows nested refere
 figma.enum('Type', {
   WithIcon: figma.instance('Icon'),
   WithoutIcon: undefined,
+})
+```
+
+Note that in contrast to `figma.boolean`, values are _not_ normalized for `figma.enum`. You always need to pass the exact literal values to the mapping object.
+
+```tsx
+// These two are equivalent for a variant with the options "Yes" and "No"
+disabled: figma.enum("Boolean Variant", {
+  Yes: // ...
+  No: // ...
+})
+disabled: figma.boolean("Boolean Variant", {
+  true: // ...
+  false: // ...
 })
 ```
 

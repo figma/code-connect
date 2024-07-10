@@ -466,7 +466,6 @@ export function parseRenderFunction(
 ) {
   const { sourceFile } = parserContext
 
-  let jsx = findJSXElement(exp)
   let exampleCode: string
 
   if (exp.parameters.length > 1) {
@@ -533,8 +532,8 @@ export function parseRenderFunction(
   // can be accessed using the compiler API, which is much easier than using a
   // regex, then in the next step we can use a simple regex to convert that into
   // the template string.
-  if (propsParameter && jsx) {
-    jsx = ts.transform(jsx, [
+  if (propsParameter) {
+    exp = ts.transform(exp, [
       (context) => (rootNode) => {
         function visit(node: ts.Node): ts.Node {
           // `props.` notation
@@ -648,24 +647,29 @@ export function parseRenderFunction(
 
           return ts.visitEachChild(node, visit, context)
         }
-        return ts.visitNode(rootNode, visit) as ts.JsxElement
+        return ts.visitNode(rootNode, visit) as
+          | ts.ArrowFunction
+          | ts.FunctionExpression
+          | ts.FunctionDeclaration
       },
-    ]).transformed[0] as typeof jsx
+    ]).transformed[0] as typeof exp
   }
 
   const printer = ts.createPrinter()
   const block = findBlock(exp)
   let nestable = false
+  let jsx = findJSXElement(exp)
 
   if (jsx && (!block || (block && block.statements.length <= 1))) {
     // The function body is a single JSX element
     exampleCode = printer.printNode(ts.EmitHint.Unspecified, jsx, sourceFile)
     nestable = true
   } else if (block) {
-    // The function body has more stuff in it, so we wrap it in a function
-    // expression that returns the JSX element. Why not just print the exact function passed
-    // to `render`? Because the parameters to that function are not actually referenced in the
-    // rendered code snippet in Figma - they're mapped to values on the Figma instance.
+    // The function body has more stuff in it, so we wrap the body in a function
+    // expression. Why not just print the exact function passed to `render`?
+    // Because the parameters to that function are not actually referenced in
+    // the rendered code snippet in Figma - they're mapped to values on the
+    // Figma instance.
     const functionName = 'Example'
     const functionExpression = ts.factory.createFunctionExpression(
       undefined,
@@ -674,13 +678,7 @@ export function parseRenderFunction(
       [],
       undefined,
       undefined,
-      ts.factory.createBlock(
-        [
-          ...block.statements.filter((s) => !ts.isReturnStatement(s)),
-          ts.factory.createReturnStatement(jsx),
-        ],
-        true,
-      ),
+      block,
     )
     const printer = ts.createPrinter()
     exampleCode = printer.printNode(ts.EmitHint.Unspecified, functionExpression, sourceFile)

@@ -22,7 +22,7 @@ function normalizePropName(name: string) {
 }
 
 function generateCodePropName(name: string) {
-  return camelCase(name.replace(/[^a-zA-Z]/g, ''))
+  return camelCase(name.replace(/[^a-zA-Z0-9]/g, ''))
 }
 
 function normalizePropValue(name: string) {
@@ -49,7 +49,9 @@ function generateProps(component: CreateRequestPayload['component']) {
       props.push(`"${codePropName}": figma.string('${figmaPropName}')`)
     }
     if (propDef.type === 'VARIANT') {
-      if (propDef.variantOptions?.find((value) => isBooleanKind(value))) {
+      const isBooleanVariant =
+        propDef.variantOptions?.length === 2 && propDef.variantOptions.every(isBooleanKind)
+      if (isBooleanVariant) {
         props.push(`"${codePropName}": figma.boolean('${figmaPropName}')`)
       } else {
         props.push(

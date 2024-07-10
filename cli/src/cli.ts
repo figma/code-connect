@@ -7,6 +7,7 @@ import { updateCli } from './common/updates'
 require('dotenv').config()
 
 async function run() {
+
   const program = new commander.Command().version(require('./../package.json').version)
   program.enablePositionalOptions()
 
