@@ -118,7 +118,7 @@ object CodeConnectTemplate {
                                 .addStatement("Figma.mapping(")
                                 .withIndent {
                                     value.variantOptions?.forEach { variantOption ->
-                                        addStatement("\"$variantOption\" to \"$variantOption\"")
+                                        addStatement("\"$variantOption\" to \"$variantOption\",")
                                     }
                                 }
 

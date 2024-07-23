@@ -3,7 +3,7 @@ import prompts from 'prompts'
 import fs from 'fs'
 import { exitWithFeedbackMessage, findComponentsInDocument, parseFileKey } from '../helpers'
 import { FigmaRestApi, getApiUrl } from '../figma_rest_api'
-import { logger, success, warn } from '../../common/logging'
+import { exitWithError, logger, success, warn } from '../../common/logging'
 import axios, { isAxiosError } from 'axios'
 import {
   ReactProjectInfo,
@@ -12,6 +12,8 @@ import {
   parseOrDetermineConfig,
   getProjectInfoFromConfig,
   CodeConnectConfig,
+  ProjectInfo,
+  CodeConnectExecutableParserConfig,
 } from '../../connect/project'
 import { parseFigmaNode } from '../validation'
 import chalk from 'chalk'
@@ -21,12 +23,14 @@ import { normalizeComponentName } from '../create'
 import { createReactCodeConnect } from '../../react/create'
 import { CodeConnectJSON } from '../../common/figma_connect'
 import boxen from 'boxen'
-import { Searcher } from 'fast-fuzzy'
 import { isFigmaConnectFile } from '../../react/parser'
 import { createCodeConnectConfig, getIncludesGlob } from './helpers'
 import stripAnsi from 'strip-ansi'
-import { handleMessages } from '../parser_executables'
+import { callParser, handleMessages } from '../parser_executables'
 import ora from 'ora'
+import { z } from 'zod'
+import { fromError } from 'zod-validation-error'
+import { autoLinkComponents } from './autolinking'
 
 type ConnectedComponentMappings = { componentName: string; path: string }[]
 
@@ -374,43 +378,6 @@ async function runManualLinkingWithConfirmation(manualLinkingArgs: ManualLinking
   }
 }
 
-/**
- * Autolinks components/paths based on fuzzy matching of name and writes mappings to linkedNodeIdsToPaths.
- *
- * Matching is done by fast-fuzzy
- */
-export function autoLinkComponents({
-  unconnectedComponents,
-  linkedNodeIdsToPaths,
-  componentPaths,
-}: {
-  unconnectedComponents: FigmaRestApi.Component[]
-  linkedNodeIdsToPaths: Record<string, string>
-  componentPaths: string[]
-}) {
-  const matchableNamesToNodeIdsMap = unconnectedComponents.reduce(
-    (acc, curr) => {
-      const matchableName = curr.name
-      acc[matchableName] = curr.id
-      return acc
-    },
-    {} as Record<string, string>,
-  )
-
-  const searchSpace = Object.keys(matchableNamesToNodeIdsMap)
-  const searcher = new Searcher(searchSpace)
-
-  componentPaths.forEach((componentPath) => {
-    const { name } = path.parse(componentPath)
-    const matchableName = name
-    const results = searcher.search(matchableName, { returnMatchData: true })
-    const bestMatch = results[0]
-    if (bestMatch && bestMatch.score > 0.9 && bestMatch.item in matchableNamesToNodeIdsMap) {
-      linkedNodeIdsToPaths[matchableNamesToNodeIdsMap[bestMatch.item]] = componentPath
-    }
-  })
-}
-
 // returns ES-style import path from given system path
 function formatImportPath(systemPath: string) {
   // use forward slashes for import paths
@@ -430,11 +397,13 @@ async function createCodeConnectFiles({
   figmaFileUrl,
   unconnectedComponentsMap,
   outDir: outDirArg,
+  projectInfo,
 }: {
   figmaFileUrl: string
   linkedNodeIdsToPaths: Record<string, string>
   unconnectedComponentsMap: Record<string, FigmaRestApi.Component>
   outDir: string | null
+  projectInfo: ProjectInfo
 }) {
   for (const [nodeId, filePath] of Object.entries(linkedNodeIdsToPaths)) {
     const urlObj = new URL(figmaFileUrl)
@@ -445,25 +414,46 @@ async function createCodeConnectFiles({
     const componentName = name.split('.')[0]
 
     const outDir = outDirArg || path.dirname(filePath)
-    const outFile = path.join(outDir, `${name}.figma.tsx`)
 
     const payload: CreateRequestPayload = {
       mode: 'CREATE',
-      destinationDir: path.dirname(filePath),
-      destinationFile: outFile,
+      destinationDir: outDir,
       component: {
         figmaNodeUrl: urlObj.toString(),
         normalizedName: normalizeComponentName(name),
         ...unconnectedComponentsMap[nodeId],
       },
-      config: {},
+      config: projectInfo.config,
     }
 
-    const result = await createReactCodeConnect(payload)
+    let result: z.infer<typeof CreateResponsePayload>
+
+    if (projectInfo.config.parser === 'react') {
+      result = await createReactCodeConnect(payload)
+    } else {
+      try {
+        const stdout = await callParser(
+          // We use `as` because the React parser makes the types difficult
+          // TODO remove once React is an executable parser
+          projectInfo.config as CodeConnectExecutableParserConfig,
+          payload,
+          projectInfo.absPath,
+        )
+
+        result = CreateResponsePayload.parse(stdout)
+      } catch (e) {
+        throw fromError(e)
+      }
+    }
+
     const { hasErrors } = handleMessages(result.messages)
 
-    if (!hasErrors) {
-      logger.info(success(`Created ${outFile}`))
+    if (hasErrors) {
+      exitWithError('Errors encountered calling parser, exiting')
+    } else {
+      result.createdFiles.forEach((file) => {
+        logger.info(success(`Created ${file.filePath}`))
+      })
     }
   }
 }
@@ -494,7 +484,7 @@ export async function getUnconnectedComponentsAndConnectedComponentMappings(
   cmd: BaseCommand,
   figmaFileUrl: string,
   componentsFromFile: FigmaRestApi.Component[],
-  projectInfo: ReactProjectInfo,
+  projectInfo: ProjectInfo<CodeConnectConfig> | ReactProjectInfo,
 ) {
   const dir = getDir(cmd)
   const fileKey = parseFileKey(figmaFileUrl)
@@ -594,24 +584,28 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
         frames: [''],
       },
     }).start()
-    const projectInfo = getReactProjectInfo(
-      (await getProjectInfoFromConfig(dir, configToUse)) as ReactProjectInfo,
-    )
 
-    const componentPaths = projectInfo.files.filter(
-      (f: string) => !isFigmaConnectFile(projectInfo.tsProgram, f),
-    )
+    let projectInfo = await getProjectInfoFromConfig(dir, configToUse)
+    let componentPaths = projectInfo.files
+
+    if (projectInfo.config.parser === 'react') {
+      projectInfo = getReactProjectInfo(projectInfo as ReactProjectInfo)
+      // TODO can we do similar filtering for non-react?
+      componentPaths = componentPaths.filter(
+        (f: string) => !isFigmaConnectFile((projectInfo as ReactProjectInfo).tsProgram, f),
+      )
+    }
     spinner.stop()
 
     if (!componentPaths.length) {
       if (hasConfigFile) {
         logger.error(
-          'No jsx/tsx files found. Please update the include/exclude globs in your config file and try again.',
+          'No files found. Please update the include/exclude globs in your config file and try again.',
         )
         exitWithFeedbackMessage(1)
       } else {
         logger.error(
-          'No jsx/tsx files could be found in that directory. Please enter a different directory.',
+          'No files for your project type could be found in that directory. Please enter a different directory.',
         )
       }
     } else {
@@ -649,13 +643,6 @@ export async function runWizard(cmd: BaseCommand) {
 
   const dir = getDir(cmd)
   const { hasConfigFile, config } = await parseOrDetermineConfig(dir, cmd.config)
-
-  if (config.parser !== 'react' && config.parser !== '__unit_test__') {
-    logger.error(
-      'This flow currently only supports React projects. Please use one of the other commands.',
-    )
-    exitWithFeedbackMessage(1)
-  }
 
   let accessToken = getAccessToken(cmd)
 
@@ -781,5 +768,6 @@ export async function runWizard(cmd: BaseCommand) {
     unconnectedComponentsMap,
     figmaFileUrl,
     outDir,
+    projectInfo,
   })
 }

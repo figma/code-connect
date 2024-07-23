@@ -3,7 +3,6 @@ import * as connect from '../../../commands/connect'
 import { FigmaRestApi } from '../../figma_rest_api'
 import * as project from '../../project'
 import {
-  autoLinkComponents,
   convertRemoteFileUrlToRelativePath,
   getComponentChoicesForPrompt,
   getUnconnectedComponentsAndConnectedComponentMappings,
@@ -91,30 +90,6 @@ describe('getComponentChoicesForPrompt', () => {
       `Figma component: some connected component            ↔️ /foo/connectedComponent1.tsx`,
       `Figma component: another connected component         ↔️ /foo/connectedComponent2.tsx`,
     ])
-  })
-})
-
-describe('autoLinkComponents', () => {
-  it('populates linkedNodeIdsToPaths using fuzzy matching', () => {
-    const linkedNodeIdsToPaths = {}
-    autoLinkComponents({
-      unconnectedComponents: MOCK_COMPONENTS,
-      linkedNodeIdsToPaths,
-      componentPaths: ['/foo/bar/AnotherComponent.tsx', '/foo/bar/DifferentComponent.tsx'],
-    })
-    expect(linkedNodeIdsToPaths).toEqual({
-      '1:12': '/foo/bar/AnotherComponent.tsx',
-      '1:13': '/foo/bar/DifferentComponent.tsx',
-    })
-  })
-  it('does not populate linkedNodeIdsToPaths with bad matches', () => {
-    const linkedNodeIdsToPaths = {}
-    autoLinkComponents({
-      unconnectedComponents: MOCK_COMPONENTS,
-      linkedNodeIdsToPaths,
-      componentPaths: ['/foo/bar/MyButton.tsx', '/foo/bar/AlternativeComponent.tsx'],
-    })
-    expect(linkedNodeIdsToPaths).toEqual({})
   })
 })
 

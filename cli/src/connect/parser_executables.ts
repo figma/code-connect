@@ -130,7 +130,9 @@ export async function callParser(
         child.stdin.end()
       }
     } catch (e) {
-      exitWithError(`Error calling parser: ${e}`)
+      exitWithError(
+        `Error calling parser: ${e}, try re-running the command with --verbose for more information.`,
+      )
     }
   })
 }

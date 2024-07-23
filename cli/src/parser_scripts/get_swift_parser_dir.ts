@@ -38,7 +38,9 @@ export async function getSwiftParserDir(cwd: string, xcodeprojPath?: string) {
     // - Figma: /path/to/code-connect
     const figmaPackageMatch = buildSettings.match(/\s+Figma: ([^\s]*)(?: @ (.*))?/)
     if (!figmaPackageMatch) {
-      exitWithError('Code Connect Swift package not found')
+      exitWithError(
+        'Code Connect Swift package not found. Please add a dependency to the Code Connect package at https://github.com/figma/code-connect to your project.',
+      )
     }
 
     // Find the package's location on disk, to compile and run the parser binary from
@@ -77,16 +79,13 @@ export async function getSwiftParserDir(cwd: string, xcodeprojPath?: string) {
         packageInfo.dependencies.find((p: any) => p.identity === 'figmadoc')
 
       if (!codeConnectPackage) {
-        exitWithError('Code Connect Swift package not found in Package.swift')
+        exitWithError(
+          'Code Connect Swift package not found in Package.swift. Please add a dependency to https://github.com/figma/code-connect to your Package.swift file.',
+        )
       }
 
-      if (codeConnectPackage.path) {
-        // Installed locally
-        figmaPackageDir = codeConnectPackage.path
-      } else {
-        // Installed from git, SPM clones it into this directory
-        figmaPackageDir = '.build/checkouts/code-connect'
-      }
+      // We can run directly from the directory of the package swift file
+      figmaPackageDir = cwd
     } catch (e) {
       exitWithError(`Error calling Swift command: ${e}`)
     }

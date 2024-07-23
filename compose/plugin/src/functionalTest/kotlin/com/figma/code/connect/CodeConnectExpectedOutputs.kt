@@ -1,14 +1,17 @@
 package com.figma.code.connect
 
 object CodeConnectExpectedOutputs {
-    fun expectedParserResult(filePath: String): String {
+    fun expectedParserResult(
+        filePath: String,
+        autoAddImports: Boolean,
+    ): String {
         return """
             {
   "docs": [
     {
       "component": "ButtonComponent",
       "figmaNode": "http://figma.com/component1",
-      "template": "constfigma=require('figma')\nfunction__fcc_renderComposeChildren(children,prefix){\nreturnchildren.flatMap((child,index)=>{\nif(child.type==='CODE'){\nletcode=child.code.split('\\n').map((line,lineIndex)=>{\nreturnline.trim()!==''?`${'$'}{prefix}${'$'}{line}`:line;\n}).join('\\n')\nif(index!==children.length-1){\ncode=code+'\\n'\n}\nreturn{\n...child,\ncode:code,\n}\n}else{\nletelements=[]\nconstshouldAddNewline=index>0&&children[index-1].type==='CODE'&&!children[index-1].code.endsWith('\\n')\nelements.push({type:'CODE',code:`${'$'}{shouldAddNewline?'\\n':''}${'$'}{prefix}`})\nelements.push(child)\nif(index!==children.length-1){\nelements.push({type:'CODE',code:'\\n'})\n}\nreturnelements\n}\n})\n}\n\nconsttext=figma.properties.string('Label')\n\n\nconstenabled=figma.properties.boolean('Enabled',{\ntrue:'true',\nfalse:'false'\n})\n\n\nconstborderStyle=figma.properties.boolean('HasBorder',{\ntrue:'BorderStyle.bordered',\nfalse:'BorderStyle.borderless'\n})\n\n\nconsticon=figma.properties.instance('Icon')\n\n\nconstchildren=figma.properties.children(['Row1','Row2'])\n\n\nconsttype=figma.properties.enum('button_type',{\n\"Primary\":'ButtonType.Primary',\n\"Secondary\":'ButtonType.Secondary'\n})\n\nexportdefaultfigma.kotlin`ButtonComponent(\ntype=${'$'}{type},\ntext=\"${'$'}{text}\",\nborderStyle=${'$'}{borderStyle},\nenabled=${'$'}{enabled},\nicon=${'$'}{__fcc_renderComposeChildren(icon,'')},\ncontents={\n${'$'}{__fcc_renderComposeChildren(children,'')}\n}\n)`",
+      "template":"            const figma = require('figma')\n            function __fcc_renderComposeChildren(children, prefix) {\n  return children.flatMap((child, index) => {\n    if (child.type === 'CODE') {\n      let code = child.code.split('\\n').map((line, lineIndex) => {\n        return line.trim() !== '' ? `${'$'}{prefix}${'$'}{line}` : line;\n      }).join('\\n')\n      if (index !== children.length - 1 && !code.replace(/^ +| +${'$'}/g, '').endsWith('\\n')) {\n        code = code + '\\n'\n      }\n      return {\n        ...child,\n        code: code,\n      }\n    } else {\n      let elements = []\n      const shouldAddNewline = index > 0 && children[index - 1].type === 'CODE' && !(children[index - 1].code.replace(/^ +| +${'$'}/g, '').endsWith('\\n'));\n      elements.push({ type: 'CODE', code: `${'$'}{shouldAddNewline ? '\\n' : ''}${'$'}{prefix}` })\n      elements.push(child)\n      if (index < children.length - 1 && !(children[index + 1].type === 'CODE' && children[index + 1].code.replace(/^ +| +${'$'}/g, '').startsWith('\\n'))) {\n        elements.push({ type: 'CODE', code: '\\n' })\n      }\n      return elements\n    }\n  })\n}\n            \n            const text = figma.properties.string('Label')\n            \n\n            const enabled =                 figma.properties.boolean('Enabled', {\n                    true: 'true',\nfalse: 'false'\n                })\n            \n\n            const borderStyle =                 figma.properties.boolean('HasBorder', {\n                    true: 'BorderStyle.bordered',\nfalse: 'BorderStyle.borderless'\n                })\n            \n\n            const icon = figma.properties.instance('Icon')\n            \n\n            const children = figma.properties.children(['Row 1', 'Row 2'])\n            \n\n            const type = figma.properties.enum('button_type', {\n    \"Primary\": 'ButtonType.Primary',\n\"Secondary\": 'ButtonType.Secondary'\n})\n            \n            export default figma.kotlin`ButtonComponent(\n    type = ${'$'}{type},\n    text = \"${'$'}{text.replace(/\\n/g, \"\\\\n\")}\",\n    borderStyle = ${'$'}{borderStyle},\n    enabled = ${'$'}{enabled},\n    icon = ${'$'}{__fcc_renderComposeChildren(icon, '')},\n    contents = {\n${'$'}{__fcc_renderComposeChildren(children, '        ')}\n    }\n)`",
       "templateData": {
         "props": {
           "text": {
@@ -43,7 +46,10 @@ object CodeConnectExpectedOutputs {
           "children": {
             "kind": "children",
             "args": {
-                "layers":["Row1","Row2"]
+                "layers":[
+                    "Row1",
+                    "Row2"
+                ]
             }
           },
           "type": {
@@ -57,17 +63,18 @@ object CodeConnectExpectedOutputs {
             }
           }
         },
-        "imports": [],
+        "imports": ${if (autoAddImports) "[\"import com.example.ButtonComponent\"]" else "[]"},
         "nestable": true
       },
       "variant": {
-        "\"some variant\"": "\"darkmode\""
+        "some variant": "darkmode",
+        "other variant": "blue"
       },
       "language": "kotlin",
       "label": "Compose",
       "sourceLocation": {
         "file": "$filePath",
-        "line": 57
+        "line": 58
       },
       "source": ""
     }

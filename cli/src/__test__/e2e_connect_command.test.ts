@@ -11,9 +11,12 @@ describe('e2e test for `connect` command', () => {
     async () => {
       const testPath = path.join(__dirname, 'e2e_connect_command/react_storybook')
 
-      const result = await promisify(exec)(`npx tsx ../cli connect parse --dir ${testPath}`, {
-        cwd: __dirname,
-      })
+      const result = await promisify(exec)(
+        `npx tsx ../cli connect parse --skip-update-check --dir ${testPath}`,
+        {
+          cwd: __dirname,
+        },
+      )
 
       expect(tidyStdOutput(result.stderr)).toBe(
         `No config file found in ${testPath}, proceeding with default options
@@ -94,7 +97,7 @@ export default figma.tsx\`<ReactApiComponent />\``,
       'successfully calls a first party parser executable',
       async () => {
         const result = await promisify(exec)(
-          `npx tsx ../cli connect parse --dir ./e2e_connect_command/unit_test_parser --verbose`,
+          `npx tsx ../cli connect parse --skip-update-check --dir ./e2e_connect_command/unit_test_parser --verbose`,
           {
             cwd: __dirname,
           },
@@ -114,7 +117,7 @@ Success from parser!`,
 
     it('does not fail with an error if a parser executable returns a warning', async () => {
       const result = await promisify(exec)(
-        `npx tsx ../cli connect parse --dir ./e2e_connect_command/unit_test_parser_warning`,
+        `npx tsx ../cli connect parse --skip-update-check --dir ./e2e_connect_command/unit_test_parser_warning`,
         {
           cwd: __dirname,
         },
@@ -131,7 +134,7 @@ Warning from parser!`,
     it('fails with an error if a parser executable returns an error', async () => {
       try {
         await promisify(exec)(
-          `npx tsx ../cli connect parse --dir ./e2e_connect_command/unit_test_parser_error`,
+          `npx tsx ../cli connect parse --skip-update-check --dir ./e2e_connect_command/unit_test_parser_error`,
           {
             cwd: __dirname,
           },
@@ -149,7 +152,7 @@ Errors encountered calling parser, exiting`,
     it('returns an error if the first party parser does not exist', async () => {
       try {
         await promisify(exec)(
-          `npx tsx ../cli connect parse --dir ./e2e_connect_command/invalid_parser`,
+          `npx tsx ../cli connect parse --skip-update-check --dir ./e2e_connect_command/invalid_parser`,
           {
             cwd: __dirname,
           },
@@ -166,7 +169,7 @@ Invalid parser specified: "does-not-exist". Valid parsers are: swift, compose, _
     it('returns an error if the first party parser does not return a valid response', async () => {
       try {
         await promisify(exec)(
-          `npx tsx ../cli connect parse --dir ./e2e_connect_command/unit_test_parser_invalid_response`,
+          `npx tsx ../cli connect parse --skip-update-check --dir ./e2e_connect_command/unit_test_parser_invalid_response`,
           {
             cwd: __dirname,
           },
@@ -175,7 +178,7 @@ Invalid parser specified: "does-not-exist". Valid parsers are: swift, compose, _
         expect(e.code).toBe(1)
         expect(tidyStdOutput(e.stderr)).toBe(
           `Config file found, parsing ./e2e_connect_command/unit_test_parser_invalid_response using specified include globs
-Error returned from parser: Validation error: Required at "docs[0].figmaNode"; Required at "docs[0].template"; Required at "docs[0].templateData"; Required at "docs[0].language"; Required at "docs[0].label"`,
+Error returned from parser: Validation error: Required at "docs[0].figmaNode"; Required at "docs[0].template"; Required at "docs[0].templateData"; Required at "docs[0].language"; Required at "docs[0].label", try re-running the command with --verbose for more information.`,
         )
       }
     })

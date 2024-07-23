@@ -34,6 +34,7 @@ export type BaseCommand = commander.Command & {
   dryRun: boolean
   dir: string
   jsonFile: string
+  skipUpdateCheck: boolean
 }
 
 function addBaseCommand(command: commander.Command, name: string, description: string) {
@@ -47,6 +48,7 @@ function addBaseCommand(command: commander.Command, name: string, description: s
     .option('-o --outFile <file>', 'specify a file to output generated Code Connect')
     .option('-o --outDir <dir>', 'specify a directory to output generated Code Connect')
     .option('-c --config <path>', 'path to a figma config file')
+    .option('--skip-update-check', 'skips checking for an updated version of the Figma CLI')
     .option('--dry-run', 'tests publishing without actually publishing')
     .addHelpText(
       'before',
@@ -69,6 +71,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
       'If no config file is found, this parses the current directory. An optional `--dir` flag can be used to specify a directory to parse.',
   )
     .option('--skip-validation', 'skip validation of Code Connect docs')
+    .option('-l --label <label>', 'label to apply to the published files')
     .action(withUpdateCheck(handlePublish))
 
   addBaseCommand(
@@ -82,6 +85,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
       '--node <link_to_node>',
       'specify the node to unpublish. This will unpublish for both React and Storybook.',
     )
+    .option('-l --label <label>', 'label to unpublish for')
     .action(withUpdateCheck(handleUnpublish))
 
   addBaseCommand(
@@ -213,7 +217,9 @@ export async function getCodeConnectObjects(
     }))
   } catch (e) {
     // zod-validation-error formats the error message into a readable format
-    exitWithError(`Error returned from parser: ${fromError(e)}`)
+    exitWithError(
+      `Error returned from parser: ${fromError(e)}, try re-running the command with --verbose for more information.`,
+    )
   }
 }
 
@@ -271,7 +277,7 @@ async function getReactCodeConnectObjects(
   return allCodeConnectObjects
 }
 
-async function handlePublish(cmd: BaseCommand & { skipValidation: boolean }) {
+async function handlePublish(cmd: BaseCommand & { skipValidation: boolean; label: string }) {
   setupHandler(cmd)
 
   let dir = getDir(cmd)
@@ -308,6 +314,13 @@ async function handlePublish(cmd: BaseCommand & { skipValidation: boolean }) {
     }
   }
 
+  if (cmd.label || projectInfo.config.label) {
+    logger.info(`Using label ${cmd.label || projectInfo.config.label}`)
+    codeConnectObjects.forEach((doc) => {
+      doc.label = cmd.label || projectInfo.config.label || doc.label
+    })
+  }
+
   if (cmd.dryRun) {
     logger.info(`Dry run complete`)
     process.exit(0)
@@ -316,7 +329,7 @@ async function handlePublish(cmd: BaseCommand & { skipValidation: boolean }) {
   upload({ accessToken, docs: codeConnectObjects })
 }
 
-async function handleUnpublish(cmd: BaseCommand & { node: string }) {
+async function handleUnpublish(cmd: BaseCommand & { node: string; label: string }) {
   setupHandler(cmd)
 
   let dir = getDir(cmd)
@@ -339,8 +352,12 @@ async function handleUnpublish(cmd: BaseCommand & { node: string }) {
 
     nodesToDeleteRelevantInfo = codeConnectObjects.map((doc) => ({
       figmaNode: doc.figmaNode,
-      label: doc.label,
+      label: cmd.label || projectInfo.config.label || doc.label,
     }))
+
+    if (cmd.label || projectInfo.config.label) {
+      logger.info(`Using label ${cmd.label || projectInfo.config.label}`)
+    }
 
     if (cmd.dryRun) {
       logger.info(`Dry run complete`)

@@ -1,3 +1,29 @@
+# Code Connect v1.0.3 (23th July 2024)
+
+## Fixed
+
+### General
+
+### React
+- Add support for hyphens in prop names (fixes https://github.com/figma/code-connect/issues/97)
+
+### SwiftUI
+- Fixed `checkouts` folder resolution edge case
+
+### Compose
+- Fixed issue with `create` command creating invalid code
+- Added import resolution for components
+
+## Features
+
+### General
+- Added support for SwiftUI and Compose in the CLI Assistant
+- Added `--skip-update-check` flag 
+- Added `--label` flag to the `publish` and `unpublish` commands to publish or unpublish to a custom label
+- We now print the label used when running the `publish` command
+- Improved autolinking algorithm
+
+
 # Code Connect v1.0.2 (10th July 2024)
 
 ## Fixed

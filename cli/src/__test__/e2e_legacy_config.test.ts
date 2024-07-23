@@ -334,7 +334,7 @@ Config file found, parsing ./e2e_connect_command/legacy_swift_config using speci
     async () => {
       try {
         await promisify(exec)(
-          `npx tsx ../cli connect parse --dir ./e2e_connect_command/legacy_both_config`,
+          `npx tsx ../cli connect parse --skip-update-check --dir ./e2e_connect_command/legacy_both_config`,
           {
             cwd: __dirname,
           },

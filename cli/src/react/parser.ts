@@ -697,7 +697,8 @@ export function parseRenderFunction(
   // parser_template_helpers.ts)
   exampleCode = exampleCode.replace(
     // match " reactPropName={__PROP__("figmaPropName")}" and extract the names
-    / ([A-Za-z0-9]+)=\{__PROP__\("([A-Za-z0-9_\.]+)"\)\}/g,
+    // We allow hyphens in prop names (unlike React) to support rendering HTML attributes
+    / ([A-Za-z0-9\-]+)=\{__PROP__\("([A-Za-z0-9_\.]+)"\)\}/g,
     (_match, reactPropName, figmaPropName) => {
       return `\${_fcc_renderReactProp('${reactPropName}', ${figmaPropName})}`
     },

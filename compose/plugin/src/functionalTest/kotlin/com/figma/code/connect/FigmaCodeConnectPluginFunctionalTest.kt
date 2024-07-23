@@ -21,7 +21,7 @@ class FigmaCodeConnectPluginFunctionalTest {
 
     private val inputFile by lazy { projectDir.resolve("inputFile.json") }
 
-    @Test fun `test E2E parsing`() {
+    private fun testParsing(addImports: Boolean) {
         // Set up the test build
         settingsFile.writeText("")
         buildFile.writeText(
@@ -38,8 +38,13 @@ class FigmaCodeConnectPluginFunctionalTest {
         runner.withPluginClasspath()
         runner.withProjectDir(projectDir)
 
-        val kotlinComponent =
+        val srcDir = projectDir.resolve("src/com/figma/code/connect/test").apply { mkdirs() }
+
+        // Copy the Kotlin test file from resources to the src directory
+        val kotlinComponent = srcDir.resolve("CodeConnectTestDocument.kt")
+        val resourceFile =
             File(javaClass.classLoader.getResource("CodeConnectTestDocument.kt")?.file ?: throw IllegalArgumentException("File not found"))
+        resourceFile.copyTo(kotlinComponent)
 
         val inputJson =
             """
@@ -48,6 +53,7 @@ class FigmaCodeConnectPluginFunctionalTest {
                 "paths": [
                 "${kotlinComponent.absolutePath}"
                 ]
+                "autoAddImports" : $addImports
             }
             """.trimIndent()
 
@@ -58,9 +64,17 @@ class FigmaCodeConnectPluginFunctionalTest {
         // Verify the result
         assertTrue(
             result.output.removeWhiteSpaces().contains(
-                CodeConnectExpectedOutputs.expectedParserResult(filePath = kotlinComponent.absolutePath).removeWhiteSpaces(),
+                CodeConnectExpectedOutputs.expectedParserResult(filePath = kotlinComponent.absolutePath, addImports).removeWhiteSpaces(),
             ),
         )
+    }
+
+    @Test fun testParsingWithImports() {
+        testParsing(true)
+    }
+
+    @Test fun testParsingWithoutImports() {
+        testParsing(false)
     }
 
     @Test fun testCreateScript() {
@@ -126,7 +140,9 @@ class FigmaCodeConnectPluginFunctionalTest {
             File(javaClass.classLoader.getResource("CodeConnectTemplateTest.kt")?.file ?: throw IllegalArgumentException("File not found"))
 
         assertTrue(
-            projectDir.resolve("TestInstanceComponent.kt").readText().removeWhiteSpaces().contains(expected.readText().removeWhiteSpaces()),
+            projectDir.resolve(
+                "TestInstanceComponent.figma.kt",
+            ).readText().removeWhiteSpaces().contains(expected.readText().removeWhiteSpaces()),
         )
     }
 

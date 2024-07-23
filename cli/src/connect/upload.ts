@@ -23,9 +23,23 @@ export async function upload({ accessToken, docs }: Args) {
       headers: getHeaders(accessToken),
     })
 
-    logger.info(
-      `Successfully uploaded to Figma:\n${docs.map((doc) => `-> ${codeConnectStr(doc)}`).join('\n')}`,
+    const docsByLabel = docs.reduce(
+      (acc, doc) => {
+        if (acc[doc.label]) {
+          acc[doc.label].push(doc)
+        } else {
+          acc[doc.label] = [doc]
+        }
+        return acc
+      },
+      {} as Record<string, CodeConnectJSON[]>,
     )
+
+    for (const [label, docs] of Object.entries(docsByLabel)) {
+      logger.info(
+        `Successfully uploaded to Figma, for ${label}:\n${docs.map((doc) => `-> ${codeConnectStr(doc)}`).join('\n')}`,
+      )
+    }
   } catch (err) {
     if (isAxiosError(err)) {
       if (err.response) {

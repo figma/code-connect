@@ -99,6 +99,7 @@ enum class ComponentType {
 data class CodeConnectParserParseInput(
     val mode: Mode,
     val paths: List<String>,
+    val autoAddImports: Boolean = true,
 )
 
 @Serializable

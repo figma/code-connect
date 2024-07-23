@@ -51,6 +51,11 @@ type BaseCodeConnectConfig = {
    */
   parser: FirstPartyParser
   // TODO add parserCommand for third party parsers
+
+  /**
+   * Label to use for the uploaded code examples
+   */
+  label?: string
 }
 
 export type CodeConnectExecutableParserConfig = BaseCodeConnectConfig & {

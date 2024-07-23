@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -17,17 +17,20 @@
   "files": [
     "dist/**/*"
   ],
+  "engines": {
+    "node": ">=16"
+  },
   "scripts": {
     "dev": "tsx src/cli.ts",
     "build": "tsc",
     "build:web": "pnpm build",
     "build:webpack": "webpack --mode production",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules npx jest --coverage",
-    "test:fast": "npm run test -- --testPathIgnorePatterns=template_rendering.test.ts --testPathIgnorePatterns=e2e_connect_command_swift.test.ts",
+    "test:fast": "npm run test -- --testPathIgnorePatterns=template_rendering.test.ts --testPathIgnorePatterns=e2e_connect_command_swift.test.ts --testPathIgnorePatterns=e2e_wizard_swift.test.ts",
     "test:ci": "npm run test:non-mac -- --runInBand",
-    "test:wizard": "npm run test -- --runInBand --testPathPattern=e2e_wizard.test.ts",
-    "test:swift": "npm run test -- --runInBand --testPathPattern=e2e_connect_command_swift.test.ts",
-    "test:non-mac": "npm run test -- --testPathIgnorePatterns=e2e_connect_command_swift.test.ts",
+    "test:wizard": "npm run test -- --runInBand --testPathPattern=e2e_wizard_react.test.ts --testPathPattern=e2e_wizard_swift.test.ts",
+    "test:swift": "npm run test -- --runInBand --testPathPattern=e2e_connect_command_swift.test.ts --testPathPattern=e2e_wizard_swift.test.ts",
+    "test:non-mac": "npm run test -- --testPathIgnorePatterns=e2e_connect_command_swift.test.ts --testPathIgnorePatterns=e2e_wizard_swift.test.ts",
     "bundle": "npm run build && npm pack && mkdir -p bundle && mv figma-code-connect*.tgz bundle",
     "bundle:npm": "npm run build && npm pack && mkdir -p bundle-npm && mv figma-code-connect*.tgz bundle-npm",
     "bundle:cli": "npm run build:webpack && mkdir -p bundle-cli && pkg --compress Brotli webpack-dist/figma.js",

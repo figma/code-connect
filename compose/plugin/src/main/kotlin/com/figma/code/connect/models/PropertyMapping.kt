@@ -180,7 +180,7 @@ data class TemplateData(
     val props: Map<String, PropertyMapping>? = null,
     // Optional array of imports for this component. These are prepended
     // to the example code.
-    val imports: List<String> = emptyList(),
+    var imports: List<String> = emptyList(),
     // Whether the example should be rendered inline if it's a nested instance. Otherwise, it'll
     // be rendered as a pill that can be clicked to view the instance instead.
     val nestable: Boolean = false,

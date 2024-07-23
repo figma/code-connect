@@ -12,7 +12,7 @@ describe('e2e test for `create` command', () => {
 
   async function runCreate(cwd: string, verbose = false) {
     return await promisify(exec)(
-      `npx cross-env FIGMA_ACCESS_TOKEN=test CODE_CONNECT_MOCK_CREATE_API_RESPONSE=${testParentPath}/dummy_api_response.json npx tsx ../../../cli connect create${
+      `npx cross-env FIGMA_ACCESS_TOKEN=test CODE_CONNECT_MOCK_CREATE_API_RESPONSE=${testParentPath}/dummy_api_response.json npx tsx ../../../cli connect create --skip-update-check${
         verbose ? ' --verbose' : ''
       } https://www.figma.com/file/1234abcd/Test-File?node-id=1-39`,
       {

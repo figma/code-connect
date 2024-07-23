@@ -45,6 +45,16 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
         )
     }
 
+    private fun createImportStatement(
+        file: KtFile,
+        component: String,
+    ): String? {
+        if (file.packageFqName.asString().isBlank()) {
+            return null
+        }
+        return "import ${file.packageFqName.asString()}.$component"
+    }
+
     @OptIn(ExperimentalSerializationApi::class)
     override fun apply(project: Project) {
         /**
@@ -80,7 +90,8 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
 
                     val documents = mutableListOf<CodeConnectDocument>()
                     val messages = mutableListOf<CodeConnectParserMessage>()
-                    val composableSourceLocations = mutableMapOf<String, SourceLocation>()
+                    // Keep track of the import + source Location
+                    val composableImportsAndSourceLocations = mutableMapOf<String, Pair<String?, SourceLocation>>()
 
                     for (path in codeConnectParserParseInput.paths.filter { it.endsWith(".kt") }) {
                         val tempFile = File(path)
@@ -98,13 +109,25 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
                         documents.addAll(parserResult.docs)
                         messages.addAll(parserResult.messages)
                         // Get all the line numbers for all @Composable functions to assign a SourceLocation
-                        composableSourceLocations.putAll(
-                            parserResult.functionLineNumbers.mapValues { SourceLocation(file = path, line = it.value) },
+                        composableImportsAndSourceLocations.putAll(
+                            parserResult.functionLineNumbers.mapValues {
+                                Pair(createImportStatement(ktFile, it.key), SourceLocation(file = path, line = it.value))
+                            },
                         )
                     }
 
                     documents.forEach { doc ->
-                        doc.sourceLocation = composableSourceLocations[doc.component] ?: SourceLocation(file = "", line = 0)
+                        val sourceInformation = composableImportsAndSourceLocations[doc.component]
+                        if (doc.component == null || sourceInformation == null) {
+                            return@forEach
+                        }
+                        doc.sourceLocation = sourceInformation.second
+
+                        if (codeConnectParserParseInput.autoAddImports) {
+                            sourceInformation.first?.let {
+                                doc.templateData.imports += it
+                            }
+                        }
                     }
 
                     println(json.encodeToString(CodeConnectPluginParserOutput(documents, messages)).trimIndent())

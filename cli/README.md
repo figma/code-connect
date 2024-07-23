@@ -105,6 +105,7 @@ npx figma connect unpublish --token <token>
 - `--skip-validation` By default, `publish` will validate your Code Connect file with the Figma component to ensure that their properties match. This flag can be used to skip this validation.
 - `--verbose` Enable verbose logging for debugging
 - `--node <node-url>` For unpublishing only a single specific component with `unpublish`
+- `--label <label>` For publishing or unpublishing under a custom label
 
 ## Configuration
 

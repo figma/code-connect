@@ -3,17 +3,31 @@ import { logger } from './logging'
 import { execSync, spawnSync } from 'child_process'
 import axios from 'axios'
 import { compareVersions } from 'compare-versions'
+import { BaseCommand } from '../commands/connect'
 
 let updatedVersionAvailable: string | false | undefined = undefined
 let message: string | undefined = undefined
 
+type EndsWithBaseCommand<T extends BaseCommand> = [...any[], T]
+
 // Wrap action handlers to check for updates or a message, and output a message
 // after the action if any are available
-export function withUpdateCheck(fn: (...args: any[]) => void | Promise<void>) {
-  return (...args: any[]) => {
+export function withUpdateCheck<T extends BaseCommand>(
+  // The last argument is always the command, but I couldn't work out how to
+  // model this with Typescript here
+  fn: (...args: any[]) => void | Promise<void>,
+) {
+  return (...args: EndsWithBaseCommand<T>) => {
+    const command = args[args.length - 1]
+    const restArgs = args.slice(0, -1)
+
+    if (command.skipUpdateCheck) {
+      return fn(...restArgs, command)
+    }
+
     startUpdateCheck()
 
-    const result = fn(...args)
+    const result = fn(...restArgs, command)
     if (result instanceof Promise) {
       result.finally(waitAndCheckForUpdates)
     } else {
