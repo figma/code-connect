@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 5.9
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import CompilerPluginSupport
@@ -15,7 +15,7 @@ let package = Package(
         .executable(name: "figma-swift", targets: ["CodeConnectCLI"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-syntax", from: "600.0.0-prerelease-2024-07-24"),
+        .package(url: "https://github.com/apple/swift-syntax", from: "509.1.1"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.49.0"),
     ],
