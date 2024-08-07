@@ -105,7 +105,7 @@ const backstage: AutolinkingTestCase = {
     { name: 'Caption | Bold', id: '727:22' },
     { name: 'Caption', id: '730:47' },
   ],
-  componentPaths: [
+  filepathExports: [
     '/Users/foo/backstage/packages/core-components/src/layout/TabbedCard/TabbedCard.tsx',
     '/Users/foo/backstage/packages/core-components/src/layout/TabbedCard/TabbedCard.test.tsx',
     '/Users/foo/backstage/packages/core-components/src/layout/TabbedCard/TabbedCard.stories.tsx',

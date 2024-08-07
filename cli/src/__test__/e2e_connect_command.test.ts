@@ -178,7 +178,7 @@ Invalid parser specified: "does-not-exist". Valid parsers are: swift, compose, _
         expect(e.code).toBe(1)
         expect(tidyStdOutput(e.stderr)).toBe(
           `Config file found, parsing ./e2e_connect_command/unit_test_parser_invalid_response using specified include globs
-Error returned from parser: Validation error: Required at "docs[0].figmaNode"; Required at "docs[0].template"; Required at "docs[0].templateData"; Required at "docs[0].language"; Required at "docs[0].label", try re-running the command with --verbose for more information.`,
+Error returned from parser: Validation error: Required at "docs[0].figmaNode"; Required at "docs[0].template"; Required at "docs[0].templateData"; Required at "docs[0].language"; Required at "docs[0].label". Try re-running the command with --verbose for more information.`,
         )
       }
     })

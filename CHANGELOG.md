@@ -1,3 +1,23 @@
+# Code Connect v1.0.4 (7th August 2024)
+
+## Fixed
+
+### React
+- Fixed rendering of identifiers, functions and objects when used as children
+
+### SwiftUI
+- Updated the `component` definition in FigmaConnect protocol to be optional and have a default implementation.
+
+### Compose
+- Added a more helpful error message when the JDK version is too low.
+
+## Features
+
+### General
+- Added error message to suggest splitting publish when request too large
+- CLI assistant support for selecting file exports to use in Code Connect template
+- New --batch-size argument for publish command in order to split uploading into smaller "batches". This will allow for large uploads without having to split running the publish command with different directories.
+
 # Code Connect v1.0.3 (23th July 2024)
 
 ## Fixed
@@ -18,7 +38,7 @@
 
 ### General
 - Added support for SwiftUI and Compose in the CLI Assistant
-- Added `--skip-update-check` flag 
+- Added `--skip-update-check` flag
 - Added `--label` flag to the `publish` and `unpublish` commands to publish or unpublish to a custom label
 - We now print the label used when running the `publish` command
 - Improved autolinking algorithm

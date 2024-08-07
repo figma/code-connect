@@ -23,16 +23,22 @@ import { normalizeComponentName } from '../create'
 import { createReactCodeConnect } from '../../react/create'
 import { CodeConnectJSON } from '../../common/figma_connect'
 import boxen from 'boxen'
-import { isFigmaConnectFile } from '../../react/parser'
-import { createCodeConnectConfig, getIncludesGlob } from './helpers'
+import {
+  createCodeConnectConfig,
+  getComponentOptionsMap,
+  getFilepathExportsFromFiles,
+  parseFilepathExport,
+  getIncludesGlob,
+} from './helpers'
 import stripAnsi from 'strip-ansi'
 import { callParser, handleMessages } from '../parser_executables'
 import ora from 'ora'
 import { z } from 'zod'
 import { fromError } from 'zod-validation-error'
 import { autoLinkComponents } from './autolinking'
+import { generatePropMapping } from './prop_mapping'
 
-type ConnectedComponentMappings = { componentName: string; path: string }[]
+type ConnectedComponentMappings = { componentName: string; filepathExport: string }[]
 
 const NONE = '(None)'
 const DELIMITERS_REGEX = /[\s-_]/g
@@ -52,9 +58,11 @@ function clearQuestion(prompt: prompts.PromptObject<string>, answer: string) {
 async function fetchTopLevelComponentsFromFile({
   accessToken,
   figmaUrl,
+  cmd,
 }: {
   accessToken: string
   figmaUrl: string
+  cmd: BaseCommand
 }) {
   // TODO enter create flow if node-id specified
   const fileKey = parseFileKey(figmaUrl)
@@ -63,7 +71,7 @@ async function fetchTopLevelComponentsFromFile({
 
   try {
     const spinner = ora({
-      text: 'Fetching component information from Figma...',
+      text: `Fetching component information from ${cmd.verbose ? `${apiUrl}\n` : 'Figma...'}`,
       color: 'green',
     }).start()
     const response = await (
@@ -79,7 +87,11 @@ async function fetchTopLevelComponentsFromFile({
             },
           })
     ).finally(() => {
-      spinner.stop()
+      if (cmd.verbose) {
+        spinner.stopAndPersist()
+      } else {
+        spinner.stop()
+      }
     })
 
     if (response.status === 200) {
@@ -174,15 +186,15 @@ async function askQuestionWithExitConfirmation<T extends string = string>(
   }
 }
 
-function formatComponentTitle(componentName: string, path: string | null, pad: number) {
+function formatComponentTitle(componentName: string, filepathExport: string | null, pad: number) {
   const nameLabel = `${chalk.dim('Figma component:')} ${componentName.padEnd(pad, ' ')}`
-  const linkedLabel = `↔️ ${path ?? '-'}`
+  const linkedLabel = `↔️ ${filepathExport ? parseFilepathExport(filepathExport).filepath : '-'}`
   return `${nameLabel}  ${linkedLabel}`
 }
 
 export function getComponentChoicesForPrompt(
   components: FigmaRestApi.Component[],
-  linkedNodeIdsToPaths: Record<string, string>,
+  linkedNodeIdsToFilepathExports: Record<string, string>,
   connectedComponentsMappings: ConnectedComponentMappings,
   dir: string,
 ): prompts.Choice[] {
@@ -198,15 +210,19 @@ export function getComponentChoicesForPrompt(
   const nameCompare = (a: FigmaRestApi.Component, b: FigmaRestApi.Component) =>
     a.name.localeCompare(b.name)
 
-  const linkedComponents = components.filter((c) => !!linkedNodeIdsToPaths[c.id]).sort(nameCompare)
-  const unlinkedComponents = components.filter((c) => !linkedNodeIdsToPaths[c.id]).sort(nameCompare)
+  const linkedComponents = components
+    .filter((c) => !!linkedNodeIdsToFilepathExports[c.id])
+    .sort(nameCompare)
+  const unlinkedComponents = components
+    .filter((c) => !linkedNodeIdsToFilepathExports[c.id])
+    .sort(nameCompare)
 
   const formatComponentChoice = (c: FigmaRestApi.Component) => {
-    const componentPath = linkedNodeIdsToPaths[c.id]
-      ? path.relative(dir, linkedNodeIdsToPaths[c.id])
+    const filepathExport = linkedNodeIdsToFilepathExports[c.id]
+      ? path.relative(dir, linkedNodeIdsToFilepathExports[c.id])
       : null
     return {
-      title: formatComponentTitle(c.name, componentPath, longestNameLength),
+      title: formatComponentTitle(c.name, filepathExport, longestNameLength),
       value: c.id,
       description: `${chalk.green('Edit link')}`,
     }
@@ -218,7 +234,7 @@ export function getComponentChoicesForPrompt(
     ...connectedComponentsMappings.map((connectedComponent) => ({
       title: formatComponentTitle(
         connectedComponent.componentName,
-        connectedComponent.path,
+        connectedComponent.filepathExport,
         longestNameLength,
       ),
       disabled: true,
@@ -244,18 +260,19 @@ function getUnconnectedComponentChoices(componentPaths: string[], dir: string) {
 type ManualLinkingArgs = {
   unconnectedComponents: FigmaRestApi.Component[]
   connectedComponentsMappings: ConnectedComponentMappings
-  linkedNodeIdsToPaths: Record<string, string>
-  componentPaths: string[]
+  linkedNodeIdsToFilepathExports: Record<string, string>
+  filepathExports: string[]
   cmd: BaseCommand
 }
 
 async function runManualLinking({
   unconnectedComponents,
-  linkedNodeIdsToPaths,
-  componentPaths,
+  linkedNodeIdsToFilepathExports,
+  filepathExports,
   connectedComponentsMappings,
   cmd,
 }: ManualLinkingArgs) {
+  const filesToComponentOptionsMap = getComponentOptionsMap(filepathExports)
   const dir = getDir(cmd)
   while (true) {
     // Don't show exit confirmation as we're relying on esc behavior
@@ -268,7 +285,7 @@ async function runManualLinking({
         )} when you're ready to continue on)`,
         choices: getComponentChoicesForPrompt(
           unconnectedComponents,
-          linkedNodeIdsToPaths,
+          linkedNodeIdsToFilepathExports,
           connectedComponentsMappings,
           dir,
         ),
@@ -282,7 +299,16 @@ async function runManualLinking({
     if (!nodeId) {
       return
     }
-    const pathChoices = getUnconnectedComponentChoices(componentPaths, dir)
+    const pathChoices = getUnconnectedComponentChoices(Object.keys(filesToComponentOptionsMap), dir)
+    const prevSelectedKey = linkedNodeIdsToFilepathExports[nodeId]
+
+    const { filepath: prevSelectedFilepath, exportName: prevSelectedComponent } = prevSelectedKey
+      ? parseFilepathExport(prevSelectedKey)
+      : {
+          filepath: null,
+          exportName: null,
+        }
+
     const { pathToComponent } = await prompts(
       {
         type: 'autocomplete',
@@ -295,10 +321,9 @@ async function runManualLinking({
             choices.filter((i) => i.value.toUpperCase().includes(input.toUpperCase())),
           ),
         // preselect if editing an existing choice
-        initial:
-          nodeId in linkedNodeIdsToPaths
-            ? pathChoices.findIndex(({ value }) => value === linkedNodeIdsToPaths[nodeId])
-            : 0,
+        initial: prevSelectedFilepath
+          ? pathChoices.findIndex(({ value }) => value === prevSelectedFilepath)
+          : 0,
       },
       {
         onSubmit: clearQuestion,
@@ -306,9 +331,36 @@ async function runManualLinking({
     )
     if (pathToComponent) {
       if (pathToComponent === NONE) {
-        delete linkedNodeIdsToPaths[nodeId]
+        delete linkedNodeIdsToFilepathExports[nodeId]
       } else {
-        linkedNodeIdsToPaths[nodeId] = pathToComponent
+        const fileExports = filesToComponentOptionsMap[pathToComponent]
+        if (fileExports.length === 0) {
+          // Not TS, default to filepath
+          linkedNodeIdsToFilepathExports[nodeId] = pathToComponent
+        } else {
+          const { filepathExport } = await prompts(
+            {
+              type: 'autocomplete',
+              name: 'filepathExport',
+              message: `Choose an export of ${path.parse(pathToComponent).base} (type to filter results)`,
+              choices: fileExports,
+              // default suggest uses .startsWith(input)
+              suggest: (input, choices) =>
+                Promise.resolve(
+                  choices.filter((i) => i.value.toUpperCase().includes(input.toUpperCase())),
+                ),
+              // preselect if editing an existing choice
+              initial:
+                prevSelectedComponent && prevSelectedFilepath === pathToComponent
+                  ? fileExports.findIndex(({ title }) => title === prevSelectedComponent)
+                  : 0,
+            },
+            {
+              onSubmit: clearQuestion,
+            },
+          )
+          linkedNodeIdsToFilepathExports[nodeId] = filepathExport
+        }
       }
     }
   }
@@ -333,7 +385,7 @@ async function runManualLinkingWithConfirmation(manualLinkingArgs: ManualLinking
       outDir = outputDirectory
     }
 
-    const linkedNodes = Object.keys(manualLinkingArgs.linkedNodeIdsToPaths)
+    const linkedNodes = Object.keys(manualLinkingArgs.linkedNodeIdsToFilepathExports)
     if (!linkedNodes.length) {
       const { confirmation } = await askQuestionOrExit({
         type: 'select',
@@ -378,46 +430,43 @@ async function runManualLinkingWithConfirmation(manualLinkingArgs: ManualLinking
   }
 }
 
-// returns ES-style import path from given system path
-function formatImportPath(systemPath: string) {
-  // use forward slashes for import paths
-  let formattedImportPath = systemPath.replaceAll(path.sep, '/')
-
-  // prefix current dir paths with ./ (node path does not)
-  formattedImportPath = formattedImportPath.startsWith('.')
-    ? formattedImportPath
-    : `./${formattedImportPath}`
-
-  // assume not using ESM imports
-  return formattedImportPath.replace(/\.(jsx|tsx)$/, '')
-}
-
 async function createCodeConnectFiles({
-  linkedNodeIdsToPaths,
+  linkedNodeIdsToFilepathExports,
   figmaFileUrl,
   unconnectedComponentsMap,
   outDir: outDirArg,
   projectInfo,
 }: {
   figmaFileUrl: string
-  linkedNodeIdsToPaths: Record<string, string>
+  linkedNodeIdsToFilepathExports: Record<string, string>
   unconnectedComponentsMap: Record<string, FigmaRestApi.Component>
   outDir: string | null
   projectInfo: ProjectInfo
 }) {
-  for (const [nodeId, filePath] of Object.entries(linkedNodeIdsToPaths)) {
+  for (const [nodeId, filepathExport] of Object.entries(linkedNodeIdsToFilepathExports)) {
     const urlObj = new URL(figmaFileUrl)
     urlObj.search = ''
     urlObj.searchParams.append('node-id', nodeId)
+    const { filepath, exportName } = parseFilepathExport(filepathExport)
 
-    const { name } = path.parse(filePath)
-    const componentName = name.split('.')[0]
+    const { name } = path.parse(filepath)
 
-    const outDir = outDirArg || path.dirname(filePath)
+    const outDir = outDirArg || path.dirname(filepath)
 
     const payload: CreateRequestPayload = {
       mode: 'CREATE',
       destinationDir: outDir,
+      sourceFilepath: filepath,
+      sourceExport: exportName || undefined,
+      propMapping:
+        projectInfo.config.parser === 'react' && filepath && exportName
+          ? generatePropMapping({
+              filepath,
+              exportName,
+              projectInfo: projectInfo as ReactProjectInfo,
+              component: unconnectedComponentsMap[nodeId],
+            })
+          : undefined,
       component: {
         figmaNodeUrl: urlObj.toString(),
         normalizedName: normalizeComponentName(name),
@@ -493,7 +542,7 @@ export async function getUnconnectedComponentsAndConnectedComponentMappings(
 
   const connectedNodeIdsInFileToCodeConnectObjectMap = codeConnectObjects.reduce(
     (map, codeConnectJson) => {
-      const parsedNode = parseFigmaNode(cmd, codeConnectJson, true)
+      const parsedNode = parseFigmaNode(cmd.verbose, codeConnectJson, true)
 
       if (parsedNode && parsedNode.fileKey === fileKey) {
         map[parsedNode.nodeId] = codeConnectJson
@@ -519,7 +568,7 @@ export async function getUnconnectedComponentsAndConnectedComponentMappings(
       })
       connectedComponentsMappings.push({
         componentName: c.name,
-        path: relativePath ?? '(Unknown file)',
+        filepathExport: relativePath ?? '(Unknown file)',
       })
     } else {
       unconnectedComponents.push(c)
@@ -586,18 +635,14 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
     }).start()
 
     let projectInfo = await getProjectInfoFromConfig(dir, configToUse)
-    let componentPaths = projectInfo.files
-
     if (projectInfo.config.parser === 'react') {
       projectInfo = getReactProjectInfo(projectInfo as ReactProjectInfo)
-      // TODO can we do similar filtering for non-react?
-      componentPaths = componentPaths.filter(
-        (f: string) => !isFigmaConnectFile((projectInfo as ReactProjectInfo).tsProgram, f),
-      )
     }
+
+    const filepathExports = getFilepathExportsFromFiles(projectInfo)
     spinner.stop()
 
-    if (!componentPaths.length) {
+    if (!filepathExports.length) {
       if (hasConfigFile) {
         logger.error(
           'No files found. Please update the include/exclude globs in your config file and try again.',
@@ -612,7 +657,7 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
       return {
         projectInfo,
         componentDirectory,
-        componentPaths,
+        filepathExports,
       }
     }
   }
@@ -659,7 +704,7 @@ export async function runWizard(cmd: BaseCommand) {
 
   logger.info('')
 
-  const { componentDirectory, projectInfo, componentPaths } =
+  const { componentDirectory, projectInfo, filepathExports } =
     await askForTopLevelDirectoryOrDetermineFromConfig({
       dir,
       hasConfigFile,
@@ -676,6 +721,7 @@ export async function runWizard(cmd: BaseCommand) {
   const componentsFromFile = await fetchTopLevelComponentsFromFile({
     accessToken,
     figmaUrl: figmaFileUrl,
+    cmd,
   })
 
   if (!componentsFromFile) {
@@ -704,7 +750,7 @@ export async function runWizard(cmd: BaseCommand) {
     }
   }
 
-  const linkedNodeIdsToPaths = {}
+  const linkedNodeIdsToFilepathExports = {}
 
   const { unconnectedComponents, connectedComponentsMappings } =
     await getUnconnectedComponentsAndConnectedComponentMappings(
@@ -716,16 +762,16 @@ export async function runWizard(cmd: BaseCommand) {
 
   autoLinkComponents({
     unconnectedComponents,
-    linkedNodeIdsToPaths,
-    componentPaths,
+    linkedNodeIdsToFilepathExports,
+    filepathExports,
   })
 
   logger.info(
     boxen(
       `${chalk.bold(`Connecting your components`)}\n\n` +
         `${chalk.green(
-          `${chalk.bold(Object.keys(linkedNodeIdsToPaths).length)} ${
-            Object.keys(linkedNodeIdsToPaths).length === 1
+          `${chalk.bold(Object.keys(linkedNodeIdsToFilepathExports).length)} ${
+            Object.keys(linkedNodeIdsToFilepathExports).length === 1
               ? 'component was automatically matched based on its name'
               : 'components were automatically matched based on their names'
           }`,
@@ -750,8 +796,8 @@ export async function runWizard(cmd: BaseCommand) {
   const outDir = await runManualLinkingWithConfirmation({
     unconnectedComponents,
     connectedComponentsMappings,
-    linkedNodeIdsToPaths,
-    componentPaths,
+    linkedNodeIdsToFilepathExports,
+    filepathExports,
     cmd,
   })
 
@@ -764,7 +810,7 @@ export async function runWizard(cmd: BaseCommand) {
   )
 
   await createCodeConnectFiles({
-    linkedNodeIdsToPaths,
+    linkedNodeIdsToFilepathExports,
     unconnectedComponentsMap,
     figmaFileUrl,
     outDir,

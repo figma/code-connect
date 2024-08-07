@@ -110,7 +110,10 @@ function _fcc_renderPropValue(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) 
 }
 
 // Render a React prop correctly, based on its type
-function _fcc_renderReactProp(name: string, prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) {
+function _fcc_renderReactProp(
+  name: string,
+  prop: FCCValue | { type: 'CODE' | 'INSTANCE' | 'ERROR' }[],
+) {
   // If the value is an array, then it's an array of objects representing React
   // children (either of type INSTANCE for pills, or CODE for inline code). The
   // template string handler in the template API handles extracting the instance
@@ -191,8 +194,15 @@ function _fcc_renderReactChildren(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }
     return figma.tsx`{\`${prop.value}\`}`
   }
 
-  // any other enum should be output as-is
-  return prop.value
+  // If the value is a JSX element, return it directly
+  if (prop.type === 'jsx-element') {
+    return prop.value
+  }
+
+  // but for other values, wrap in braces
+  if (prop.type === 'function' || prop.type === 'identifier' || prop.type === 'object') {
+    return `{${prop.value}}`
+  }
 }
 
 // Return the helpers as a string which can be injected into the template

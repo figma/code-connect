@@ -76,11 +76,11 @@ describe('getComponentChoicesForPrompt', () => {
       [
         {
           componentName: 'some connected component',
-          path: '/foo/connectedComponent1.tsx',
+          filepathExport: '/foo/connectedComponent1.tsx',
         },
         {
           componentName: 'another connected component',
-          path: '/foo/connectedComponent2.tsx',
+          filepathExport: '/foo/connectedComponent2.tsx',
         },
       ],
       '/',
@@ -151,7 +151,7 @@ describe('getUnconnectedComponentsAndConnectedComponentMappings', () => {
         },
       ],
       connectedComponentsMappings: [
-        { componentName: 'a reeeeeeeally long component name', path: 'Modal.tsx' },
+        { componentName: 'a reeeeeeeally long component name', filepathExport: 'Modal.tsx' },
       ],
     })
   })

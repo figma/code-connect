@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { exitWithError, logger } from '../common/logging'
-import { CodeConnectExecutableParserConfig, FirstPartyExecutableParser } from './project'
+import {
+  CodeConnectExecutableParserConfig,
+  FirstPartyExecutableParser,
+  FirstPartyParser,
+} from './project'
 import {
   CreateResponsePayload,
   ParserExecutableMessages,
@@ -14,6 +18,7 @@ import {
   getGradleWrapperExecutablePath,
   getGradleWrapperPath,
 } from '../parser_scripts/get_gradlew_path'
+import { getComposeErrorSuggestion } from '../parser_scripts/compose_errors'
 
 const temporaryInputFilePath = 'tmp/figma-code-connect-parser-input.json.tmp'
 
@@ -82,6 +87,7 @@ export async function callParser(
       })
 
       let stdout = ''
+      let stderr = ''
 
       child.stdout.on('data', (data) => {
         stdout += data.toString()
@@ -102,18 +108,25 @@ export async function callParser(
       // Non-JSON output will be logged as debug messages, as this is likely to
       // be e.g. compiler output which the user doesn't need to see ordinarily.
       child.stderr.on('data', (data) => {
-        const message = data.toString().trim()
+        const message = data.toString()
+        const trimmedMessage = message.trim()
         try {
-          const parsed = JSON.parse(message)
+          const parsed = JSON.parse(trimmedMessage)
           handleMessages([parsed])
         } catch (e) {
-          logger.debug(message)
+          stderr += message
+          logger.debug(trimmedMessage)
         }
       })
 
       child.on('close', (code) => {
         if (code !== 0) {
-          reject(new Error(`Parser exited with code ${code}`))
+          const errorSuggestion = determineErrorSuggestionFromStderr(stderr, config.parser)
+          if (errorSuggestion) {
+            reject(new Error(`Parser exited with code ${code}: ${errorSuggestion}`))
+          } else {
+            reject(new Error(`Parser exited with code ${code}`))
+          }
         } else {
           resolve(JSON.parse(stdout))
         }
@@ -131,7 +144,7 @@ export async function callParser(
       }
     } catch (e) {
       exitWithError(
-        `Error calling parser: ${e}, try re-running the command with --verbose for more information.`,
+        `Error calling parser: ${e}. Try re-running the command with --verbose for more information.`,
       )
     }
   })
@@ -159,4 +172,18 @@ export function handleMessages(messages: z.infer<typeof ParserExecutableMessages
   })
 
   return { hasErrors }
+}
+
+// This function is used to determine if there is a suggestion for the error based on the output
+// to stderr. Certain parsers return the same error code for different types of errors such as
+// errors from invoking the gradle wrapper for Compose.
+// In the future we should consider exposing a different API for having the parser return a suggestion directly.
+function determineErrorSuggestionFromStderr(
+  stderr: string,
+  parser: FirstPartyParser,
+): string | null {
+  if (parser === 'compose') {
+    return getComposeErrorSuggestion(stderr)
+  }
+  return null
 }

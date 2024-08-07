@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { BaseCodeConnectObject } from '../common/figma_connect'
+import { FigmaRestApi } from './figma_rest_api'
 
 export type ParseRequestPayload = {
   mode: 'PARSE'
@@ -113,6 +114,11 @@ export const ParseResponsePayload = z.object({
   messages: ParserExecutableMessages,
 })
 
+export type SupportedMappingType =
+  | FigmaRestApi.ComponentPropertyType.Text
+  | FigmaRestApi.ComponentPropertyType.Boolean
+export type PropMapping = Record<string, { codePropName: string; mapping: SupportedMappingType }>
+
 export type CreateRequestPayload = {
   mode: 'CREATE'
   // Absolute destination directory for the created file. The parser is free to
@@ -122,6 +128,13 @@ export type CreateRequestPayload = {
   // Optional destination file name. If omitted, the parser can determine the
   // file name itself.
   destinationFile?: string
+  // The filepath of the code to be connected. If present, this is used instead of
+  // component.normalizedName
+  sourceFilepath?: string
+  // The export to use from sourceFilepath (TypeScript only)
+  sourceExport?: string
+  // A mapping of how Figma props should map to code properties
+  propMapping?: PropMapping
   // Information about the Figma component. This matches the REST API (except the
   // figmaNodeUrl and normalizedName fields), which should make it easier to
   // implement and maintain as we can just pass it through

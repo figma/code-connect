@@ -72,6 +72,10 @@ export function addConnectCommandToProgram(program: commander.Command) {
   )
     .option('--skip-validation', 'skip validation of Code Connect docs')
     .option('-l --label <label>', 'label to apply to the published files')
+    .option(
+      '-b --batch-size <batch_size>',
+      'optional batch size (in number of documents) to use when uploading. Use this if you hit "request too large" errors. See README for more information.',
+    )
     .action(withUpdateCheck(handlePublish))
 
   addBaseCommand(
@@ -218,7 +222,7 @@ export async function getCodeConnectObjects(
   } catch (e) {
     // zod-validation-error formats the error message into a readable format
     exitWithError(
-      `Error returned from parser: ${fromError(e)}, try re-running the command with --verbose for more information.`,
+      `Error returned from parser: ${fromError(e)}. Try re-running the command with --verbose for more information.`,
     )
   }
 }
@@ -277,7 +281,9 @@ async function getReactCodeConnectObjects(
   return allCodeConnectObjects
 }
 
-async function handlePublish(cmd: BaseCommand & { skipValidation: boolean; label: string }) {
+async function handlePublish(
+  cmd: BaseCommand & { skipValidation: boolean; label: string; batchSize: string },
+) {
   setupHandler(cmd)
 
   let dir = getDir(cmd)
@@ -326,7 +332,16 @@ async function handlePublish(cmd: BaseCommand & { skipValidation: boolean; label
     process.exit(0)
   }
 
-  upload({ accessToken, docs: codeConnectObjects })
+  let batchSize
+  if (cmd.batchSize) {
+    batchSize = parseInt(cmd.batchSize, 10)
+    if (isNaN(batchSize)) {
+      logger.error('Error: failed to parse batch-size. batch-size passed must be a number')
+      exitWithFeedbackMessage(1)
+    }
+  }
+
+  upload({ accessToken, docs: codeConnectObjects, batchSize: batchSize, verbose: cmd.verbose })
 }
 
 async function handleUnpublish(cmd: BaseCommand & { node: string; label: string }) {

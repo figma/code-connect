@@ -7,6 +7,6 @@ export type AutolinkingTestCase = {
     name: FigmaRestApi.Component['name']
     id: FigmaRestApi.Component['id']
   }[]
-  componentPaths: string[]
+  filepathExports: string[]
   perfectResult: Record<string, string>
 }

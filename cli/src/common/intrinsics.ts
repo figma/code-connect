@@ -466,7 +466,7 @@ export function intrinsicToString({ kind, args }: Intrinsic, childLayer?: string
       return `[${args.className.map((className) => (typeof className === 'string' ? `"${className}"` : `${intrinsicToString(className, childLayer)}`)).join(', ')}].filter(v => !!v).join(' ')`
     }
     case IntrinsicKind.TextContent: {
-      return `${selector}.__findChildWithCriteria__({ name: '${args.layer}', type: "TEXT" }).textContent`
+      return `${selector}.__findChildWithCriteria__({ name: '${args.layer}', type: "TEXT" }).__render__()`
     }
     case IntrinsicKind.NestedProps: {
       throw new ParserError(

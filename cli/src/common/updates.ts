@@ -4,30 +4,35 @@ import { execSync, spawnSync } from 'child_process'
 import axios from 'axios'
 import { compareVersions } from 'compare-versions'
 import { BaseCommand } from '../commands/connect'
+import { Command } from 'commander'
 
 let updatedVersionAvailable: string | false | undefined = undefined
 let message: string | undefined = undefined
 
-type EndsWithBaseCommand<T extends BaseCommand> = [...any[], T]
+// The type of the arguments passed to a command handler:
+// any arguments, then the command arguments, then the Command object
+type CommandArgs<T extends BaseCommand> = [...any[], T, Command]
 
 // Wrap action handlers to check for updates or a message, and output a message
 // after the action if any are available
 export function withUpdateCheck<T extends BaseCommand>(
-  // The last argument is always the command, but I couldn't work out how to
-  // model this with Typescript here
+  // The second to last argument is always the command args, but I couldn't work
+  // out how to model this with Typescript here
   fn: (...args: any[]) => void | Promise<void>,
 ) {
-  return (...args: EndsWithBaseCommand<T>) => {
-    const command = args[args.length - 1]
-    const restArgs = args.slice(0, -1)
+  return (...args: CommandArgs<T>) => {
+    // Get the args passed at the command line (the second to last argument)
+    const commandArgs = args[args.length - 2]
+    // Anything before that is a regular arg
+    const restArgs = args.slice(0, -2)
 
-    if (command.skipUpdateCheck) {
-      return fn(...restArgs, command)
+    if (commandArgs.skipUpdateCheck) {
+      return fn(...restArgs, commandArgs)
     }
 
     startUpdateCheck()
 
-    const result = fn(...restArgs, command)
+    const result = fn(...restArgs, commandArgs)
     if (result instanceof Promise) {
       result.finally(waitAndCheckForUpdates)
     } else {

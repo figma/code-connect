@@ -52,7 +52,7 @@ let package = Package(
             ],
             path: "swiftui/Tests/CodeConnectParserTest",
             resources: [
-                .copy("Button.figma.test"),
+                .copy("Samples.figma.test"),
             ]
         )
     ]

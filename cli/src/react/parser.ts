@@ -206,6 +206,175 @@ function getImportsForIdentifiers({ sourceFile }: ParserContext, _identifiers: s
   return imports
 }
 
+function findCallExpression(node: ts.Node): ts.CallExpression {
+  if (ts.isCallExpression(node)) {
+    return node
+  } else {
+    return ts.forEachChild(node, findCallExpression) as ts.CallExpression
+  }
+}
+
+/**
+ * Traverses the AST and finds the first arrow function declaration
+ * @param node
+ * @returns
+ */
+function findDescendantArrowFunction(node: ts.Node): ts.ArrowFunction {
+  if (ts.isArrowFunction(node)) {
+    return node
+  } else {
+    return ts.forEachChild(node, findDescendantArrowFunction) as ts.ArrowFunction
+  }
+}
+
+/**
+ * Traverses the AST and finds the first function expression
+ * (handles forwardRef:d component declarations)
+ * @param node
+ * @returns
+ */
+function findDescendantFunctionExpression(node: ts.Node): ts.FunctionExpression {
+  if (ts.isFunctionExpression(node)) {
+    return node
+  } else {
+    return ts.forEachChild(node, findDescendantFunctionExpression) as ts.FunctionExpression
+  }
+}
+
+function getDeclarationFromSymbol(symbol: ts.Symbol) {
+  if (!symbol.declarations || !symbol.declarations.length) {
+    throw new Error(`No declarations found in symbol ${symbol.escapedName}`)
+  }
+  return symbol.declarations[0]
+}
+
+/**
+ * This handles a number of cases for finding the function expression of an exported symbol:
+ * - A function that is exported directly (function declaration)
+ * - A function that is exported as a variable (arrow function)
+ * - A function expression wrapped in a forwardRef
+ * - A function expression wrapped in a memo call
+ * @param declaration an exported function declaration
+ * @param checker
+ */
+function findFunctionExpression(
+  declaration: ts.Declaration,
+  checker: ts.TypeChecker,
+  sourceFile: ts.SourceFile,
+) {
+  let functionExpression: ts.FunctionExpression | ts.ArrowFunction
+
+  // Example: export function Button() {}
+  if (ts.isFunctionDeclaration(declaration)) {
+    return declaration
+  }
+
+  // Example: export const Button = forwardRef(function Button() {})
+  if ((functionExpression = findDescendantFunctionExpression(declaration))) {
+    return functionExpression
+  }
+
+  // Example: export const Button = () => {}
+  if ((functionExpression = findDescendantArrowFunction(declaration))) {
+    return functionExpression
+  }
+
+  // Example: export const MemoButton = memo(Button)
+  // Example: export const ButtonWithRef = forwardRef(Button)
+  if (ts.isVariableDeclaration(declaration)) {
+    const callExpression = findCallExpression(declaration)
+    const component = callExpression.arguments[0]
+    // follow the symbol to its declaration, then try to find the function expression again
+    const componentSymbol = checker.getSymbolAtLocation(component)
+
+    if (!componentSymbol) {
+      throw new Error('No symbol found at location')
+    }
+
+    const componentDeclaration = getDeclarationFromSymbol(componentSymbol)
+    return findFunctionExpression(componentDeclaration, checker, sourceFile)
+  }
+
+  throw new ParserError('Failed to find function expression for component', {
+    sourceFile,
+    node: declaration,
+  })
+}
+
+export type ComponentTypeSignature = Record<string, string>
+
+/**
+ * Extracts the type signature from the interface of a React component as a map of
+ * keys to strings representing the type of that property. Appends a '?' to the value
+ * if it's optional. Example:
+ * {
+ *  name: string
+ *  disabled: ?boolean
+ * }
+ * @param symbol the symbol of the function declaration of the component (in the source file)
+ * @param sourceFile the source file with the component definition
+ * @param checker
+ * @returns
+ */
+export function extractComponentTypeSignature(
+  symbol: ts.Symbol,
+  checker: ts.TypeChecker,
+  sourceFile: ts.SourceFile,
+) {
+  const declaration = getDeclarationFromSymbol(symbol)
+
+  const ReactInterfaceNames = ['HTMLAttributes', 'Attributes', 'AriaAttributes', 'DOMAttributes']
+
+  const functionExpression = findFunctionExpression(declaration, checker, sourceFile)
+  const propsType: ts.Type = checker.getTypeAtLocation(functionExpression.parameters[0])
+
+  if (!propsType) {
+    throw new InternalError(
+      `Failed to extract props from component declaration: ${declaration.getText()}`,
+    )
+  }
+
+  const propsMap: ComponentTypeSignature = {}
+  const props = propsType.getProperties()
+  for (const prop of props) {
+    // Skip props that are inherited from React types
+    // NOTE: this is pretty naive, in the future we might want to
+    // actually traverse the AST to determine if the types are declared
+    // in the React namespace
+
+    const parent = getDeclarationFromSymbol(prop).parent
+    if (ts.isInterfaceDeclaration(parent)) {
+      const parentInterfaceName = parent.name.getText()
+      if (
+        ReactInterfaceNames.includes(parentInterfaceName) ||
+        (parent.heritageClauses && parent.heritageClauses[0].getText().includes('HTMLAttributes'))
+      ) {
+        continue
+      }
+    }
+
+    if (!prop.valueDeclaration) {
+      throw new Error(`No valueDeclaration for symbol ${prop.escapedName}`)
+    }
+
+    const propType = checker.getTypeOfSymbolAtLocation(prop, prop.valueDeclaration)
+    let propTypeString = checker.typeToString(propType)
+
+    if (propType.isUnion()) {
+      // Get the types of the union
+      const unionTypes = propType.types
+
+      // Map each type to its string representation and join them with a comma
+      propTypeString = unionTypes.map((type) => checker.typeToString(type)).join(' | ')
+    }
+
+    propsMap[prop.name] =
+      prop.flags & ts.SymbolFlags.Optional ? `?${propTypeString}` : propTypeString
+  }
+
+  return propsMap
+}
+
 /**
  * Extract metadata about the referenced React component. Used by both the
  * Code Connect and Storybook commands.

@@ -320,6 +320,25 @@ figma.enum('Options', {
 
 // result is true for disabled variants otherwise undefined
 figma.enum('Variant', { Disabled: true })
+
+// enums mappings can be used to show a component based on a Figma variant
+figma.connect(Modal, 'https://...', {
+  props: {
+    cancelButton: figma.enum('Type', {
+      'Cancellable': <CancelButton />
+    }),
+    // ...
+  },
+  example: ({ cancelButton }) => {
+    return (
+      <Modal>
+        <Title>Title</Title>
+        <Content>Some content</Content>
+        {cancelButton}
+      </Modal>
+    )
+  },
+})
 ```
 
 Mapping objects for `figma.enum` as well as `figma.boolean` allows nested references, which is useful if you want to conditionally render a nested instance for example. (see the next section for how to use `figma.instance`)

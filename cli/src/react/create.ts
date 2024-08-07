@@ -2,8 +2,13 @@ import { camelCase } from 'lodash'
 import * as prettier from 'prettier'
 import fs from 'fs'
 import z from 'zod'
-import { CreateRequestPayload, CreateResponsePayload } from '../connect/parser_executable_types'
+import {
+  CreateRequestPayload,
+  CreateResponsePayload,
+  PropMapping,
+} from '../connect/parser_executable_types'
 import path from 'path'
+import { normalizeComponentName } from '../connect/create'
 
 function isBooleanKind(propValue: string) {
   const normalized = propValue.toLowerCase()
@@ -30,7 +35,7 @@ function normalizePropValue(name: string) {
   return name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
 }
 
-function generateProps(component: CreateRequestPayload['component']) {
+function generateProps(component: CreateRequestPayload['component'], propMapping?: PropMapping) {
   const props: string[] = []
   if (
     !component.componentPropertyDefinitions ||
@@ -40,15 +45,18 @@ function generateProps(component: CreateRequestPayload['component']) {
   }
 
   for (const [propName, propDef] of Object.entries(component.componentPropertyDefinitions)) {
-    const codePropName = generateCodePropName(propName)
+    const mappedProp = propMapping && propMapping[propName]
+    const codePropName = mappedProp ? mappedProp.codePropName : generateCodePropName(propName)
+    const type = mappedProp ? mappedProp.mapping : propDef.type
     const figmaPropName = normalizePropName(propName)
-    if (propDef.type === 'BOOLEAN') {
+
+    if (type === 'BOOLEAN') {
       props.push(`"${codePropName}": figma.boolean('${figmaPropName}')`)
     }
-    if (propDef.type === 'TEXT') {
+    if (type === 'TEXT') {
       props.push(`"${codePropName}": figma.string('${figmaPropName}')`)
     }
-    if (propDef.type === 'VARIANT') {
+    if (type === 'VARIANT') {
       const isBooleanVariant =
         propDef.variantOptions?.length === 2 && propDef.variantOptions.every(isBooleanKind)
       if (isBooleanVariant) {
@@ -61,7 +69,7 @@ function generateProps(component: CreateRequestPayload['component']) {
         )
       }
     }
-    if (propDef.type === 'INSTANCE_SWAP') {
+    if (type === 'INSTANCE_SWAP') {
       props.push(`"${codePropName}": figma.instance('${figmaPropName}')`)
     }
   }
@@ -73,17 +81,17 @@ function generateProps(component: CreateRequestPayload['component']) {
 function getOutFileName({
   outFile,
   outDir,
-  componentName,
+  sourceFilename,
 }: {
   outFile: string | undefined
   outDir: string
-  componentName: string
+  sourceFilename: string
 }): string {
   if (outFile) {
     return outFile
   }
 
-  const baseName = `${componentName}.figma.tsx`
+  const baseName = `${sourceFilename}.figma.tsx`
 
   if (outDir) {
     return path.join(outDir, baseName)
@@ -92,20 +100,71 @@ function getOutFileName({
   return path.join(process.env.INIT_CWD ?? process.cwd(), baseName)
 }
 
+// returns ES-style import path from given system path
+function formatImportPath(systemPath: string) {
+  // use forward slashes for import paths
+  let formattedImportPath = systemPath.replaceAll(path.sep, '/')
+
+  // prefix current dir paths with ./ (node path does not)
+  if (!formattedImportPath.startsWith('.')) {
+    formattedImportPath = `./${formattedImportPath}`
+  }
+
+  // assume not using ESM imports
+  return formattedImportPath.replace(/\.(jsx|tsx)$/, '')
+}
+
+function getImportsPath({
+  codeConnectFilePath,
+  sourceFilepath,
+  normalizedName,
+}: {
+  codeConnectFilePath: string
+  sourceFilepath?: string
+  normalizedName: string
+}) {
+  if (!sourceFilepath) {
+    return `./${normalizedName}`
+  }
+  const codeConnectFolder = path.dirname(codeConnectFilePath)
+  const pathToComponentFile = path.relative(codeConnectFolder, sourceFilepath)
+
+  return formatImportPath(pathToComponentFile)
+}
+
 export async function createReactCodeConnect(
   payload: CreateRequestPayload,
 ): Promise<z.infer<typeof CreateResponsePayload>> {
-  const { component, destinationFile, destinationDir } = payload
+  const { component, destinationFile, destinationDir, sourceFilepath, sourceExport, propMapping } =
+    payload
   const { normalizedName, figmaNodeUrl } = component
+
+  const sourceFilename = sourceFilepath
+    ? path.parse(sourceFilepath).name.split('.')[0]
+    : normalizedName
+
   const filePath = getOutFileName({
     outFile: destinationFile,
     outDir: destinationDir,
-    componentName: normalizedName,
+    sourceFilename,
   })
+
+  const importsPath = getImportsPath({
+    codeConnectFilePath: filePath,
+    sourceFilepath,
+    normalizedName,
+  })
+
+  const importName =
+    sourceFilepath && sourceExport
+      ? sourceExport === 'default'
+        ? normalizeComponentName(sourceFilename)
+        : sourceExport
+      : normalizedName
 
   const codeConnect = `
 import React from 'react'
-import { ${normalizedName} } from './${normalizedName}'
+import ${sourceExport === 'default' ? importName : `{ ${importName} }`} from '${importsPath}'
 import figma from '@figma/code-connect'
 
 /**
@@ -116,9 +175,9 @@ import figma from '@figma/code-connect'
  * code example you'd like to see in Figma
 */
 
-figma.connect(${normalizedName}, "${figmaNodeUrl}", {
-  props: ${generateProps(component)},
-  example: (props) => <${normalizedName} />
+figma.connect(${importName}, "${figmaNodeUrl}", {
+  props: ${generateProps(component, propMapping)},
+  example: (props) => <${importName} />
 })
 `
   let formatted = await prettier.format(codeConnect, {

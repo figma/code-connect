@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -32,6 +32,7 @@
     "test:swift": "npm run test -- --runInBand --testPathPattern=e2e_connect_command_swift.test.ts --testPathPattern=e2e_wizard_swift.test.ts",
     "test:non-mac": "npm run test -- --testPathIgnorePatterns=e2e_connect_command_swift.test.ts --testPathIgnorePatterns=e2e_wizard_swift.test.ts",
     "bundle": "npm run build && npm pack && mkdir -p bundle && mv figma-code-connect*.tgz bundle",
+    "bundle:local": "cp package.json package.json.bak && grep -v 'workspace:' package.json > package.json && npm run build && npm pack && mkdir -p bundle-local && mv figma-code-connect*.tgz bundle-local; mv package.json.bak package.json",
     "bundle:npm": "npm run build && npm pack && mkdir -p bundle-npm && mv figma-code-connect*.tgz bundle-npm",
     "bundle:cli": "npm run build:webpack && mkdir -p bundle-cli && pkg --compress Brotli webpack-dist/figma.js",
     "bundle:cli:linux": "npm run bundle:cli -- -o bundle-cli/figma-linux --target node18-linux-x64,node18-linux-arm64",

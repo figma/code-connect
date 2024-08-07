@@ -120,3 +120,10 @@ struct NonNestable: FigmaConnect {
     }
 }
 
+struct ComponentlessDefinition: FigmaConnect {
+    let figmaNodeUrl: String = "https://figma.com/file/abc/Test?node-id=123"
+    
+    var body: some View {
+        SomeElement()
+    }
+}

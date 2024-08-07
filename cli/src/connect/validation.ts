@@ -9,14 +9,14 @@ import { getApiUrl, getHeaders } from './figma_rest_api'
 import { BaseCommand } from '../commands/connect'
 
 export function parseFigmaNode(
-  cmd: BaseCommand,
+  verbose: boolean,
   doc: CodeConnectJSON,
   silent: boolean = false,
 ): { fileKey: string; nodeId: string } | null {
   const figmaNodeUrl = url.parse(doc.figmaNode, true)
   const fileKeyMatch = figmaNodeUrl.path?.match(/(file|design)\/([a-zA-Z0-9]+)/)
   if (!fileKeyMatch) {
-    if (!silent || cmd.verbose) {
+    if (!silent || verbose) {
       logger.error(`Failed to parse ${doc.figmaNode}`)
     }
     return null
@@ -27,7 +27,7 @@ export function parseFigmaNode(
     const figmaNodeId = validateNodeId(nodeId)
     return { fileKey, nodeId: figmaNodeId }
   } else {
-    if (!silent || cmd.verbose) {
+    if (!silent || verbose) {
       logger.error(`Failed to get node-id from ${doc.figmaNode}`)
     }
     return null
@@ -241,7 +241,7 @@ export async function validateDocs(
   const fileKeyToNodeIds: { [key: string]: any } = {}
   let valid = true
   docs.forEach((doc) => {
-    const parsedNode = parseFigmaNode(cmd, doc)
+    const parsedNode = parseFigmaNode(cmd.verbose, doc)
     if (!parsedNode) {
       valid = false
       return

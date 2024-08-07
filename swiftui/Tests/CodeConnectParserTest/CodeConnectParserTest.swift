@@ -94,10 +94,11 @@ class CodeConnectParserTest: XCTestCase {
                 ],
                 imports: [],
                 nestable: true
-            )
+            ),
+            functionName: "FigmaButton_doc"
         )
 
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "Button.figma", withExtension: "test"))
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "Samples.figma", withExtension: "test"))
         var figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:]).docs.first(where: {
             $0.component == "FigmaButton"
         }))
@@ -105,7 +106,7 @@ class CodeConnectParserTest: XCTestCase {
         // The source is not easily predictable as it depends on the location on disk,
         // so instead check it looks sensible, then set the doc's source to match the
         // expectation so we can still XCTAssertEqual instead of manually testing each field
-        XCTAssertTrue(figmadoc.source.hasSuffix("/Button.figma.test"))
+        XCTAssertTrue(figmadoc.source.hasSuffix("/Samples.figma.test"))
         figmadoc.source = expectedDoc.source
 
         XCTAssertEqual(figmadoc, expectedDoc)
@@ -175,16 +176,17 @@ class CodeConnectParserTest: XCTestCase {
                 ],
                 imports: [],
                 nestable: true
-            )
+            ),
+            functionName: "LegacyFigmaButton_doc"
         )
 
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "Button.figma", withExtension: "test"))
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "Samples.figma", withExtension: "test"))
         var figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:]).docs.first(where: { $0.component == "LegacyFigmaButton"}))
 
         // The source is not easily predictable as it depends on the location on disk,
         // so instead check it looks sensible, then set the doc's source to match the
         // expectation so we can still XCTAssertEqual instead of manually testing each field
-        XCTAssertTrue(figmadoc.source.hasSuffix("/Button.figma.test"))
+        XCTAssertTrue(figmadoc.source.hasSuffix("/Samples.figma.test"))
         figmadoc.source = expectedDoc.source
 
         XCTAssertEqual(figmadoc, expectedDoc)
@@ -204,11 +206,36 @@ class CodeConnectParserTest: XCTestCase {
                 props: [:],
                 imports: [],
                 nestable: false
-            )
+            ),
+            functionName: "NonNestable"
         )
 
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "Button.figma", withExtension: "test"))
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "Samples.figma", withExtension: "test"))
         let figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:])).docs.first(where: { $0.component == "AnyView" })
+
+        XCTAssertEqual(figmadoc, expectedDoc)
+    }
+    
+    func testNoComponentDefinition() throws {
+        let expectedDoc = CodeConnectDoc(
+            figmaNode: "https://figma.com/file/abc/Test?node-id=123",
+            source: "",
+            sourceLocation: CodeConnectDoc.SourceLocation(line: 0),
+            component: nil,
+            variant: [:],
+            template: JSTemplateTestHelpers.templateWithInitialBoilerplate("""
+            export default figma.swift`SomeElement()`
+            """),
+            templateData: TemplateData(
+                props: [:],
+                imports: [],
+                nestable: true
+            ),
+            functionName: "ComponentlessDefinition"
+        )
+
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "Samples.figma", withExtension: "test"))
+        let figmadoc = try XCTUnwrap(CodeConnectParser.createCodeConnects([url], importMapping: [:])).docs.first(where: { $0.component == nil })
 
         XCTAssertEqual(figmadoc, expectedDoc)
     }

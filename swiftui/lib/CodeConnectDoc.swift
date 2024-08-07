@@ -21,10 +21,11 @@ public struct CodeConnectDoc: Encodable, Equatable {
     public let figmaNode: String
     var source: String
     var sourceLocation: SourceLocation
-    let component: String
+    let component: String?
     let variant: [String: VariantValue]
     let template: String
     let templateData: TemplateData
+    let functionName: String
 
     // Default params
     let language: String = "swift"
@@ -33,14 +34,6 @@ public struct CodeConnectDoc: Encodable, Equatable {
     mutating func update(source: String, sourceLocation: SourceLocation) {
         self.source = source
         self.sourceLocation = sourceLocation
-    }
-
-    public func infoLabel() -> String {
-        var label = component
-        label = label + variant.map({ (key, value) in
-            "\(key)=\(value)"
-        }).joined(separator: " ")
-        return label + " " + figmaNode
     }
 }
 #endif

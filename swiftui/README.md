@@ -12,7 +12,7 @@ Follow the instructions [here](../README.md#cli-installation) to install the Cod
 
 ## Import the Figma package
 
-In addition to installing the CLI, you'll need to add the Code Connect Swift package to your project. This package contains helper functions and types associated with Code Connect, as well as the parser for Swift language support.
+In addition to installing the CLI, you'll need to add the Code Connect Swift package to your project. This package contains helper functions and types associated with Code Connect, as well as the parser for Swift language support. You'll also need to add the `Figma` dependency to your target that you'll be authoring Code Connect files in.
 
 ```swift
 let package = Package(
@@ -22,7 +22,14 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/figma/code-connect", from: "1.0.0"),
     ],
-    targets: [...]
+    targets: [
+      .target(
+         name: "MyTarget",
+         dependencies: [
+               .product(name: "Figma", package: "code-connect")
+         ]
+      )
+    ]
 )
 ```
 

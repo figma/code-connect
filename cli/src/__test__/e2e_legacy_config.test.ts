@@ -8,7 +8,15 @@ import { LONG_TEST_TIMEOUT_MS, tidyStdOutput } from './utils'
 describe('e2e test for legacy config handling', () => {
   async function runCommandInteractively(testCase: string, answer: string) {
     const command = 'npx'
-    const args = ['tsx', '../cli', 'connect', 'parse', '--dir', `./e2e_connect_command/${testCase}`]
+    const args = [
+      'tsx',
+      '../cli',
+      'connect',
+      'parse',
+      '--skip-update-check',
+      '--dir',
+      `./e2e_connect_command/${testCase}`,
+    ]
     const child = spawn(command, args, {
       cwd: __dirname,
       stdio: 'pipe',

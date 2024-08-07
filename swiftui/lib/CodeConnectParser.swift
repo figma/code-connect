@@ -297,10 +297,6 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
         }
 
         // Handle Errors
-
-        guard let component else {
-            throw ParserError.missingComponentDefinition(connectionName: node.name.text)
-        }
         guard let figmaNodeUrl else {
             throw ParserError.missingUrlDefinition(connectionName: node.name.text)
         }
@@ -335,7 +331,8 @@ class FigmaConnectStructVisitor: SyntaxVisitor {
             component: component,
             variant: variant ?? [:],
             template: template,
-            templateData: templateData
+            templateData: templateData,
+            functionName: node.name.text
         )
     }
 
@@ -372,6 +369,7 @@ public enum CodeConnectParser {
         var docs: [String: [CodeConnectDoc]] = [:]
         var messages: [ParserResultMessage] = []
         // First pass: Find all FCC definitions
+        var componentDefinitions: Set<String> = []
         paths.forEach { url in
             do {
                 guard let file = try? String(contentsOf: url) else { return }
@@ -379,9 +377,13 @@ public enum CodeConnectParser {
                 let finder = FigmaConnectStructVisitor(importMapping: importMapping, baseUrl: url)
                 finder.walk(syntaxTree)
                 finder.docs.forEach { doc in
-                    var docsForComponent = docs[doc.component, default: []]
+                    if let component = doc.component {
+                        componentDefinitions.insert(component)
+                    }
+                    let key = doc.component ?? doc.functionName
+                    var docsForComponent = docs[key, default: []]
                     docsForComponent.append(doc)
-                    docs[doc.component] = docsForComponent
+                    docs[key] = docsForComponent
                 }
                 messages += finder.messages
             }
@@ -393,7 +395,7 @@ public enum CodeConnectParser {
             let syntaxTree = Parser.parse(source: file)
             let converter = SourceLocationConverter(fileName: url.path, tree: syntaxTree)
             let structDefinitionFinder = StructDefinitionFinder(
-                definitionsToFind: Set(docs.keys),
+                definitionsToFind: componentDefinitions,
                 converter: converter
             )
             structDefinitionFinder.walk(syntaxTree)
