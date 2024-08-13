@@ -436,12 +436,14 @@ async function createCodeConnectFiles({
   unconnectedComponentsMap,
   outDir: outDirArg,
   projectInfo,
+  cmd,
 }: {
   figmaFileUrl: string
   linkedNodeIdsToFilepathExports: Record<string, string>
   unconnectedComponentsMap: Record<string, FigmaRestApi.Component>
   outDir: string | null
   projectInfo: ProjectInfo
+  cmd: BaseCommand
 }) {
   for (const [nodeId, filepathExport] of Object.entries(linkedNodeIdsToFilepathExports)) {
     const urlObj = new URL(figmaFileUrl)
@@ -465,6 +467,7 @@ async function createCodeConnectFiles({
               exportName,
               projectInfo: projectInfo as ReactProjectInfo,
               component: unconnectedComponentsMap[nodeId],
+              cmd,
             })
           : undefined,
       component: {
@@ -585,10 +588,12 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
   dir,
   hasConfigFile,
   config,
+  cmd,
 }: {
   dir: string
   hasConfigFile: boolean
   config: CodeConnectConfig
+  cmd: BaseCommand
 }) {
   let componentDirectory: string | null = null
 
@@ -639,7 +644,7 @@ async function askForTopLevelDirectoryOrDetermineFromConfig({
       projectInfo = getReactProjectInfo(projectInfo as ReactProjectInfo)
     }
 
-    const filepathExports = getFilepathExportsFromFiles(projectInfo)
+    const filepathExports = getFilepathExportsFromFiles(projectInfo, cmd)
     spinner.stop()
 
     if (!filepathExports.length) {
@@ -709,6 +714,7 @@ export async function runWizard(cmd: BaseCommand) {
       dir,
       hasConfigFile,
       config,
+      cmd,
     })
 
   const { figmaFileUrl } = await askQuestionOrExit({
@@ -815,5 +821,6 @@ export async function runWizard(cmd: BaseCommand) {
     figmaFileUrl,
     outDir,
     projectInfo,
+    cmd,
   })
 }

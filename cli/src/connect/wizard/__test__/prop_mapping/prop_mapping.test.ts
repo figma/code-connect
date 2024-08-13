@@ -99,6 +99,7 @@ describe('Prop mapping', () => {
             },
           },
         },
+        cmd: {} as any,
       })
       expect(result).toEqual({
         'Has Icon': {

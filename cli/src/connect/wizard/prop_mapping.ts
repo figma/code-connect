@@ -4,6 +4,8 @@ import { ComponentTypeSignature, extractComponentTypeSignature } from '../../rea
 import { FigmaRestApi } from '../figma_rest_api'
 import { PropMapping, SupportedMappingType } from '../parser_executable_types'
 import { MatchData, Searcher } from 'fast-fuzzy'
+import { BaseCommand } from '../../commands/connect'
+import { logger } from '../../common/logging'
 
 const PROP_MINIMUM_MATCH_THRESHOLD = 0.8
 
@@ -97,17 +99,28 @@ export function generatePropMapping({
   filepath,
   projectInfo,
   component,
+  cmd,
 }: {
   exportName: string
   filepath: string
   projectInfo: ReactProjectInfo
   component: FigmaRestApi.Component
-}): PropMapping {
-  const signature = extractSignature({
-    nameToFind: exportName,
-    sourceFilePath: filepath,
-    projectInfo,
-  })
+  cmd: BaseCommand
+}): PropMapping | undefined {
+  let signature: ComponentTypeSignature
+
+  try {
+    signature = extractSignature({
+      nameToFind: exportName,
+      sourceFilePath: filepath,
+      projectInfo,
+    })
+  } catch (e) {
+    if (cmd.verbose) {
+      logger.warn(`Could not extract signature for "${exportName}" in ${filepath}`)
+    }
+    return undefined
+  }
 
   const matchableCodeProps = Object.keys(signature).reduce((acc, key) => {
     acc[getMatchableStr(key)] = key
@@ -123,28 +136,31 @@ export function generatePropMapping({
   const searchSpace = Object.keys(matchableCodeProps)
   const searcher = new Searcher(searchSpace)
 
-  Object.entries(component.componentPropertyDefinitions).forEach(
-    ([propertyName, componentPropertyDefinition]) => {
-      const results = searcher.search(getMatchableStr(propertyName), { returnMatchData: true })
-      const bestMatch = results[0]
-      const matchingCodeProp = matchableCodeProps[bestMatch?.item]
+  if (component.componentPropertyDefinitions) {
+    Object.entries(component.componentPropertyDefinitions).forEach(
+      ([propertyName, componentPropertyDefinition]) => {
+        const results = searcher.search(getMatchableStr(propertyName), { returnMatchData: true })
+        const bestMatch = results[0]
+        const matchingCodeProp = matchableCodeProps[bestMatch?.item]
 
-      if (
-        bestMatch &&
-        bestMatch.score > PROP_MINIMUM_MATCH_THRESHOLD &&
-        getComponentPropertyTypeFromSignature(signature[matchingCodeProp]) ===
-          componentPropertyDefinition.type &&
-        isBestMatchForProp(bestMatch)
-      ) {
-        matchedPropScores[bestMatch.item] = {
-          codePropName: matchingCodeProp,
-          figmaPropName: propertyName,
-          figmaPropType: componentPropertyDefinition.type,
-          score: bestMatch.score,
+        if (
+          bestMatch &&
+          bestMatch.score > PROP_MINIMUM_MATCH_THRESHOLD &&
+          getComponentPropertyTypeFromSignature(signature[matchingCodeProp]) ===
+            componentPropertyDefinition.type &&
+          isBestMatchForProp(bestMatch)
+        ) {
+          matchedPropScores[bestMatch.item] = {
+            codePropName: matchingCodeProp,
+            figmaPropName: propertyName,
+            figmaPropType: componentPropertyDefinition.type,
+            score: bestMatch.score,
+          }
         }
-      }
-    },
-  )
+      },
+    )
+  }
+
   return Object.entries(matchedPropScores).reduce(
     (acc, [_, { codePropName, figmaPropName, figmaPropType }]) => {
       acc[figmaPropName] = {

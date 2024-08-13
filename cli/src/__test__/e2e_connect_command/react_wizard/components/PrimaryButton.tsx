@@ -11,6 +11,9 @@ interface ButtonProps {
  * @param disabled disable the button
  * @returns JSX element
  */
-export const PrimaryButton = ({ children, disabled = false }: ButtonProps) => {
+const InnerComponent = ({ children, disabled = false }: ButtonProps) => {
   return <button disabled={disabled}>{children}</button>
 }
+
+// Aliases not yet supported by wizard, signature gen should fail gracefully
+export const PrimaryButton = InnerComponent

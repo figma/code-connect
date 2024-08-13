@@ -11,6 +11,7 @@ import { logger, success } from '../../common/logging'
 import path from 'path'
 import prompts, { Choice } from 'prompts'
 import { isFigmaConnectFile } from '../../react/parser'
+import { BaseCommand } from '../../commands/connect'
 
 
 /**
@@ -118,7 +119,7 @@ export function getComponentOptionsMap(filepathExports: string[]) {
  * @param projectInfo
  * @returns an array of components in the format `${filepath}~${componentName}
  */
-export function getFilepathExportsFromFiles(projectInfo: ProjectInfo) {
+export function getFilepathExportsFromFiles(projectInfo: ProjectInfo, cmd: BaseCommand) {
   return projectInfo.files.reduce((options, filepath) => {
     if (projectInfo.config.parser === 'react') {
       const { tsProgram } = projectInfo as ReactProjectInfo
@@ -128,12 +129,19 @@ export function getFilepathExportsFromFiles(projectInfo: ProjectInfo) {
         if (!sourceFile) {
           throw new Error(`Could not parse file ${filepath}`)
         }
-        const sourceFileSymbol = checker.getSymbolAtLocation(sourceFile)!
-        const exports = checker.getExportsOfModule(sourceFileSymbol)
+        try {
+          const sourceFileSymbol = checker.getSymbolAtLocation(sourceFile)!
+          const exports = checker.getExportsOfModule(sourceFileSymbol)
 
-        exports.forEach((exp) => {
-          options.push(getFilepathExport(filepath, exp.getName()))
-        })
+          exports.forEach((exp) => {
+            options.push(getFilepathExport(filepath, exp.getName()))
+          })
+        } catch (e) {
+          if (cmd.verbose) {
+            logger.warn(`Could not get exports from ${filepath}`)
+          }
+          // ignore invalid files
+        }
       }
     } else {
       options.push(filepath)

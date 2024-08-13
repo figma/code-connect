@@ -1,3 +1,10 @@
+# Code Connect v1.0.5 (13th August 2024)
+
+## Fixed
+
+### React
+- Fixed an issue around creation of Code Connect files from the CLI assistant (fixes https://github.com/figma/code-connect/issues/125)
+
 # Code Connect v1.0.4 (7th August 2024)
 
 ## Fixed

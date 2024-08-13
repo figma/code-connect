@@ -86,7 +86,7 @@ describe('getFilepathExportsFromFiles', () => {
   })
 
   it('generates list of file component keys from ProjectInfo', () => {
-    const result = getFilepathExportsFromFiles(projectInfo)
+    const result = getFilepathExportsFromFiles(projectInfo, {} as any)
     expect(result.map((filepath) => path.parse(filepath).base)).toEqual([
       'MyComponent.tsx~MyComponent',
       'MyComponent.tsx~MyComponentProps', // TODO ideally we'd filter out by type here
