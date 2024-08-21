@@ -13,6 +13,12 @@ import prompts, { Choice } from 'prompts'
 import { isFigmaConnectFile } from '../../react/parser'
 import { BaseCommand } from '../../commands/connect'
 
+export function maybePrefillWizardQuestionsForTesting() {
+  if (process.env.JEST_WORKER_ID && process.env.WIZARD_ANSWERS_TO_PREFILL) {
+    const unescapedJson = JSON.parse(process.env.WIZARD_ANSWERS_TO_PREFILL.replace(/\\"/g, '"'))
+    prompts.inject(unescapedJson)
+  }
+}
 
 /**
  *

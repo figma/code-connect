@@ -883,10 +883,11 @@ export function parseRenderFunction(
     },
   )
 
-  // Replace object values like `{ prop: __PROP__("propName") }` with
-  // `{ prop: ${propName} }`. These never need special treatment based on their type.
+  // Replace object values like `{ prop: __PROP__("propName") }` or `{
+  // 'aria-prop': __PROP__("propName") }` with `{ prop: ${propName} }`. These
+  // never need special treatment based on their type.
   exampleCode = exampleCode.replace(
-    /([A-Za-z0-9]+):\s+__PROP__\("([A-Za-z_\.]+)"\)/g,
+    /([^\s]+):\s+__PROP__\("([A-Za-z_\.]+)"\)/g,
     (_match, objectKey, figmaPropName) => {
       return `${objectKey}: \${_fcc_renderPropValue(${figmaPropName})}`
     },

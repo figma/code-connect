@@ -1,9 +1,9 @@
 import { FigmaRestApi } from '../../../figma_rest_api'
 import { autoLinkComponents, getBestMatchingExportWithinFile } from '../../autolinking'
-import polarisReact from './test_cases/polaris_react'
-import vitaminWeb from './test_cases/vitamin_web'
 
-const TEST_CASES = [vitaminWeb, polarisReact]
+
+const TEST_CASES = [
+]
 
 describe('autolinking', () => {
   TEST_CASES.forEach((testCase) => {

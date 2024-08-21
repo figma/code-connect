@@ -16,7 +16,7 @@ Add the Gradle plugin to your module `build.gradle.kts` file.
 
 ```
 plugins {
-   id("com.figma.code.connect") version "1.0.0"
+   id("com.figma.code.connect") version "1.+"
 }
 ```
 
@@ -26,7 +26,7 @@ In order to start authoring Code Connect files, add the following dependencies t
 
 ```
 dependencies {
-    implementation("com.figma.code.connect:plugin:1.0.0")
+    implementation("com.figma.code.connect:plugin:1.+")
 }
 ```
 

@@ -116,6 +116,7 @@ In addition to the [general configuration](../README.md#general-configuration) f
 ```jsonp
 {
   "codeConnect": {
+    "parser": "react",
     "include": [],
     "exclude": ["test/**", "docs/**", "build/**"],
     "importPaths": {
@@ -246,7 +247,6 @@ export function ButtonExample({ label, disabled, type }) {
 
 The `figma` import contains helpers for mapping all sorts of properties from design to code. They work for simple mappings where only the naming differs between Figma and code, as well as more complex mappings where the type differs. See the below reference for all the helpers that exist and the ways you can use them to connect Figma and code components using Code Connect.
 
-
 ### figma.connect
 
 `figma.connect()` has two signatures for connecting components.
@@ -288,16 +288,15 @@ figma.boolean('Has Icon', {
   true: <Icon />,
   false: <Spacer />,
 })
-
 ```
 
 In some cases, you only want to render a certain prop if it matches some value in Figma. You can do this either by passing a partial mapping object, or setting the value to `undefined`.
 
 ```tsx
 // Don't render the prop if 'Has label' in figma is `false`
-figma.boolean("Has label", {
-  true: figma.string("Label"),
-  false: undefined
+figma.boolean('Has label', {
+  true: figma.string('Label'),
+  false: undefined,
 })
 ```
 
@@ -325,7 +324,7 @@ figma.enum('Variant', { Disabled: true })
 figma.connect(Modal, 'https://...', {
   props: {
     cancelButton: figma.enum('Type', {
-      'Cancellable': <CancelButton />
+      Cancellable: <CancelButton />,
     }),
     // ...
   },
@@ -402,10 +401,10 @@ It's common for components in Figma to have child instances that aren't bound to
 To illustrate this, consider the layer hierarchy in a component vs an instance of that component:
 
 Button (Component)
-  Icon (Instance) -- "Icon" is the original name of the layer, this is what you should pass to `figma.children()`
+Icon (Instance) -- "Icon" is the original name of the layer, this is what you should pass to `figma.children()`
 
 Button (Instance)
-  RenamedIcon (Instance) -- here the instance layer was renamed, which won't break the mapping since we're not using this name
+RenamedIcon (Instance) -- here the instance layer was renamed, which won't break the mapping since we're not using this name
 
 Note that the nested instance also must be connected separately.
 
@@ -421,7 +420,7 @@ figma.children(['Tab 1', 'Tab 2'])
 
 ### Wildcard match
 
-`figma.children()` can be used with a single wildcard '*' character, to partially match names or to render any nested child. Wildcards cannot be used with the array argument. Matches are case sensitive.
+`figma.children()` can be used with a single wildcard '\*' character, to partially match names or to render any nested child. Wildcards cannot be used with the array argument. Matches are case sensitive.
 
 ```tsx
 // map any (all) child instances
@@ -478,6 +477,7 @@ figma.connect("https://...", {
 ```
 
 In Dev Mode this will display as:
+
 ```
 <button className="btn-base btn-large btn-disabled" />
 ```

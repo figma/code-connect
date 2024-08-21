@@ -1,6 +1,23 @@
+# Code Connect v1.0.6 (21st August 2024)
+
+## Fixed
+
+### React
+- Fixed issue where props with special characters such as hyphens would not render properly. (https://github.com/figma/code-connect/issues/116)
+
+## Features
+
+
+### React
+- figma.enum now supports floating point numbers
+
+### Compose
+- Update the dependency for Code Connect to use Kotlin 2.0 libraries
+
+
 # Code Connect v1.0.5 (13th August 2024)
 
-## Fixed
+## Fixed
 
 ### React
 - Fixed an issue around creation of Code Connect files from the CLI assistant (fixes https://github.com/figma/code-connect/issues/125)

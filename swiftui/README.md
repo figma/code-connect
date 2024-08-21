@@ -38,7 +38,7 @@ let package = Package(
 To connect your first component, start by going to Dev Mode in Figma and right-click on the component you want to connect, then choose to `Copy link to selection`. Make sure you are copying the link to a main component and not an instance of the component. The main component will typically be located in a centralized design system library file. Using this link, run `figma connect create` from within your SwiftUI project. If you encounter errors, please check if you need additional [configuration](#configuration) for your project.
 
 ```sh
-figma connect create https://... --token <auth token>
+figma connect create "https://..." --token <auth token>
 ```
 
 This will create a Code Connect file with some basic scaffolding for the component you want to connect. By default this file will be called `<component-name>.figma.swift` based on the name of the component in Figma. However, you may rename this file as you see fit. The scaffolding that is generated is based on the interface of the component in Figma. Depending on how closely this matches your code component you'll need to make some edits to this file before you publish it.
@@ -177,6 +177,7 @@ struct Button_connection : FigmaConnect {
    }
 }
 ```
+
 `@FigmaString` is used to map strings directly. `@FigmaBoolean` is used to map booleans. Variants in Figma can be mapped using `@FigmaEnum`. For nested instances, `@FigmaInstance` should be used.
 
 ```swift
@@ -211,29 +212,28 @@ Or setting a boolean to true when a specific enum option is specified in Figma.
 @FigmaEnum("Type", mapping: [ "Disabled": true ]) var isDisabled: Bool
 ```
 
-
 ### Hiding Default Values
 
 For certain types of mapped properties, you may want to hide them if their default value is shown. For example, you may want to display a `.disabled(true)` modifier if a component has a `Disabled = True` boolean property, but not show anything otherwise. You can use the `hideDefault` parameter on `@FigmaEnum` or `@FigmaBoolean` to represent this.
 
- ```swift
-    @FigmaBoolean("Disabled", hideDefault: true)
-    var disabled: Bool = false
+```swift
+   @FigmaBoolean("Disabled", hideDefault: true)
+   var disabled: Bool = false
 
-    var body: some View {
-        MyView()
-            .disabled(self.disabled)
-    }
- ```
+   var body: some View {
+       MyView()
+           .disabled(self.disabled)
+   }
+```
 
 If the component in Figma has `Disabled = True`, the resulting code will show
+
 ```swift
 MyView()
    .disabled(true)
 ```
 
 If `Disabled = false` the resulting code will simply be `MyView()`.
-
 
 ## Instance children
 
@@ -334,11 +334,14 @@ struct MyComponent_doc: FigmaConnect {
 ```
 
 In the above example, if the value of `State = Primary` in Figma, the resultant code will be
+
 ```swift
 MyComponent()
    .tint(.blue)
 ```
+
 Otherwise, it will be:
+
 ```swift
 MyComponent()
    .backgroundColor(.clear)

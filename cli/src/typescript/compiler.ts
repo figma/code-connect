@@ -383,7 +383,7 @@ export function convertObjectLiteralToJs(
       } else if (valueNode.kind === ts.SyntaxKind.NullKeyword) {
         obj[key] = null
       } else if (valueNode.kind === ts.SyntaxKind.NumericLiteral) {
-        obj[key] = parseInt(valueNode.getText(), 10)
+        obj[key] = parseFloat(valueNode.getText())
       } else {
         obj[key] = valueNode.getText()
       }
