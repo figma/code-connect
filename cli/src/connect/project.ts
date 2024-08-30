@@ -56,6 +56,11 @@ type BaseCodeConnectConfig = {
    * Label to use for the uploaded code examples
    */
   label?: string
+
+  /**
+   * Path to the custom Swift parser CLI
+   */
+  customSwiftCLIPath?: string
 }
 
 export type CodeConnectExecutableParserConfig = BaseCodeConnectConfig & {

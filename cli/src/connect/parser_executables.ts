@@ -34,7 +34,11 @@ type ParserInfo = {
 const FIRST_PARTY_PARSERS: Record<FirstPartyExecutableParser, ParserInfo> = {
   swift: {
     command: async (cwd, config, mode) => {
-      return `swift run --package-path ${await getSwiftParserDir(cwd, (config as any).xcodeprojPath)} figma-swift`
+      if (config.customSwiftCLIPath) {
+        return `${config.customSwiftCLIPath}`
+      } else {
+        return `swift run --package-path ${await getSwiftParserDir(cwd, (config as any).xcodeprojPath)} figma-swift`
+      }
     },
   },
   compose: {
