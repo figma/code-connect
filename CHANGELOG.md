@@ -1,3 +1,10 @@
+# Code Connect v1.1.1 (10th September 2024)
+
+## Fixed
+
+### General
+- Fixed an issue where the `@figma/code-connect@1.1.0` npm package had an incorrect README
+
 # Code Connect v1.1.0 (10th September 2024)
 
 ## Features

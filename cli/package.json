@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -56,6 +56,7 @@
     "bundle:cli:mac": "npm run bundle:cli -- -o bundle-cli/figma-mac --target node18-mac-x64,node18-mac-arm64",
     "bundle:cli:mac:arm64": "npm run bundle:cli -- -o bundle-cli/figma-mac-arm64 --target node18-mac-arm64",
     "bundle:cli:win": "npm run bundle:cli -- -o bundle-cli/figma-win --target node18-win-x64",
+    "publish:npm": "npm install && npm run build && npm run bundle:npm-readme:prepare && npm publish --access public; npm run bundle:npm-readme:restore",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
