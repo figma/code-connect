@@ -1,3 +1,30 @@
+# Code Connect v1.1.0 (10th September 2024)
+
+## Features
+
+### HTML
+- Added support for documenting HTML-based frameworks (including Web Components, Angular and Vue), using the new `html` parser. See the [documentation](docs/html.md) for more information.
+
+  HTML support for Code Connect is in preview, and the API is liable to change during this period. Please let us know your feedback via [GitHub Issues](https://github.com/figma/code-connect/issues/new/choose).
+
+### SwiftUI
+- Added a `swiftPackagePath` configuration option to specify a custom path to a `Package.swift` file to run Code Connect from.
+
+### React
+- Code Connect files created in the CLI assistant will now start including some auto-generated prop mappings between Figma properties and linked code props. This is an early feature and support for different prop types is limited.
+
+### General
+
+- Restructured the Code Connect documentation. All documentation can now be found in the [docs](docs) directory.
+
+## Fixed
+
+### React
+- `figma.nestedProps` can now be used in conjunction with `figma.boolean` for conditionally hidden nested instances (fixes https://github.com/figma/code-connect/issues/118, https://github.com/figma/code-connect/issues/89)
+- Fixed an issue where backticks could not be used in the example code (fixes https://github.com/figma/code-connect/issues/139)
+- Fixed an issue with wildcard paths in import mappings
+- Fixed an error when trying to use the icon script with component sets
+
 # Code Connect v1.0.6 (21st August 2024)
 
 ## Fixed
@@ -6,7 +33,6 @@
 - Fixed issue where props with special characters such as hyphens would not render properly. (https://github.com/figma/code-connect/issues/116)
 
 ## Features
-
 
 ### React
 - figma.enum now supports floating point numbers

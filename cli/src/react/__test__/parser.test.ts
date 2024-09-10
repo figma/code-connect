@@ -1,8 +1,9 @@
-import { ParserError, parse } from '../parser'
 import ts from 'typescript'
 import path from 'path'
 import { CodeConnectReactConfig } from '../../connect/project'
 import { readFileSync } from 'fs'
+import { parseCodeConnect, ParserError } from '../../connect/parser_common'
+import { findAndResolveImports, parseReactDoc } from '../parser'
 
 async function testParse(
   file: string,
@@ -20,16 +21,19 @@ async function testParse(
       paths: config?.paths ?? {},
     },
   )
-  return await parse(
+
+  return await parseCodeConnect({
     program,
-    path.join(__dirname, file),
-    { ...config, parser: 'react' },
-    __dirname,
-    {
+    file: path.join(__dirname, file),
+    config: { ...config, parser: 'react' },
+    parseFn: parseReactDoc,
+    resolveImportsFn: findAndResolveImports,
+    absPath: __dirname,
+    parseOptions: {
       repoUrl: 'git@github.com:figma/code-connect.git',
       debug: false,
     },
-  )
+  })
 }
 
 function getExpectedTemplate(name: string) {
@@ -173,7 +177,7 @@ describe('Parser (JS templates)', () => {
     expect(result).toMatchObject([
       {
         templateData: {
-          imports: ["import { Button } from '@lib/ButtonTest'"],
+          imports: ["import { Button } from '@lib/TestComponents'"],
         },
       },
     ])
@@ -403,14 +407,15 @@ describe('Parser (JS templates)', () => {
       {},
     )
 
-    const result = await parse(
-      tsProgram,
-      path.join(__dirname, 'PropsSpread.figma.tsx'),
-      {
+    const result = await parseCodeConnect({
+      program: tsProgram,
+      file: path.join(__dirname, 'PropsSpread.figma.tsx'),
+      config: {
         parser: 'react',
       },
-      __dirname,
-    )
+      absPath: __dirname,
+      parseFn: parseReactDoc,
+    })
 
     expect(result).toMatchObject([
       {
@@ -469,14 +474,15 @@ describe('Parser (JS templates)', () => {
       {},
     )
 
-    const result = await parse(
-      tsProgram,
-      path.join(__dirname, 'PropsSpreadWithDestructuring.figma.tsx'),
-      {
+    const result = await parseCodeConnect({
+      program: tsProgram,
+      file: path.join(__dirname, 'PropsSpreadWithDestructuring.figma.tsx'),
+      config: {
         parser: 'react',
       },
-      __dirname,
-    )
+      absPath: __dirname,
+      parseFn: parseReactDoc,
+    })
 
     expect(result).toMatchObject([
       {
@@ -603,6 +609,33 @@ describe('Parser (JS templates)', () => {
         component: 'Button',
         templateData: {
           imports: ['import Button from "@ui/Button"', 'import { myHook } from "@ui/hooks"'],
+        },
+      },
+    ])
+  })
+
+  it('Handles importing from files with various casings', async () => {
+    const result = await testParse(
+      'ImportsCasings.figma.tsx',
+      ['./components/test_component_underscore.tsx', './components/test-component-kebab.tsx'],
+      {
+        importPaths: {
+          '__test__/*': '@lib',
+        },
+      },
+    )
+
+    expect(result).toMatchObject([
+      {
+        component: 'TestComponentKebab',
+        templateData: {
+          imports: ["import { TestComponentKebab } from '@lib'"],
+        },
+      },
+      {
+        component: 'TestComponentUnderscore',
+        templateData: {
+          imports: ["import { TestComponentUnderscore } from '@lib'"],
         },
       },
     ])

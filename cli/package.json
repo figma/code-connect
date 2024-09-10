@@ -1,11 +1,25 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
   "license": "MIT",
-  "main": "./dist/index.js",
+  "main": "./dist/react/index_react.js",
+  "exports": {
+    ".": {
+      "types": "./dist/react/index_react.d.ts",
+      "default": "./dist/react/index_react.js"
+    },
+    "./html": {
+      "types": "./dist/html/index_html.d.ts",
+      "default": "./dist/html/index_html.js"
+    },
+    "./react": {
+      "types": "./dist/react/index_react.d.ts",
+      "default": "./dist/react/index_react.js"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+ssh://git@github.com/figma/code-connect.git"
@@ -25,15 +39,18 @@
     "build": "tsc",
     "build:web": "pnpm build",
     "build:webpack": "webpack --mode production",
-    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules npx jest --coverage",
-    "test:fast": "npm run test -- --testPathIgnorePatterns=template_rendering.test.ts --testPathIgnorePatterns=e2e_connect_command_swift.test.ts --testPathIgnorePatterns=e2e_wizard_swift.test.ts",
+    "test": "npm run test:no-coverage -- --coverage",
+    "test:no-coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules npx jest",
+    "test:fast": "npm run test -- --testPathIgnorePatterns=template_rendering.test.ts --testPathIgnorePatterns=e2e_parse_command_swift.test.ts --testPathIgnorePatterns=e2e_wizard_swift.test.ts",
     "test:ci": "npm run test:non-mac -- --runInBand",
     "test:wizard": "npm run test -- --runInBand --testPathPattern=e2e_wizard_react.test.ts --testPathPattern=e2e_wizard_swift.test.ts",
-    "test:swift": "npm run test -- --runInBand --testPathPattern=e2e_connect_command_swift.test.ts --testPathPattern=e2e_wizard_swift.test.ts",
-    "test:non-mac": "npm run test -- --testPathIgnorePatterns=e2e_connect_command_swift.test.ts --testPathIgnorePatterns=e2e_wizard_swift.test.ts",
+    "test:swift": "npm run test -- --runInBand --testPathPattern=e2e_parse_command_swift.test.ts --testPathPattern=e2e_wizard_swift.test.ts --testPathPattern=e2e_parse_command_swift_xcodeproj.test.ts",
+    "test:non-mac": "npm run test -- --testPathIgnorePatterns=e2e_parse_command_swift.test.ts --testPathIgnorePatterns=e2e_wizard_swift.test.ts --testPathIgnorePatterns=e2e_parse_command_swift_xcodeproj.test.ts",
     "bundle": "npm run build && npm pack && mkdir -p bundle && mv figma-code-connect*.tgz bundle",
     "bundle:local": "cp package.json package.json.bak && grep -v 'workspace:' package.json > package.json && npm run build && npm pack && mkdir -p bundle-local && mv figma-code-connect*.tgz bundle-local; mv package.json.bak package.json",
-    "bundle:npm": "npm run build && npm pack && mkdir -p bundle-npm && mv figma-code-connect*.tgz bundle-npm",
+    "bundle:npm-readme:prepare": "mv README.md ../cli-README.md.bak && cp ../README.md . && npx ts-node ../scripts/make_readme_links_absolute.ts",
+    "bundle:npm-readme:restore": "mv ../cli-README.md.bak README.md",
+    "bundle:npm": "npm run build && npm run bundle:npm-readme:prepare && npm pack && mkdir -p bundle-npm && mv figma-code-connect*.tgz bundle-npm; npm run bundle:npm-readme:restore",
     "bundle:cli": "npm run build:webpack && mkdir -p bundle-cli && pkg --compress Brotli webpack-dist/figma.js",
     "bundle:cli:linux": "npm run bundle:cli -- -o bundle-cli/figma-linux --target node18-linux-x64,node18-linux-arm64",
     "bundle:cli:mac": "npm run bundle:cli -- -o bundle-cli/figma-mac --target node18-mac-x64,node18-mac-arm64",
@@ -44,6 +61,7 @@
   "devDependencies": {
     "@types/cross-spawn": "^6.0.6",
     "@types/jest": "^29.5.5",
+    "@types/jsdom": "^21.1.7",
     "@types/lodash": "^4.17.0",
     "@types/node": "^20.14.0",
     "@types/prettier": "2.7.3",
@@ -76,9 +94,11 @@
     "fast-fuzzy": "^1.12.0",
     "find-up": "^5.0.0",
     "glob": "^10.3.10",
+    "jsdom": "^24.1.1",
     "lodash": "^4.17.21",
     "minimatch": "^9.0.3",
     "ora": "^5.4.1",
+    "parse5": "^7.1.2",
     "prettier": "^2.8.8",
     "prompts": "^2.4.2",
     "strip-ansi": "^6.0.0",

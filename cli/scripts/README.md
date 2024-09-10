@@ -47,6 +47,7 @@ interface Component {
   // URL to this node
   figmaUrl: string
   // Properties for this component, keyed by the name of the property
+  // *** Only available for Component Sets ***
   componentPropertyDefinitions: Record<string, {
     defaultValue: boolean | string
     type: 'BOOLEAN' | 'INSTANCE_SWAP' | 'TEXT' | 'VARIANT'

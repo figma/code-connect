@@ -31,6 +31,10 @@ export namespace FigmaRestApi {
      * All possible values for this property. Only exists on VARIANT properties
      */
     variantOptions?: string[]
+    /**
+     * Only exists on INSTANCE_SWAP  properties
+     */
+    preferredValues?: { type: string; key: string }[]
   }
 
   export interface Node {

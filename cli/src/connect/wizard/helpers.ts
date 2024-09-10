@@ -10,8 +10,8 @@ import {
 import { logger, success } from '../../common/logging'
 import path from 'path'
 import prompts, { Choice } from 'prompts'
-import { isFigmaConnectFile } from '../../react/parser'
 import { BaseCommand } from '../../commands/connect'
+import { isFigmaConnectFile } from '../parser_common'
 
 export function maybePrefillWizardQuestionsForTesting() {
   if (process.env.JEST_WORKER_ID && process.env.WIZARD_ANSWERS_TO_PREFILL) {
@@ -129,24 +129,27 @@ export function getFilepathExportsFromFiles(projectInfo: ProjectInfo, cmd: BaseC
   return projectInfo.files.reduce((options, filepath) => {
     if (projectInfo.config.parser === 'react') {
       const { tsProgram } = projectInfo as ReactProjectInfo
-      if (!isFigmaConnectFile(tsProgram, filepath)) {
+      if (!isFigmaConnectFile(tsProgram, filepath, 'tsx')) {
         const checker = tsProgram.getTypeChecker()
         const sourceFile = tsProgram.getSourceFile(filepath)
         if (!sourceFile) {
-          throw new Error(`Could not parse file ${filepath}`)
-        }
-        try {
-          const sourceFileSymbol = checker.getSymbolAtLocation(sourceFile)!
-          const exports = checker.getExportsOfModule(sourceFileSymbol)
-
-          exports.forEach((exp) => {
-            options.push(getFilepathExport(filepath, exp.getName()))
-          })
-        } catch (e) {
           if (cmd.verbose) {
-            logger.warn(`Could not get exports from ${filepath}`)
+            logger.warn(`Could not parse file for TypeScript: ${filepath}`)
           }
-          // ignore invalid files
+        } else {
+          try {
+            const sourceFileSymbol = checker.getSymbolAtLocation(sourceFile)!
+            const exports = checker.getExportsOfModule(sourceFileSymbol)
+
+            exports.forEach((exp) => {
+              options.push(getFilepathExport(filepath, exp.getName()))
+            })
+          } catch (e) {
+            if (cmd.verbose) {
+              logger.warn(`Could not parse exports of file: ${filepath}`)
+            }
+            // ignore invalid files
+          }
         }
       }
     } else {

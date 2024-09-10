@@ -6,12 +6,10 @@ import {
   parsePropertyOfType,
 } from '../typescript/compiler'
 import {
-  ParserContext,
-  ParserError,
   parseComponentMetadata,
-  InternalError,
   parseRenderFunction,
   getDefaultTemplate,
+  findAndResolveImports,
 } from '../react/parser'
 import {
   CodeConnectReactConfig,
@@ -20,11 +18,12 @@ import {
   getStorybookUrl,
 } from '../connect/project'
 import { logger } from '../common/logging'
-import { CodeConnectJSON } from '../common/figma_connect'
+import { CodeConnectJSON } from '../connect/figma_connect'
 import ts from 'typescript'
-import { FigmaConnectMeta } from '../common/api'
+import { FigmaConnectMeta } from '../connect/api'
 import { minimatch } from 'minimatch'
-import { parsePropsObject } from '../common/intrinsics'
+import { parsePropsObject } from '../connect/intrinsics'
+import { InternalError, ParserContext, ParserError } from '../connect/parser_common'
 
 interface ConvertStorybookFilesArgs {
   /**
@@ -100,6 +99,7 @@ async function convertStorybookFile({
     config,
     sourceFile,
     absPath,
+    resolvedImports: findAndResolveImports(tsProgram, sourceFile),
   }
 
   let source = readFileSync(path).toString()

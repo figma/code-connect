@@ -1,3 +1,3 @@
 # Code Connect (React)
 
-The Code Connect React docs have moved [here](../cli/README.md).
+Code Connect React docs can be found [here](../docs/react.md).

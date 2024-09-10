@@ -1,69 +1,85 @@
 import path from 'path'
 import { ReactProjectInfo, getProjectInfo, getReactProjectInfo } from '../../../project'
-import { extractSignature, generatePropMapping } from '../../prop_mapping'
+import {
+  generatePropMapping,
+  extractSignatureAndGeneratePropMapping,
+  generateValueMapping,
+} from '../../prop_mapping'
 import { FigmaRestApi } from '../../../figma_rest_api'
 
+import basic from './basic'
+
+const PROP_MAPPING_TEST_SUITES = [
+  basic,
+]
+
 describe('Prop mapping', () => {
-  describe('extractSignature', () => {
-    let projectInfo: ReactProjectInfo
-    let componentsFilepath: string
+  describe('generatePropMapping', () => {
+    PROP_MAPPING_TEST_SUITES.forEach((suite) => {
+      it(`Prop mapping meets acceptable threshold for ${suite.name}`, () => {
+        /**
+         * For each suite of components, get the total number of props that have a mapping
+         * in the test data, as well as the count of mappings we've correctly generated.
+         * We then divide correct / total to get the overall success rate
+         */
+        const [totalProps, totalCorrect] = suite.testCases.reduce(
+          ([totalProps, totalCorrect], testCase) => {
+            const actualResult = generatePropMapping({
+              componentPropertyDefinitions: testCase.componentPropertyDefinitions,
+              signature: testCase.signature,
+            })
 
-    beforeEach(async () => {
-      projectInfo = await getProjectInfo(path.join(__dirname, 'tsProgram', 'react'), '').then(
-        (res) => getReactProjectInfo(res as ReactProjectInfo),
-      )
-      componentsFilepath = path.join(__dirname, 'tsProgram', 'react', 'Components.tsx')
-    })
+            // count correct prop mappings for single component
+            let numCorrect = 0
+            Object.keys(testCase.perfectResult).forEach((prop) => {
+              if (
+                JSON.stringify(actualResult[prop]) === JSON.stringify(testCase.perfectResult[prop])
+              ) {
+                numCorrect++
+              }
+            })
 
-    it('Extracts signature containing a broad set of types', async () => {
-      const result = await extractSignature({
-        nameToFind: 'LotsOfProps',
-        sourceFilePath: componentsFilepath,
-        projectInfo,
-      })
-      expect(result).toEqual({
-        children: 'React.ReactNode',
-        onClick: 'React.MouseEventHandler<HTMLDivElement>',
-        title: 'string',
-        hasIcon: 'false | true',
-        count: 'number',
-        anOptionalString: '?string',
-        fuzzyMatchingString: 'string',
-      })
-    })
+            return [
+              totalProps + Object.keys(testCase.perfectResult).length,
+              totalCorrect + numCorrect,
+            ]
+          },
+          [0, 0],
+        )
 
-    it('Extracts signature from a call expression', async () => {
-      const result = await extractSignature({
-        nameToFind: 'MemoizedComponent',
-        sourceFilePath: componentsFilepath,
-        projectInfo,
-      })
-      expect(result).toEqual({
-        unmemoized: 'true',
-      })
-    })
+        const percentageCorrect = totalCorrect / totalProps
 
-    // TODO fix in Parser
-    // it('Extracts signature from a variable alias', async () => {
-    //   const result = await extractSignature('AliasForComponent', componentsFilepath, projectInfo)
-    //   expect(result).toEqual({
-    //     aliased: 'true',
-    //   })
-    // })
-
-    it('Extracts signature from default export', async () => {
-      const result = await extractSignature({
-        nameToFind: 'default',
-        sourceFilePath: componentsFilepath,
-        projectInfo,
-      })
-      expect(result).toEqual({
-        isDefault: 'true',
+        expect(percentageCorrect).toBeGreaterThanOrEqual(suite.passThreshold)
       })
     })
   })
 
-  describe('generatePropMapping', () => {
+  describe('generateValueMapping', () => {
+    it('creates value mapping using fuzzy matching', () => {
+      const result = generateValueMapping('"input" | "filter" | "single-choice" | "action"', {
+        type: FigmaRestApi.ComponentPropertyType.Variant,
+        defaultValue: 'Filter',
+        variantOptions: [
+          'Action',
+          'Filter',
+          'Filter + badge',
+          'Input',
+          'Input + icon',
+          'Input + img',
+          'Single choice',
+        ],
+      })
+
+      expect(result).toEqual({
+        'Single choice': 'single-choice',
+        Input: 'input',
+        Filter: 'filter',
+        Action: 'action',
+      })
+    })
+  })
+
+  describe('extractSignatureAndGeneratePropMapping', () => {
     let projectInfo: ReactProjectInfo
     let componentsFilepath: string
 
@@ -75,44 +91,44 @@ describe('Prop mapping', () => {
     })
 
     it('Generates a prop mapping from a file, export, and Figma component', async () => {
-      const result = await generatePropMapping({
+      const result = await extractSignatureAndGeneratePropMapping({
         exportName: 'LotsOfProps',
         filepath: componentsFilepath,
         projectInfo,
-        component: {
-          type: 'COMPONENT',
-          name: 'Lots of props',
-          id: '111:111',
-          children: [],
-          componentPropertyDefinitions: {
-            'Has Icon': {
-              type: FigmaRestApi.ComponentPropertyType.Boolean,
-              defaultValue: false,
-            },
-            Title: {
-              type: FigmaRestApi.ComponentPropertyType.Text,
-              defaultValue: '',
-            },
-            'Fuzzy Match String': {
-              type: FigmaRestApi.ComponentPropertyType.Text,
-              defaultValue: '',
-            },
+        componentPropertyDefinitions: {
+          'Has Icon': {
+            type: FigmaRestApi.ComponentPropertyType.Boolean,
+            defaultValue: false,
+          },
+          Title: {
+            type: FigmaRestApi.ComponentPropertyType.Text,
+            defaultValue: '',
+          },
+          'Fuzzy Match String': {
+            type: FigmaRestApi.ComponentPropertyType.Text,
+            defaultValue: '',
           },
         },
         cmd: {} as any,
       })
       expect(result).toEqual({
-        'Has Icon': {
-          codePropName: 'hasIcon',
-          mapping: 'BOOLEAN',
+        hasIcon: {
+          kind: 'boolean',
+          args: {
+            figmaPropName: 'Has Icon',
+          },
         },
-        Title: {
-          codePropName: 'title',
-          mapping: 'TEXT',
+        title: {
+          kind: 'string',
+          args: {
+            figmaPropName: 'Title',
+          },
         },
-        'Fuzzy Match String': {
-          codePropName: 'fuzzyMatchingString',
-          mapping: 'TEXT',
+        fuzzyMatchingString: {
+          kind: 'string',
+          args: {
+            figmaPropName: 'Fuzzy Match String',
+          },
         },
       })
     })

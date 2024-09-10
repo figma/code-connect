@@ -1,6 +1,7 @@
-import { execSync } from 'child_process'
+import { execSync, spawnSync } from 'child_process'
 import { exitWithError, logger } from '../common/logging'
 import { getFileIfExists } from './get_file_if_exists'
+import path from 'path'
 
 // Find the location of the Code Connect Swift package on disk, so that we can
 // call `swift run figma-swift` from the correct location. This requires parsing
@@ -10,25 +11,44 @@ import { getFileIfExists } from './get_file_if_exists'
 // As this is a first party parser, we do this in TypeScript and call it as part
 // of our code. For third party parsers, logic like this would need to be
 // implemented in a script/binary which the user points Code Connect to.
-export async function getSwiftParserDir(cwd: string, xcodeprojPath?: string) {
+export async function getSwiftParserDir(
+  cwd: string,
+  xcodeprojPath?: string,
+  swiftPackagePath?: string,
+) {
   let figmaPackageDir: string | undefined
+  let xcodeprojFile: string | undefined
+  let packageSwiftFile: string | undefined
 
-  // Check for the supported project types.
-  const xcodeProjFile = (xcodeprojPath || getFileIfExists(cwd, '*.xcodeproj')).replace(/\s/g, '\\ ')
-  const packageSwiftFile = getFileIfExists(cwd, 'Package.swift')
+  // // Check for the supported project types giving precedence top the user provided path
+  if (xcodeprojPath) {
+    xcodeprojFile = xcodeprojPath.replace(/\s/g, '\\ ')
+  } else if (swiftPackagePath) {
+    packageSwiftFile = path.dirname(swiftPackagePath).replace(/\s/g, '\\ ')
+  } else {
+    xcodeprojFile = getFileIfExists(cwd, '*.xcodeproj').replace(/\s/g, '\\ ')
+    packageSwiftFile = getFileIfExists(cwd, 'Package.swift').replace(/\s/g, '\\ ')
+  }
 
-  if (!(xcodeProjFile || packageSwiftFile)) {
+  if (!(xcodeprojFile || packageSwiftFile)) {
     exitWithError(
       'No supported project found. Supported project types are .xcodeproj or Package.swift. You can specify the location of your .xcodeproj file with the `xcodeprojPath` config option.',
     )
   }
 
-  if (xcodeProjFile) {
+  if (xcodeprojFile) {
     // Use xcodebuild to get the build settings, so we can find where the Code
     // Connect Swift package is installed
-    const buildSettings = execSync(`xcodebuild -project ${xcodeProjFile} -showBuildSettings`, {
+    const result = spawnSync('xcodebuild', ['-project', xcodeprojFile, '-showBuildSettings'], {
       cwd,
-    }).toString()
+      encoding: 'utf-8',
+    })
+
+    if (result.error) {
+      throw result.error
+    }
+
+    const buildSettings = result.stdout
 
     // Extract the source and version of the Code Connect Swift package from the
     // xcodebuild output, which can be in any of the following formats depending
@@ -67,11 +87,24 @@ export async function getSwiftParserDir(cwd: string, xcodeprojPath?: string) {
       figmaPackageDir = `${buildDir[1]}/../../SourcePackages/checkouts/code-connect`
     }
   } else if (packageSwiftFile) {
+    const swiftPackageDir = swiftPackagePath ? path.dirname(swiftPackagePath) : undefined
+    const packageDir = swiftPackageDir || cwd
     // Use the Swift command to determine if the package is installed locally or from Git
     try {
-      const packageInfo = JSON.parse(
-        execSync('swift package describe --type json', { cwd }).toString(),
+      const result = spawnSync(
+        'swift',
+        ['package', '--package-path', packageDir, 'describe', '--type', 'json'],
+        {
+          cwd,
+          encoding: 'utf-8',
+        },
       )
+
+      if (result.error) {
+        throw result.error
+      }
+
+      const packageInfo = JSON.parse(result.stdout)
 
       const codeConnectPackage =
         packageInfo.dependencies.find((p: any) => p.identity === 'code-connect') ??
@@ -85,7 +118,7 @@ export async function getSwiftParserDir(cwd: string, xcodeprojPath?: string) {
       }
 
       // We can run directly from the directory of the package swift file
-      figmaPackageDir = cwd
+      figmaPackageDir = packageDir
     } catch (e) {
       exitWithError(`Error calling Swift command: ${e}`)
     }

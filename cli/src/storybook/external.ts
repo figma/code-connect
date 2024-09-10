@@ -1,4 +1,4 @@
-import { FigmaConnectMeta } from '../common/api'
+import { FigmaConnectMeta } from '../connect/api'
 
 /**
  * Type for the Storybook `parameters` when using Figma Code Connect. This can

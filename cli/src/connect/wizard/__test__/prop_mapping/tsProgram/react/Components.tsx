@@ -1,4 +1,6 @@
-import React, { memo } from 'react'
+import React, { memo, forwardRef } from 'react'
+import { DefinedInDifferentFile } from './Components2'
+import { ReExportedComponent } from './Components2'
 
 export function LotsOfProps({
   children,
@@ -45,8 +47,16 @@ function NonExportedComponent(props: AliasedComponentProps) {
 
 export const AliasForComponent = NonExportedComponent
 
+export const AliasForComponentInDifferentFile = DefinedInDifferentFile
+
 function UnmemoizedComponent(props: { unmemoized: true }) {
   return <>Hello world</>
 }
 
 export const MemoizedComponent = memo(UnmemoizedComponent)
+
+export const WithForwardRef = forwardRef<HTMLDivElement, { forwarded: true }>((props, ref) => {
+  return <div ref={ref}>Hello world</div>
+})
+
+export { ReExportedComponent }

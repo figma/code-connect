@@ -1,0 +1,1 @@
+This directory contains common functionality for any use of the Figma CLI. Code Connect-specific shared functionality should go in [connect](../connect).

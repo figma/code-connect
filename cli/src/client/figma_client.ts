@@ -62,15 +62,15 @@ export async function getComponents(fileOrNode: string) {
     ...component,
     fileKey,
     figmaUrl: figmaUrlOfComponent(component, fileKey),
-    componentPropertyDefinitions: Object.keys(component.componentPropertyDefinitions).reduce(
-      (result, key) => {
-        return {
-          ...result,
-          // this removes the ID prefix from property names e.g #123:name -> name
-          [normalizePropName(key)]: component.componentPropertyDefinitions[key],
-        }
-      },
-      {},
-    ),
+    componentPropertyDefinitions:
+      component.type === 'COMPONENT_SET'
+        ? Object.keys(component.componentPropertyDefinitions).reduce((result, key) => {
+            return {
+              ...result,
+              // this removes the ID prefix from property names e.g #123:name -> name
+              [normalizePropName(key)]: component.componentPropertyDefinitions[key],
+            }
+          }, {})
+        : undefined,
   }))
 }

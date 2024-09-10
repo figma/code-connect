@@ -162,7 +162,7 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
                     val codeConnectParserCreateInput =
                         json.decodeFromString<CodeConnectParserCreateInput>(tempFile.readText())
 
-                    val output = CodeConnectTemplate.create(codeConnectParserCreateInput)
+                    val output = CodeConnectCreator.create(codeConnectParserCreateInput)
                     println(json.encodeToString(output))
                 }
             }

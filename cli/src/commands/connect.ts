@@ -1,5 +1,4 @@
 import * as commander from 'commander'
-import { InternalError, ParserError, isFigmaConnectFile, parse } from '../react/parser'
 import fs from 'fs'
 import { upload } from '../connect/upload'
 import { validateDocs } from '../connect/validation'
@@ -7,14 +6,16 @@ import { createCodeConnectFromUrl } from '../connect/create'
 import {
   CodeConnectConfig,
   CodeConnectExecutableParserConfig,
+  CodeConnectHtmlConfig,
   CodeConnectReactConfig,
   ProjectInfo,
   getProjectInfo,
   getReactProjectInfo,
   getRemoteFileUrl,
+  getTsProgram,
 } from '../connect/project'
 import { LogLevel, exitWithError, highlight, logger, success } from '../common/logging'
-import { CodeConnectJSON } from '../common/figma_connect'
+import { CodeConnectJSON } from '../connect/figma_connect'
 import { convertStorybookFiles } from '../storybook/convert'
 import { delete_docs } from '../connect/delete_docs'
 import { runWizard } from '../connect/wizard/run_wizard'
@@ -24,6 +25,16 @@ import { ParseRequestPayload, ParseResponsePayload } from '../connect/parser_exe
 import z from 'zod'
 import { withUpdateCheck } from '../common/updates'
 import { exitWithFeedbackMessage } from '../connect/helpers'
+import { parseHtmlDoc } from '../html/parser'
+import {
+  InternalError,
+  isFigmaConnectFile,
+  parseCodeConnect,
+  ParseFn,
+  ParserError,
+  ResolveImportsFn,
+} from '../connect/parser_common'
+import { findAndResolveImports, parseReactDoc } from '../react/parser'
 
 export type BaseCommand = commander.Command & {
   token: string
@@ -96,7 +107,9 @@ export function addConnectCommandToProgram(program: commander.Command) {
     connectCommand,
     'parse',
     'Run Code Connect locally to find any files that have figma connections, then converts them to JSON and outputs to stdout.',
-  ).action(withUpdateCheck(handleParse))
+  )
+    .option('-l --label <label>', 'label to apply to the parsed files')
+    .action(withUpdateCheck(handleParse))
 
   addBaseCommand(
     connectCommand,
@@ -168,8 +181,7 @@ function transformDocFromParser(
 }
 
 export async function getCodeConnectObjects(
-  dir: string,
-  cmd: BaseCommand,
+  cmd: BaseCommand & { label?: string },
   projectInfo: ProjectInfo,
   silent = false,
 ): Promise<CodeConnectJSON[]> {
@@ -181,73 +193,117 @@ export async function getCodeConnectObjects(
     }
   }
 
+  let codeConnectObjects: CodeConnectJSON[] = []
+
   if (projectInfo.config.parser === 'react') {
-    return getReactCodeConnectObjects(
-      dir,
+    codeConnectObjects = await getReactCodeConnectObjects(
       projectInfo as ProjectInfo<CodeConnectReactConfig>,
       cmd,
       silent,
     )
-  }
-
-  const payload: ParseRequestPayload = {
-    mode: 'PARSE',
-    paths: projectInfo.files,
-    config: projectInfo.config,
-  }
-
-  try {
-    const stdout = await callParser(
-      // We use `as` because the React parser makes the types difficult
-      // TODO remove once React is an executable parser
-      projectInfo.config as CodeConnectExecutableParserConfig,
-      payload,
-      projectInfo.absPath,
-    )
-
-    const parsed = ParseResponsePayload.parse(stdout)
-
-    const { hasErrors } = handleMessages(parsed.messages)
-
-    if (hasErrors) {
-      exitWithError('Errors encountered calling parser, exiting')
+  } else if (projectInfo.config.parser === 'html') {
+    codeConnectObjects = await getCodeConnectObjectsFromParseFn({
+      parseFn: parseHtmlDoc,
+      fileExtension: 'ts',
+      projectInfo,
+      cmd,
+      silent,
+    })
+  } else {
+    const payload: ParseRequestPayload = {
+      mode: 'PARSE',
+      paths: projectInfo.files,
+      config: projectInfo.config,
     }
 
-    return parsed.docs.map((doc) => ({
-      ...transformDocFromParser(doc, projectInfo.remoteUrl, projectInfo.config),
-      metadata: {
-        cliVersion: require('../../package.json').version,
-      },
-    }))
-  } catch (e) {
-    // zod-validation-error formats the error message into a readable format
-    exitWithError(
-      `Error returned from parser: ${fromError(e)}. Try re-running the command with --verbose for more information.`,
-    )
+    try {
+      const stdout = await callParser(
+        // We use `as` because the React parser makes the types difficult
+        // TODO remove once React is an executable parser
+        projectInfo.config as CodeConnectExecutableParserConfig,
+        payload,
+        projectInfo.absPath,
+      )
+
+      const parsed = ParseResponsePayload.parse(stdout)
+
+      const { hasErrors } = handleMessages(parsed.messages)
+
+      if (hasErrors) {
+        exitWithError('Errors encountered calling parser, exiting')
+      }
+
+      codeConnectObjects = parsed.docs.map((doc) => ({
+        ...transformDocFromParser(doc, projectInfo.remoteUrl, projectInfo.config),
+        metadata: {
+          cliVersion: require('../../package.json').version,
+        },
+      }))
+    } catch (e) {
+      // zod-validation-error formats the error message into a readable format
+      exitWithError(
+        `Error returned from parser: ${fromError(e)}. Try re-running the command with --verbose for more information.`,
+      )
+    }
   }
+
+  if (cmd.label || projectInfo.config.label) {
+    logger.info(`Using label "${cmd.label || projectInfo.config.label}"`)
+    codeConnectObjects.forEach((doc) => {
+      doc.label = cmd.label || projectInfo.config.label || doc.label
+    })
+  }
+
+  return codeConnectObjects
 }
 
-// The React/Storybook parser is handled as a special case for now. Other
-// parsers uses the separate parser executable model and React will be
-// transitioned to that at some point, but for now the old code path is used
-async function getReactCodeConnectObjects(
-  dir: string,
-  projectInfo: ProjectInfo<CodeConnectReactConfig>,
-  cmd: BaseCommand,
+type GetCodeConnectObjectsArgs = {
+  parseFn: ParseFn
+  resolveImportsFn?: ResolveImportsFn
+  fileExtension: string
+  projectInfo: ProjectInfo<CodeConnectConfig>
+  cmd: BaseCommand
+  silent?: boolean
+}
+
+// React/Storybook and HTML parsers are handled as special cases for now, they
+// do not use the parser executable model but instead directly call a function
+// in the code base. We may want to transition them to that model in future.
+async function getCodeConnectObjectsFromParseFn({
+  /** The function used to parse a source file into a Code Connect object */
+  parseFn,
+  /** Optional function used to resolve imports in a source file */
+  resolveImportsFn,
+  /** The file extension to filter for when checking if files should be parsed */
+  fileExtension,
+  /** Project info */
+  projectInfo,
+  /** The commander command object */
+  cmd,
+  /** Silences console output */
   silent = false,
-) {
+}: GetCodeConnectObjectsArgs) {
   const codeConnectObjects: CodeConnectJSON[] = []
-  const reactProjectInfo = getReactProjectInfo(projectInfo)
 
-  const { files, remoteUrl, config, tsProgram } = reactProjectInfo
+  const tsProgram = getTsProgram(projectInfo)
+  const { files, remoteUrl, config, absPath } = projectInfo
 
-  for (const file of files.filter((f: string) => isFigmaConnectFile(tsProgram, f))) {
+  for (const file of files.filter((f: string) => isFigmaConnectFile(tsProgram, f, fileExtension))) {
     try {
-      const docs = await parse(tsProgram, file, config, reactProjectInfo.absPath, {
-        repoUrl: remoteUrl,
-        debug: cmd.verbose,
-        silent,
+      const docs = await parseCodeConnect({
+        program: tsProgram,
+        file,
+        config,
+        parseFn,
+        resolveImportsFn,
+        absPath,
+        parseOptions: {
+          repoUrl: remoteUrl,
+          debug: cmd.verbose,
+          silent,
+        },
       })
+
       codeConnectObjects.push(...docs)
       if (!silent || cmd.verbose) {
         logger.info(success(file))
@@ -272,6 +328,23 @@ async function getReactCodeConnectObjects(
     }
   }
 
+  return codeConnectObjects
+}
+
+async function getReactCodeConnectObjects(
+  projectInfo: ProjectInfo<CodeConnectReactConfig>,
+  cmd: BaseCommand,
+  silent = false,
+) {
+  const codeConnectObjects = await getCodeConnectObjectsFromParseFn({
+    parseFn: parseReactDoc,
+    resolveImportsFn: findAndResolveImports,
+    fileExtension: 'tsx',
+    projectInfo,
+    cmd,
+    silent,
+  })
+
   const storybookCodeConnectObjects = await convertStorybookFiles({
     projectInfo: getReactProjectInfo(projectInfo),
   })
@@ -289,7 +362,7 @@ async function handlePublish(
   let dir = getDir(cmd)
   const projectInfo = await getProjectInfo(dir, cmd.config)
 
-  const codeConnectObjects = await getCodeConnectObjects(dir, cmd, projectInfo)
+  const codeConnectObjects = await getCodeConnectObjects(cmd, projectInfo)
 
   if (codeConnectObjects.length === 0) {
     logger.warn(
@@ -318,13 +391,6 @@ async function handlePublish(
       var time = end - start
       logger.info(`All Code Connect files are valid (${time}ms)`)
     }
-  }
-
-  if (cmd.label || projectInfo.config.label) {
-    logger.info(`Using label ${cmd.label || projectInfo.config.label}`)
-    codeConnectObjects.forEach((doc) => {
-      doc.label = cmd.label || projectInfo.config.label || doc.label
-    })
   }
 
   if (cmd.dryRun) {
@@ -363,7 +429,7 @@ async function handleUnpublish(cmd: BaseCommand & { node: string; label: string 
   } else {
     const projectInfo = await getProjectInfo(dir, cmd.config)
 
-    const codeConnectObjects = await getCodeConnectObjects(dir, cmd, projectInfo)
+    const codeConnectObjects = await getCodeConnectObjects(cmd, projectInfo)
 
     nodesToDeleteRelevantInfo = codeConnectObjects.map((doc) => ({
       figmaNode: doc.figmaNode,
@@ -388,13 +454,13 @@ async function handleUnpublish(cmd: BaseCommand & { node: string; label: string 
   })
 }
 
-async function handleParse(cmd: BaseCommand) {
+async function handleParse(cmd: BaseCommand & { label: string }) {
   setupHandler(cmd)
 
   const dir = cmd.dir ?? process.cwd()
   const projectInfo = await getProjectInfo(dir, cmd.config)
 
-  const codeConnectObjects = await getCodeConnectObjects(dir, cmd, projectInfo)
+  const codeConnectObjects = await getCodeConnectObjects(cmd, projectInfo)
 
   if (cmd.dryRun) {
     logger.info(`Dry run complete`)

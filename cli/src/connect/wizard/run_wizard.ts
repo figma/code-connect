@@ -21,7 +21,7 @@ import path from 'path'
 import { CreateRequestPayload, CreateResponsePayload } from '../parser_executable_types'
 import { normalizeComponentName } from '../create'
 import { createReactCodeConnect } from '../../react/create'
-import { CodeConnectJSON } from '../../common/figma_connect'
+import { CodeConnectJSON } from '../../connect/figma_connect'
 import boxen from 'boxen'
 import {
   createCodeConnectConfig,
@@ -36,7 +36,7 @@ import ora from 'ora'
 import { z } from 'zod'
 import { fromError } from 'zod-validation-error'
 import { autoLinkComponents } from './autolinking'
-import { generatePropMapping } from './prop_mapping'
+import { extractSignatureAndGeneratePropMapping } from './prop_mapping'
 
 type ConnectedComponentMappings = { componentName: string; filepathExport: string }[]
 
@@ -462,11 +462,12 @@ async function createCodeConnectFiles({
       sourceExport: exportName || undefined,
       propMapping:
         projectInfo.config.parser === 'react' && filepath && exportName
-          ? generatePropMapping({
+          ? extractSignatureAndGeneratePropMapping({
               filepath,
               exportName,
               projectInfo: projectInfo as ReactProjectInfo,
-              component: unconnectedComponentsMap[nodeId],
+              componentPropertyDefinitions:
+                unconnectedComponentsMap[nodeId].componentPropertyDefinitions,
               cmd,
             })
           : undefined,
@@ -541,7 +542,7 @@ export async function getUnconnectedComponentsAndConnectedComponentMappings(
   const dir = getDir(cmd)
   const fileKey = parseFileKey(figmaFileUrl)
 
-  const codeConnectObjects = await getCodeConnectObjects(dir, cmd, projectInfo, true)
+  const codeConnectObjects = await getCodeConnectObjects(cmd, projectInfo, true)
 
   const connectedNodeIdsInFileToCodeConnectObjectMap = codeConnectObjects.reduce(
     (map, codeConnectJson) => {
@@ -693,6 +694,12 @@ export async function runWizard(cmd: BaseCommand) {
 
   const dir = getDir(cmd)
   const { hasConfigFile, config } = await parseOrDetermineConfig(dir, cmd.config)
+
+  // This isn't ideal as you see the intro text followed by an error, but we'll
+  // add support for this soon so I think it's OK
+  if (config.parser === 'html') {
+    exitWithError('HTML projects are currently not supported by Code Connect interactive setup')
+  }
 
   let accessToken = getAccessToken(cmd)
 

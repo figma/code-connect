@@ -78,16 +78,14 @@ describe('getComponentOptionsMap', () => {
 })
 
 describe('getFilepathExportsFromFiles', () => {
-  let projectInfo: ProjectInfo
-  beforeEach(async () => {
-    projectInfo = await getProjectInfo(path.join(__dirname, 'tsProgram', 'react'), '').then((res) =>
-      getReactProjectInfo(res as ReactProjectInfo),
-    )
-  })
-
-  it('generates list of file component keys from ProjectInfo', () => {
+  it('generates list of file component keys from ProjectInfo, ignoring unsupported files', async () => {
+    const projectInfo = await getProjectInfo(
+      path.join(__dirname, 'tsProgram', 'react'),
+      path.join(__dirname, 'tsProgram', 'react', 'figma.config.json'),
+    ).then((res) => getReactProjectInfo(res as ReactProjectInfo))
     const result = getFilepathExportsFromFiles(projectInfo, {} as any)
     expect(result.map((filepath) => path.parse(filepath).base)).toEqual([
+      'plain_js_file.jsx~PlainOldJsComponent',
       'MyComponent.tsx~MyComponent',
       'MyComponent.tsx~MyComponentProps', // TODO ideally we'd filter out by type here
       'MultipleComponents.tsx~default',

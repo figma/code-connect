@@ -1,4 +1,4 @@
-import { CodeConnectReactConfig, resolveImportPath } from '../project'
+import { CodeConnectReactConfig, getRemoteFileUrl, mapImportPath } from '../project'
 
 describe('Project helper functions', () => {
   function getConfig(importPaths: {}): CodeConnectReactConfig {
@@ -10,7 +10,7 @@ describe('Project helper functions', () => {
 
   describe('importPath mappings', () => {
     it('Matches a simple import path', () => {
-      const mapped = resolveImportPath(
+      const mapped = mapImportPath(
         '/Users/test/app/src/button.tsx',
         getConfig({ importPaths: { 'src/button.tsx': '@ui/button' } }),
       )
@@ -18,7 +18,7 @@ describe('Project helper functions', () => {
     })
 
     it('Matches a wildcard import path', () => {
-      const mapped = resolveImportPath(
+      const mapped = mapImportPath(
         '/Users/test/app/src/button.tsx',
         getConfig({ importPaths: { 'src/*': '@ui' } }),
       )
@@ -26,7 +26,7 @@ describe('Project helper functions', () => {
     })
 
     it('Matches a wildcard import path with a wildcard output path', () => {
-      const mapped = resolveImportPath(
+      const mapped = mapImportPath(
         '/Users/test/app/src/button.tsx',
         getConfig({ importPaths: { 'src/*': '@ui/*' } }),
       )
@@ -34,7 +34,7 @@ describe('Project helper functions', () => {
     })
 
     it('Matches a wildcard import path with a nested directory', () => {
-      const mapped = resolveImportPath(
+      const mapped = mapImportPath(
         '/Users/test/app/src/components/button.tsx',
         getConfig({ importPaths: { 'src/*': '@ui' } }),
       )
@@ -42,7 +42,7 @@ describe('Project helper functions', () => {
     })
 
     it('Matches a wildcard import path and output path with a nested directory', () => {
-      const mapped = resolveImportPath(
+      const mapped = mapImportPath(
         '/Users/test/app/src/components/button.tsx',
         getConfig({ importPaths: { 'src/*': '@ui/*' } }),
       )
@@ -50,7 +50,7 @@ describe('Project helper functions', () => {
     })
 
     it('Passing only a wildcard matches any import', () => {
-      const mapped = resolveImportPath(
+      const mapped = mapImportPath(
         '/Users/test/app/src/components/button.tsx',
         getConfig({ importPaths: { '*': '@ui' } }),
       )
@@ -58,7 +58,7 @@ describe('Project helper functions', () => {
     })
 
     it('Returns null for non-matching paths', () => {
-      const mapped = resolveImportPath(
+      const mapped = mapImportPath(
         '/Users/test/app/src/button.tsx',
         getConfig({ importPaths: { 'src/components/*': '@ui' } }),
       )
@@ -66,11 +66,25 @@ describe('Project helper functions', () => {
     })
 
     it('Should pick the first match if there are multiple mappings', () => {
-      const mapped = resolveImportPath(
+      const mapped = mapImportPath(
         '/Users/test/app/src/icons/icon.tsx',
         getConfig({ importPaths: { 'icons/*': '@ui/icons', 'src/*': '@ui' } }),
       )
       expect(mapped).toEqual('@ui/icons')
+    })
+  })
+
+  describe('getRemoteFileUrl', () => {
+    it('handles git repo urls', () => {
+      expect(getRemoteFileUrl('/path/file.ts', 'git@github.com:myorg/myrepo.git')).toBe(
+        'https://github.com/myorg/myrepo/blob/master/path/file.ts',
+      )
+    })
+
+    it('handles https repo urls', () => {
+      expect(getRemoteFileUrl('/path/file.ts', 'https://github.com/myorg/myrepo.git')).toBe(
+        'https://github.com/myorg/myrepo/blob/master/path/file.ts',
+      )
     })
   })
 })

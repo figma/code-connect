@@ -1,7 +1,5 @@
 const _stripAnsi = require('strip-ansi')
 
-export const LONG_TEST_TIMEOUT_MS = 15 * 1000
-
 /**
  * Tidy up the output from stdout, removing ANSI codes and trimming whitespace
  * so that it's easier for tests to compare against the expected output.

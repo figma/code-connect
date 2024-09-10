@@ -1,4 +1,4 @@
-import figma from '../..'
+import figma from '../../'
 
 import { ButtonArrowFunction } from './components/TestComponents'
 

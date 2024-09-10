@@ -1,4 +1,4 @@
-import { CodeConnectJSON } from '../common/figma_connect'
+import { CodeConnectJSON } from '../connect/figma_connect'
 import { logger, underline, highlight } from '../common/logging'
 import axios, { isAxiosError } from 'axios'
 import { getApiUrl, getHeaders } from './figma_rest_api'

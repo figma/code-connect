@@ -33,38 +33,39 @@ export type FCCValue =
       | typeof _fcc_templateString
     >
 
-export function _fcc_jsxElement(value: string) {
+export function _fcc_jsxElement($value: string) {
   return {
-    value,
-    type: 'jsx-element',
+    $value,
+    $type: 'jsx-element',
   } as const
 }
 
-export function _fcc_function(value: string) {
+export function _fcc_function($value: string) {
   return {
-    value,
-    type: 'function',
+    $value,
+    $type: 'function',
   } as const
 }
 
-export function _fcc_identifier(value: string) {
+export function _fcc_identifier($value: string) {
   return {
-    value,
-    type: 'identifier',
+    $value,
+    $type: 'identifier',
   } as const
 }
 
-export function _fcc_object(value: string) {
+export function _fcc_object($value: Record<string, any>) {
   return {
-    value,
-    type: 'object',
+    $value,
+    $type: 'object',
+    ...$value,
   } as const
 }
 
-export function _fcc_templateString(value: string) {
+export function _fcc_templateString($value: string) {
   return {
-    value,
-    type: 'template-string',
+    $value,
+    $type: 'template-string',
   } as const
 }
 
@@ -93,17 +94,16 @@ function _fcc_renderPropValue(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) 
     return prop
   }
 
-  if (
-    prop.type === 'function' ||
-    prop.type === 'identifier' ||
-    prop.type === 'object' ||
-    prop.type === 'jsx-element'
-  ) {
-    return prop.value
+  if (prop.$type === 'function' || prop.$type === 'identifier' || prop.$type === 'jsx-element') {
+    return prop.$value
   }
 
-  if (prop.type === 'template-string') {
-    return `\`${prop.value}\``
+  if (prop.$type === 'object') {
+    return _fcc_stringifyObject(prop.$value)
+  }
+
+  if (prop.$type === 'template-string') {
+    return `\`${prop.$value}\``
   }
 
   return 'undefined'
@@ -159,17 +159,16 @@ function _fcc_renderReactProp(
     return ''
   }
 
-  if (
-    prop.type === 'function' ||
-    prop.type === 'identifier' ||
-    prop.type === 'object' ||
-    prop.type === 'jsx-element'
-  ) {
-    return ` ${name}={${prop.value}}`
+  if (prop.$type === 'function' || prop.$type === 'identifier' || prop.$type === 'jsx-element') {
+    return ` ${name}={${prop.$value}}`
   }
 
-  if (prop.type === 'template-string') {
-    return ` ${name}={\`${prop.value}\`}`
+  if (prop.$type === 'object') {
+    return ` ${name}={${_fcc_stringifyObject(prop.$value)}}`
+  }
+
+  if (prop.$type === 'template-string') {
+    return ` ${name}={\`${prop.$value}\`}`
   }
 
   return ''
@@ -189,20 +188,38 @@ function _fcc_renderReactChildren(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }
     return ''
   }
 
-  if (prop.type === 'template-string') {
+  if (prop.$type === 'template-string') {
     // If the value is a template string, wrap in braces
-    return figma.tsx`{\`${prop.value}\`}`
+    return figma.tsx`{\`${prop.$value}\`}`
   }
 
   // If the value is a JSX element, return it directly
-  if (prop.type === 'jsx-element') {
-    return prop.value
+  if (prop.$type === 'jsx-element') {
+    return prop.$value
   }
 
   // but for other values, wrap in braces
-  if (prop.type === 'function' || prop.type === 'identifier' || prop.type === 'object') {
-    return `{${prop.value}}`
+  if (prop.$type === 'function' || prop.$type === 'identifier') {
+    return `{${prop.$value}}`
   }
+
+  if (prop.$type === 'object') {
+    return `{${_fcc_stringifyObject(prop.$value)}}`
+  }
+}
+
+function _fcc_stringifyObject(obj: any): string {
+  if (Array.isArray(obj)) {
+    return `[${obj.map((element) => `${_fcc_stringifyObject(element)}`).join(',')}]`
+  }
+
+  if (typeof obj !== 'object' || obj instanceof Date || obj === null) {
+    return JSON.stringify(obj)
+  }
+
+  return `{${Object.keys(obj)
+    .map((key) => ` ${key}: ${_fcc_stringifyObject(obj[key])} `)
+    .join(',')}}`
 }
 
 // Return the helpers as a string which can be injected into the template
@@ -216,6 +233,7 @@ export function getParsedTemplateHelpersString() {
     _fcc_object,
     _fcc_templateString,
     _fcc_renderPropValue,
+    _fcc_stringifyObject,
   ]
     .map((fn) => fn.toString())
     .join('\n')

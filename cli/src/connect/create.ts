@@ -14,6 +14,7 @@ import { createReactCodeConnect } from '../react/create'
 import { z } from 'zod'
 import { CreateRequestPayload, CreateResponsePayload } from './parser_executable_types'
 import { fromError } from 'zod-validation-error'
+import { createHtmlCodeConnect } from '../html/create'
 interface GenerateDocsArgs {
   accessToken: string
   figmaNodeUrl: string
@@ -94,6 +95,8 @@ export async function createCodeConnectFromUrl({
 
       if (projectInfo.config.parser === 'react') {
         result = await createReactCodeConnect(payload)
+      } else if (projectInfo.config.parser === 'html') {
+        result = await createHtmlCodeConnect(payload)
       } else {
         try {
           const stdout = await callParser(

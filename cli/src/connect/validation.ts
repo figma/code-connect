@@ -2,7 +2,7 @@ import * as url from 'url'
 import { chunk, get } from 'lodash'
 import axios, { isAxiosError } from 'axios'
 
-import { CodeConnectJSON } from '../common/figma_connect'
+import { CodeConnectJSON } from '../connect/figma_connect'
 import { logger } from '../common/logging'
 import { validateNodeId } from './helpers'
 import { getApiUrl, getHeaders } from './figma_rest_api'

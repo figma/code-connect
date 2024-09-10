@@ -1,5 +1,5 @@
-import ts from 'typescript'
-import { ParserContext, ParserError } from '../react/parser'
+import ts, { isTaggedTemplateExpression, isTemplateExpression } from 'typescript'
+import { ParserContext, ParserError } from '../connect/parser_common'
 
 /**
  * Get the default export from a TypeScript source file
@@ -117,7 +117,7 @@ export function parsePropertyOfType<T extends ts.Node>({
     if (!required) {
       return undefined
     } else {
-      throw new ParserError(`Expected property '${propertyName}' to be present`, {
+      throw new ParserError(errorMessage ?? `Expected property '${propertyName}' to be present`, {
         sourceFile,
         node: objectLiteralNode,
       })
@@ -384,6 +384,9 @@ export function convertObjectLiteralToJs(
         obj[key] = null
       } else if (valueNode.kind === ts.SyntaxKind.NumericLiteral) {
         obj[key] = parseFloat(valueNode.getText())
+      } else if (isTaggedTemplateExpression(valueNode)) {
+        // Return the content of the template string without the backticks
+        obj[key] = valueNode.template.getText().replace(/^`/, '').replace(/`$/, '')
       } else {
         obj[key] = valueNode.getText()
       }
@@ -401,9 +404,13 @@ export function getTagName(element: ts.JsxElement | ts.JsxSelfClosingElement) {
   }
 }
 
-export function stripQuotes(node: ts.StringLiteral) {
-  if (node.text.startsWith('"') || node.text.startsWith("'")) {
-    return node.text.substring(1, -1)
+export function stripQuotesFromNode(node: ts.StringLiteral) {
+  return stripQuotes(node.text)
+}
+
+function stripQuotes(text: string) {
+  if (text.startsWith('"') || text.startsWith("'")) {
+    return text.substring(1, text.length - 1)
   }
-  return node.text
+  return text
 }

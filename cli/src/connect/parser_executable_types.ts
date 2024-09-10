@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { BaseCodeConnectObject } from '../common/figma_connect'
-import { FigmaRestApi } from './figma_rest_api'
+import { Intrinsic } from '../connect/intrinsics'
+import { BaseCodeConnectObject } from '../connect/figma_connect'
 
 export type ParseRequestPayload = {
   mode: 'PARSE'
@@ -114,10 +114,16 @@ export const ParseResponsePayload = z.object({
   messages: ParserExecutableMessages,
 })
 
-export type SupportedMappingType =
-  | FigmaRestApi.ComponentPropertyType.Text
-  | FigmaRestApi.ComponentPropertyType.Boolean
-export type PropMapping = Record<string, { codePropName: string; mapping: SupportedMappingType }>
+export type PropMapping = Record<string, Intrinsic>
+
+export type ComponentPropertyDefinition = {
+  // The property type
+  type: 'BOOLEAN' | 'INSTANCE_SWAP' | 'TEXT' | 'VARIANT'
+  // The default value of this property
+  defaultValue: boolean | string
+  // All possible values for this property. Only exists on VARIANT properties
+  variantOptions?: string[]
+}
 
 export type CreateRequestPayload = {
   mode: 'CREATE'
@@ -152,17 +158,7 @@ export type CreateRequestPayload = {
     // The type of the Figma component
     type: 'COMPONENT' | 'COMPONENT_SET'
     // Map of the Figma component's properties, keyed by property name
-    componentPropertyDefinitions: Record<
-      string,
-      {
-        // The property type
-        type: 'BOOLEAN' | 'INSTANCE_SWAP' | 'TEXT' | 'VARIANT'
-        // The default value of this property
-        defaultValue: boolean | string
-        // All possible values for this property. Only exists on VARIANT properties
-        variantOptions?: string[]
-      }
-    >
+    componentPropertyDefinitions: Record<string, ComponentPropertyDefinition>
   }
   // The configuration object for this parser.
   // Each parser's configuration is separate and can take any shape, though we
