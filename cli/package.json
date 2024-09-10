@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -47,7 +47,7 @@
     "test:swift": "npm run test -- --runInBand --testPathPattern=e2e_parse_command_swift.test.ts --testPathPattern=e2e_wizard_swift.test.ts --testPathPattern=e2e_parse_command_swift_xcodeproj.test.ts",
     "test:non-mac": "npm run test -- --testPathIgnorePatterns=e2e_parse_command_swift.test.ts --testPathIgnorePatterns=e2e_wizard_swift.test.ts --testPathIgnorePatterns=e2e_parse_command_swift_xcodeproj.test.ts",
     "bundle": "npm run build && npm pack && mkdir -p bundle && mv figma-code-connect*.tgz bundle",
-    "bundle:local": "cp package.json package.json.bak && grep -v 'workspace:' package.json > package.json && npm run build && npm pack && mkdir -p bundle-local && mv figma-code-connect*.tgz bundle-local; mv package.json.bak package.json",
+    "bundle:local": "cp package.json package.json.bak && grep -v 'workspace:' package.json > package.json.tmp && mv package.json.tmp package.json && npm run build && npm pack && mkdir -p bundle-local && mv figma-code-connect*.tgz bundle-local; mv package.json.bak package.json",
     "bundle:npm-readme:prepare": "mv README.md ../cli-README.md.bak && cp ../README.md . && npx ts-node ../scripts/make_readme_links_absolute.ts",
     "bundle:npm-readme:restore": "mv ../cli-README.md.bak README.md",
     "bundle:npm": "npm run build && npm run bundle:npm-readme:prepare && npm pack && mkdir -p bundle-npm && mv figma-code-connect*.tgz bundle-npm; npm run bundle:npm-readme:restore",

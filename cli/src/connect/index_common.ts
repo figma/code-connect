@@ -15,7 +15,7 @@ import { FigmaConnectClient } from '../client/figma_client'
 export function getClient() {
   let client: FigmaConnectClient = {} as any
   if (typeof process !== 'undefined' && process.versions && process.versions.node) {
-    client = require('./client/external')
+    client = require('../client/external')
   }
   return client
 }

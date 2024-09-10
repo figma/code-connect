@@ -1,5 +1,5 @@
 // change to: "import { client } from '@figma/code-connect'"
-import { client } from '../src'
+import { client } from '../src/react/index_react'
 import fs from 'fs'
 import path from 'path'
 

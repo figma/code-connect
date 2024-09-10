@@ -1,3 +1,10 @@
+# Code Connect v1.1.2 (10th September 2024)
+
+## Fixed
+
+### React
+- Fixed an issue with `client` export used by the icon script (fixes https://github.com/figma/code-connect/issues/156)
+
 # Code Connect v1.1.1 (10th September 2024)
 
 ## Fixed
