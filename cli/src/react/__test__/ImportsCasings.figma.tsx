@@ -1,5 +1,5 @@
 import React from 'react'
-import figma from '../..'
+import figma from '../index_react'
 
 import { TestComponentKebab } from './components/test-component-kebab'
 import { TestComponentUnderscore } from './components/test_component_underscore'

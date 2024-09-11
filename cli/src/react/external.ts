@@ -1,5 +1,3 @@
-// todo move me to react
-import { FigmaConnectMeta, PropMapping, ValueOf, EnumValue } from '../connect/api'
 import * as React from 'react'
 import {
   booleanType,
@@ -9,13 +7,10 @@ import {
   classNameType,
   textContentType,
 } from '../connect/external_types'
+import { ReactMeta } from './types'
 
-function connectType<P = {}>(_figmaNodeUrl: string, _meta?: FigmaConnectMeta<P>): void
-function connectType<P = {}>(
-  _component: any,
-  _figmaNodeUrl: string,
-  _meta?: FigmaConnectMeta<P>,
-): void
+function connectType<P = {}>(_figmaNodeUrl: string, _meta?: ReactMeta<P>): void
+function connectType<P = {}>(_component: any, _figmaNodeUrl: string, _meta?: ReactMeta<P>): void
 function connectType(_component: unknown, _figmaNodeUrl: unknown, _meta?: unknown): void {}
 
 function instanceType(_figmaPropName: string) {

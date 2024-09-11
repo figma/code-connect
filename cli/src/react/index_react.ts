@@ -9,6 +9,7 @@ import * as figma from './external'
 import * as StorybookTypes from '../storybook/external'
 import { FigmaConnectClient } from '../client/figma_client'
 import { getClient } from '../connect/index_common'
+import { ReactMeta } from './types'
 
 const _client: FigmaConnectClient = getClient()
 const _figma: FigmaConnectAPI<JSX.Element> & {
@@ -23,11 +24,7 @@ const _figma: FigmaConnectAPI<JSX.Element> & {
    * @param figmaNodeUrl A link to the node in Figma, for example:`https://www.figma.com/file/123abc/My-Component?node-id=123:456`
    * @param meta {@link FigmaConnectMeta}
    */
-  connect<P = {}>(
-    component: any,
-    figmaNodeUrl: string,
-    meta?: FigmaConnectMeta<P, React.Component | JSX.Element>,
-  ): void
+  connect<P = {}>(component: any, figmaNodeUrl: string, meta?: ReactMeta<P>): void
 
   /**
    * Defines a code snippet that displays in Figma when a component is selected. This function has two signatures:
@@ -39,10 +36,7 @@ const _figma: FigmaConnectAPI<JSX.Element> & {
    * @param figmaNodeUrl A link to the node in Figma, for example:`https://www.figma.com/file/123abc/My-Component?node-id=123:456`
    * @param meta {@link FigmaConnectMeta}
    */
-  connect<P = {}>(
-    figmaNodeUrl: string,
-    meta?: FigmaConnectMeta<P, React.Component | JSX.Element>,
-  ): void
+  connect<P = {}>(figmaNodeUrl: string, meta?: ReactMeta<P>): void
 
   /**
    * Maps a Figma property to a boolean value for the connected component. This prop is replaced
@@ -103,13 +97,6 @@ const _figma: FigmaConnectAPI<JSX.Element> & {
    * ```
    */
   nestedProps<V>(layer: string, input: V): V
-
-  /**
-   * A list of import statements that will render in the Code Snippet in Figma.
-   * This overrides the auto-generated imports for the component. When this is specified,
-   * the `importPaths` option in the config file is also ignored.
-   */
-  imports?: string[]
 } = figma
 
 export { _figma as figma, _client as client }

@@ -1,4 +1,3 @@
-import { FigmaConnectMeta } from '../connect/api'
 import {
   booleanType,
   enumType,
@@ -8,11 +7,9 @@ import {
   textContentType,
 } from '../connect/external_types'
 import { HtmlTemplateString } from './template_literal'
+import { HtmlMeta } from './types'
 
-function connectType<P = {}>(
-  _figmaNodeUrl: string,
-  _meta?: FigmaConnectMeta<P, HtmlTemplateString>,
-): void {}
+function connectType<P = {}>(_figmaNodeUrl: string, _meta?: HtmlMeta<P>): void {}
 
 function instanceType(_figmaPropName: string): HtmlTemplateString {
   return {

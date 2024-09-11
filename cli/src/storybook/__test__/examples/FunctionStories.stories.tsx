@@ -1,5 +1,6 @@
-import { StoryParameters, figma } from '../../..'
+import { StoryParameters, figma } from '../../../react/index_react'
 import { FunctionComponent } from './FunctionComponent'
+import React from 'react'
 
 export default {
   title: 'FunctionComponent',
@@ -13,7 +14,7 @@ export default {
         disabled: figma.boolean('Disabled'),
       },
     },
-  } satisfies StoryParameters,
+  } satisfies StoryParameters<{ disabled: boolean }>,
 }
 
 export function Default() {

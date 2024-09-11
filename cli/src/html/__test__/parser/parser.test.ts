@@ -65,4 +65,16 @@ describe('HTML Parser', () => {
       async () => await testParse('RegularFunctionExampleWithExtraCode.figma.ts'),
     ).rejects.toThrow('Expected only a tagged template literal as the body of the render function')
   })
+
+  it('handles imports', async () => {
+    const result = await testParse('CustomImports.figma.ts', [])
+
+    expect(result).toMatchObject([
+      {
+        templateData: {
+          imports: ['import "@ui/Button"'],
+        },
+      },
+    ])
+  })
 })

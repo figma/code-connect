@@ -1,3 +1,14 @@
+# Code Connect v1.1.3 (11th September 2024)
+
+## Fixed
+
+### HTML
+- Fixed an issue where `imports` was incorrectly not included in the TypeScript interface
+- Added a note in the [documentation](docs/html.md) that HTML support requires `moduleResolution: "NodeNext"`
+
+### React
+- Fixed an issue where `imports` was incorrectly not included in the TypeScript interface (fixes https://github.com/figma/code-connect/issues/159)
+
 # Code Connect v1.1.2 (10th September 2024)
 
 ## Fixed

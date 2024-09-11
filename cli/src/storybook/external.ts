@@ -11,7 +11,7 @@ import { FigmaConnectMeta } from '../connect/api'
  *   } satisfies StoryParameters,
  * }
  */
-export type StoryParameters<T = {}> = {
+export type StoryParameters<T> = {
   design: {
     type: 'figma'
     /**
@@ -26,7 +26,7 @@ export type StoryParameters<T = {}> = {
   } & Pick<FigmaConnectMeta, 'props' | 'links'>
 }
 
-type ExampleObject<T> = FigmaConnectMeta<T, string> & {
+type ExampleObject<T> = FigmaConnectMeta<T, unknown, string> & {
   variant?: FigmaConnectMeta['variant']
   links?: FigmaConnectMeta['links']
 }

@@ -1,5 +1,6 @@
 import { FunctionComponent } from './FunctionComponent'
-import { StoryParameters } from '../../../'
+import { StoryParameters } from '../../../react/index_react'
+import React from 'react'
 
 export default {
   title: 'FunctionComponent',

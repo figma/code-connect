@@ -1,5 +1,5 @@
 import React from 'react'
-import figma from '../..'
+import figma from '../index_react'
 import { Button } from './PropsSpread'
 
 const props = {

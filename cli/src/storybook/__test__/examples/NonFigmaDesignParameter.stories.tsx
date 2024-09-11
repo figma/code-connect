@@ -1,4 +1,5 @@
 import { ArrowComponent } from './ArrowComponent'
+import React from 'react'
 
 export default {
   title: 'ArrowComponent',

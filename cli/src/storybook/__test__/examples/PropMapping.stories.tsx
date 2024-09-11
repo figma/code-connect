@@ -1,5 +1,6 @@
 import { PropMapping, PropMappingProps } from './PropMapping'
-import figma, { StoryParameters } from '../../..'
+import figma, { StoryParameters } from '../../../react/index_react'
+import React from 'react'
 
 export default {
   title: 'PropMapping',

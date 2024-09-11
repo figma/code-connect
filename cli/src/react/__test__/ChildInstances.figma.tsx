@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { figma } from '../..'
+import { figma } from '../index_react'
 import { Button } from './components/TestComponents'
 
 figma.connect(Button, 'instanceSwap', {

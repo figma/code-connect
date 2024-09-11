@@ -1,3 +1,5 @@
+import React from 'react'
+
 export type PropMappingProps = {
   stringProp: string
   booleanProp: boolean

@@ -1,4 +1,4 @@
-import figma from '../../..'
+import figma from '../../../../../react/index_react'
 
 import { ReactApiComponent } from './ReactApiComponent'
 

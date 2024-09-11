@@ -46,7 +46,7 @@ export default figma.tsx\`<ReactApiComponent />\``,
         figmaNode: 'https://figma.com/test',
         source:
           'https://github.com/figma/code-connect/blob/main/cli/src/connect/__test__/e2e/e2e_parse_command/react_storybook/StorybookComponent.tsx',
-        sourceLocation: { line: 7 },
+        sourceLocation: { line: 8 },
         templateData: { imports: [] },
         component: 'StorybookComponent',
         label: 'Storybook',

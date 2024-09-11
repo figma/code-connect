@@ -9,6 +9,7 @@ import * as figma from './external'
 import { FigmaConnectClient } from '../client/figma_client'
 import { html, HtmlTemplateString } from './template_literal'
 import { getClient } from '../connect/index_common'
+import { HtmlMeta } from './types'
 
 const _client: FigmaConnectClient = getClient()
 const _figma: FigmaConnectAPI<HtmlTemplateString> & {
@@ -18,11 +19,7 @@ const _figma: FigmaConnectAPI<HtmlTemplateString> & {
    * @param figmaNodeUrl A link to the node in Figma, for example:`https://www.figma.com/file/123abc/My-Component?node-id=123:456`
    * @param meta {@link FigmaConnectMeta}
    */
-  connect<P = {}>(
-    figmaNodeUrl: string,
-    meta: Required<Pick<FigmaConnectMeta<P, HtmlTemplateString>, 'example'>> &
-      FigmaConnectMeta<P, HtmlTemplateString>,
-  ): void
+  connect<P = {}>(figmaNodeUrl: string, meta: HtmlMeta<P>): void
 
   /**
    * Maps a Figma property to a boolean value for the connected component. This prop is replaced

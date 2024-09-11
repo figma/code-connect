@@ -1,4 +1,4 @@
-import { StoryParameters } from '../../..'
+import { StoryParameters } from '../../../react/index_react'
 import { ArrowComponent } from './ArrowComponent'
 
 export default {

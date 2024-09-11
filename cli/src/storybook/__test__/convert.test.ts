@@ -86,7 +86,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           figmaNode: 'https://figma.com/test',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponent'),
         },
       ])
@@ -99,7 +99,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           figmaNode: 'https://figma.com/test',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/ArrowComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('ArrowComponent'),
         },
       ])
@@ -112,7 +112,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           figmaNode: 'https://figma.com/test',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/ArrowComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('ArrowComponent'),
         },
       ])
@@ -125,7 +125,7 @@ describe('convertStorybookFiles (JS templates)', () => {
         figmaNode: 'https://figma.com/test',
         source:
           'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
-        sourceLocation: { line: 7 },
+        sourceLocation: { line: 8 },
         template: getExpectedTemplate('FunctionComponent'),
       },
       {
@@ -153,7 +153,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           figmaNode: 'https://figma.com/test',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponent'),
         },
         {
@@ -169,7 +169,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           figmaNode: 'https://figma.com/test',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponent'),
         },
         {
@@ -188,7 +188,7 @@ describe('convertStorybookFiles (JS templates)', () => {
         figmaNode: 'https://figma.com/test',
         source:
           'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/PropMapping.tsx',
-        sourceLocation: { line: 7 },
+        sourceLocation: { line: 9 },
         template: getExpectedTemplate('PropMapping'),
         // name: 'Default',
         templateData: {
@@ -235,7 +235,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           figmaNode: 'https://figma.com/test',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/ArrowComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: `const figma = require("figma")\n\nexport default figma.tsx\`<ArrowComponent />\``,
         },
       ])
@@ -248,7 +248,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           figmaNode: 'https://figma.com/test',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponent'),
           // name: 'Default',
         },
@@ -271,7 +271,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           component: 'FunctionComponent',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponent'),
           variant: { 'With icon': false },
           // name: 'Default',
@@ -281,7 +281,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           component: 'FunctionComponent',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponentWithIcon'),
           variant: { 'With icon': true },
           // name: 'WithIcon',
@@ -291,7 +291,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           component: 'FunctionComponent',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponentStringName'),
           variant: { DummyOption: 'DummyValue' },
           // name: 'StringName',
@@ -301,7 +301,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           component: 'FunctionComponent',
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponentMultipleRestrictions'),
           variant: { 'With icon': true, DummyOption: 'DummyValue' },
           // name: 'StringName',
@@ -321,7 +321,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           figmaNode: 'https://figma.com/test',
           source:
             'https://storybook.com/?path=/docs/cli-src-storybook---test---examples-FunctionComponent',
-          sourceLocation: { line: 7 },
+          sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponent'),
         },
       ])

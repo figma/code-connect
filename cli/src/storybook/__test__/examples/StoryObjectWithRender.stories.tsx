@@ -1,5 +1,6 @@
-import { StoryParameters, figma } from '../../../'
+import { StoryParameters, figma } from '../../../react/index_react'
 import { FunctionComponent } from './FunctionComponent'
+import React from 'react'
 
 export default {
   title: 'StoryObjectWithRender',
@@ -29,7 +30,7 @@ export const Disabled = {
 }
 
 export const WithArgs = {
-  render: (args) => {
+  render: (args: any) => {
     return (
       <FunctionComponent disabled={args.disabled}>
         Hello this line is long to cause it to wrap in brackets

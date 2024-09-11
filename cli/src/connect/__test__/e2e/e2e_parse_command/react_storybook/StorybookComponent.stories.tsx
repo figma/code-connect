@@ -1,5 +1,6 @@
-import { StoryParameters } from '../../..'
+import { StoryParameters } from '../../../../../react/index_react'
 import { StorybookComponent } from './StorybookComponent'
+import React from 'react'
 
 export default {
   title: 'StorybookComponent',

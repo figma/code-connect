@@ -990,7 +990,7 @@ export async function parseReactDoc(
 ): Promise<CodeConnectJSON> {
   const { checker, sourceFile, config } = parserContext
 
-  // Parse the arguments to the `Figma.connect()` call
+  // Parse the arguments to the `figma.connect()` call
   const { componentArg, figmaNodeUrlArg, configObjArg } = parseFigmaConnectArgs(node, parserContext)
 
   const { propsArg, exampleArg, variantArg, linksArg, importsArg } = parseConfigObjectArg(

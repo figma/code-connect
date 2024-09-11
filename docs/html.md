@@ -19,6 +19,9 @@ Install this package into your project's directory.
 npm install @figma/code-connect
 ```
 
+> [!NOTE]
+> Code Connect uses [package.json entry points](https://nodejs.org/api/packages.html#packages_package_entry_points), which requires `"moduleResolution": "NodeNext"` in your `tsconfig.json`. If this is a problem for your project, please let us know via [GitHub Issues](https://github.com/figma/code-connect/issues/new/choose).
+
 ## Basic setup
 
 To connect your first component go to Dev Mode in Figma and right-click on the component you want to connect, then choose `Copy link to selection` from the menu. Make sure you are copying the link to a main component and not an instance of the component. The main component will typically be located in a centralized design system library file. Using this link, run `figma connect create` from inside your project. Note that depending on what terminal software you're using, you might need to wrap the URL in quotes.

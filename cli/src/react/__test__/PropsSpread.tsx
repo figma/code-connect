@@ -1,7 +1,7 @@
 import React from 'react'
 
 interface ButtonProps {
-  width: string
+  width: string | undefined
   variant: string
   disabled: boolean
 }

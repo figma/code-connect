@@ -1,3 +1,3 @@
-import figma from '../..'
+import figma from '../index_react'
 
 figma.connect(null, 'ui/button')

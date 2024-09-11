@@ -17,11 +17,12 @@
     "node_modules",
     "dist",
     "src/__test__",
+    "src/html/__test__",
     "src/react/__test__",
     "src/connect/__test__",
     "src/connect/wizard/__test__",
     "src/storybook/__test__",
     "src/components",
-    "scripts"
+    "scripts",
   ],
 }

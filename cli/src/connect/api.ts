@@ -127,7 +127,10 @@ export interface FigmaConnectLink {
   url: string
 }
 
-export interface FigmaConnectMeta<T = {}, ExampleFnReturnT = unknown> {
+// ExampleFnReturnT is the return type of an example function.
+// ExtraExampleT allows us to pass in an extra type to the `example` property,
+// so that in Storybook, we can use strings to refer to non-hoisted functions
+export interface FigmaConnectMeta<T = {}, ExampleFnReturnT = unknown, ExtraExampleT = never> {
   /**
    * Restricts this figma connect to any variants that fullfill the given filter.
    * The filter is a map of Figma variant names to values. Example:
@@ -140,7 +143,7 @@ export interface FigmaConnectMeta<T = {}, ExampleFnReturnT = unknown> {
 
   /**
    * Prop mappings for the connected component. This is used to map the values of the component's props
-   * to the values that are used in Figma, using helper functions like `Figma.boolean`. For example:
+   * to the values that are used in Figma, using helper functions like `figma.boolean`. For example:
    * ```ts
    * props: {
    *   disabled: figma.boolean('Disabled'),
@@ -160,7 +163,7 @@ export interface FigmaConnectMeta<T = {}, ExampleFnReturnT = unknown> {
    * @param props
    * @returns
    */
-  example?: (props: T) => ExampleFnReturnT
+  example?: ((props: T) => ExampleFnReturnT) | ExtraExampleT
 
   /**
    * A list of links that will display in Figma along with the examples

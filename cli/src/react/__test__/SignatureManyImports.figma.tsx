@@ -1,4 +1,4 @@
-import figma from '../..'
+import figma from '../index_react'
 import { Icon1, Icon2, Icon3, Icon4, Icon5 } from './SignatureManyImports'
 
 figma.connect(Icon1, '1')
