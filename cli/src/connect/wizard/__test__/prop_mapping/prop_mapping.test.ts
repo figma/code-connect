@@ -4,55 +4,13 @@ import {
   generatePropMapping,
   extractSignatureAndGeneratePropMapping,
   generateValueMapping,
+  buildMatchableNamesMap,
+  MatchableNameTypes,
 } from '../../prop_mapping'
 import { FigmaRestApi } from '../../../figma_rest_api'
-
-import basic from './basic'
-
-const PROP_MAPPING_TEST_SUITES = [
-  basic,
-]
+import { runPropMappingBenchmarking } from './benchmarking_helpers'
 
 describe('Prop mapping', () => {
-  describe('generatePropMapping', () => {
-    PROP_MAPPING_TEST_SUITES.forEach((suite) => {
-      it(`Prop mapping meets acceptable threshold for ${suite.name}`, () => {
-        /**
-         * For each suite of components, get the total number of props that have a mapping
-         * in the test data, as well as the count of mappings we've correctly generated.
-         * We then divide correct / total to get the overall success rate
-         */
-        const [totalProps, totalCorrect] = suite.testCases.reduce(
-          ([totalProps, totalCorrect], testCase) => {
-            const actualResult = generatePropMapping({
-              componentPropertyDefinitions: testCase.componentPropertyDefinitions,
-              signature: testCase.signature,
-            })
-
-            // count correct prop mappings for single component
-            let numCorrect = 0
-            Object.keys(testCase.perfectResult).forEach((prop) => {
-              if (
-                JSON.stringify(actualResult[prop]) === JSON.stringify(testCase.perfectResult[prop])
-              ) {
-                numCorrect++
-              }
-            })
-
-            return [
-              totalProps + Object.keys(testCase.perfectResult).length,
-              totalCorrect + numCorrect,
-            ]
-          },
-          [0, 0],
-        )
-
-        const percentageCorrect = totalCorrect / totalProps
-
-        expect(percentageCorrect).toBeGreaterThanOrEqual(suite.passThreshold)
-      })
-    })
-  })
 
   describe('generateValueMapping', () => {
     it('creates value mapping using fuzzy matching', () => {
@@ -112,24 +70,89 @@ describe('Prop mapping', () => {
         cmd: {} as any,
       })
       expect(result).toEqual({
-        hasIcon: {
-          kind: 'boolean',
-          args: {
-            figmaPropName: 'Has Icon',
+        propMapping: {
+          hasIcon: {
+            kind: 'boolean',
+            args: {
+              figmaPropName: 'Has Icon',
+            },
+          },
+          title: {
+            kind: 'string',
+            args: {
+              figmaPropName: 'Title',
+            },
+          },
+          fuzzyMatchingString: {
+            kind: 'string',
+            args: {
+              figmaPropName: 'Fuzzy Match String',
+            },
           },
         },
-        title: {
-          kind: 'string',
-          args: {
-            figmaPropName: 'Title',
-          },
+        signature: {
+          anOptionalString: '?string',
+          children: 'React.ReactNode',
+          count: 'number',
+          fuzzyMatchingString: 'string',
+          hasIcon: 'false | true',
+          onClick: 'React.MouseEventHandler<HTMLDivElement>',
+          title: 'string',
         },
-        fuzzyMatchingString: {
-          kind: 'string',
-          args: {
-            figmaPropName: 'Fuzzy Match String',
-          },
+      })
+    })
+  })
+
+  describe('buildMatchableNamesMap', () => {
+    it('Builds a map of matchable names to their corresponding definitions, adding to array for any collisions', () => {
+      const componentPropertyDefinitions = {
+        'Has Icon': {
+          type: FigmaRestApi.ComponentPropertyType.Boolean,
+          defaultValue: false,
         },
+        Action: {
+          type: FigmaRestApi.ComponentPropertyType.Text,
+          defaultValue: '',
+        },
+        Variant: {
+          type: FigmaRestApi.ComponentPropertyType.Variant,
+          defaultValue: 'Filter',
+          variantOptions: ['Action', 'Filter'],
+        },
+      }
+
+      const result = buildMatchableNamesMap(componentPropertyDefinitions)
+      expect(result).toEqual({
+        Action: [
+          {
+            name: 'Action',
+            type: MatchableNameTypes.Property,
+          },
+          {
+            name: 'Action',
+            type: MatchableNameTypes.VariantValue,
+            variantProperty: 'Variant',
+          },
+        ],
+        Filter: [
+          {
+            name: 'Filter',
+            type: MatchableNameTypes.VariantValue,
+            variantProperty: 'Variant',
+          },
+        ],
+        HasIcon: [
+          {
+            name: 'Has Icon',
+            type: MatchableNameTypes.Property,
+          },
+        ],
+        Variant: [
+          {
+            name: 'Variant',
+            type: MatchableNameTypes.Property,
+          },
+        ],
       })
     })
   })

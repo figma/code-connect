@@ -11,6 +11,5 @@ export type PropMappingTestCase = {
 
 export type PropMappingTestSuite = {
   name: string
-  passThreshold: number // TODO maybe we want to be more granular with this - false positives, % rates for different helpers?
   testCases: PropMappingTestCase[]
 }

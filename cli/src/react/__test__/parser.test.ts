@@ -3,7 +3,7 @@ import path from 'path'
 import { CodeConnectReactConfig } from '../../connect/project'
 import { readFileSync } from 'fs'
 import { parseCodeConnect, ParserError } from '../../connect/parser_common'
-import { findAndResolveImports, parseReactDoc } from '../parser'
+import { findAndResolveImports, parseReactDoc, replacePropPlaceholders } from '../parser'
 
 async function testParse(
   file: string,
@@ -711,5 +711,29 @@ describe('Parser (JS templates)', () => {
     await expect(() => testParse('NoComponentArgOrExampleFunction.figma.tsx')).rejects.toThrowError(
       ParserError,
     )
+  })
+
+  describe('replacePropPlaceholders', () => {
+    it('replaces prop, child, and value placeholders', () => {
+      const result = replacePropPlaceholders(`
+const [isOpen, setIsOpen] = useState(__PROP__("isOpenPropName"))
+const style = {
+  width: __PROP__("widthPropName")
+}
+<MyComponent myProp={__PROP__("myPropName")} style={style}>
+  {__PROP__("childPropName")}
+</MyComponent>
+`)
+
+      expect(result).toEqual(`
+const [isOpen, setIsOpen] = useState(\${_fcc_renderPropValue(isOpenPropName)})
+const style = {
+  width: \${_fcc_renderPropValue(widthPropName)}
+}
+<MyComponent\${_fcc_renderReactProp('myProp', myPropName)} style={style}>
+  \${_fcc_renderReactChildren(childPropName)}
+</MyComponent>
+`)
+    })
   })
 })

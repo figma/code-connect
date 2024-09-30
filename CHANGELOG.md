@@ -1,6 +1,24 @@
+# Code Connect v1.1.4 (26th September 2024)
+
+## Fixed
+
+### React
+- Fixed a Prettier bug with the interactive setup
+- Removed empty enum mappings from generated Code Connect in interactive setup
+- Fixed an issue with props not rendering correctly in the Figma UI if used in the body of a component (e.g. as a hook argument). Any Code Connect with this issue will need republishing to be fixed. (fixes https://github.com/figma/code-connect/issues/167)
+- Support mapping from an enum value to a boolean prop in CLI Assistant
+
+## Features
+
+### Compose
+- The dependencies required to author Code Connect files now live in a separate module from the plugin and are hosted on Maven Central. Refer to the [documentation](docs/compose.md) for updated instructions on adding Code Connect to your project.
+
+### SwiftUI
+- Updated the swift-syntax dependency to include 600.0.0 (Swift 6)
+
 # Code Connect v1.1.3 (11th September 2024)
 
-## Fixed
+## Fixed
 
 ### HTML
 - Fixed an issue where `imports` was incorrectly not included in the TypeScript interface
@@ -9,18 +27,23 @@
 ### React
 - Fixed an issue where `imports` was incorrectly not included in the TypeScript interface (fixes https://github.com/figma/code-connect/issues/159)
 
+## Features
+
+### React
+- Code Connect files created in the CLI assistant will now start try to use auto-generated prop mappings in the component props. This is an early feature and support for different types is limited.
+
 # Code Connect v1.1.2 (10th September 2024)
 
-## Fixed
+## Fixed
 
-### React
+### React
 - Fixed an issue with `client` export used by the icon script (fixes https://github.com/figma/code-connect/issues/156)
 
 # Code Connect v1.1.1 (10th September 2024)
 
 ## Fixed
 
-### General
+### General
 - Fixed an issue where the `@figma/code-connect@1.1.0` npm package had an incorrect README
 
 # Code Connect v1.1.0 (10th September 2024)
@@ -205,10 +228,10 @@
 
 ### React
 
-- Added support for [nested properties](cli/README.md#nested-properties), using `figma.nestedProps`
-- Added support for [concatenating strings for CSS class names](cli/README.md#classname), using `figma.className`
-- Added support for [text content from layers](cli/README.md#text-content), using `figma.textContent`
-- Added support for [wildcards](cli/README.md#wildcard-match) with `figma.children`
+- Added support for [nested properties](docs/react.md#nested-properties), using `figma.nestedProps`
+- Added support for [concatenating strings for CSS class names](docs/react.md#classname), using `figma.className`
+- Added support for [text content from layers](docs/react.md#text-content), using `figma.textContent`
+- Added support for [wildcards](docs/react.md#wildcard-match) with `figma.children`
 
 ### SwiftUI
 

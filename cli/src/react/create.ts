@@ -12,6 +12,7 @@ import path from 'path'
 import { normalizeComponentName } from '../connect/create'
 import { Intrinsic, IntrinsicKind, ValueMappingKind } from '../connect/intrinsics'
 import { getOutFileName } from '../connect/create_common'
+import { ComponentTypeSignature } from './parser'
 
 export function isBooleanKind(propValue: string) {
   const normalized = propValue.toLowerCase()
@@ -112,7 +113,7 @@ function generateSinglePropMappingFromFigmaProp(
     } else {
       return `"${codePropName}": figma.enum('${figmaPropName}', { \n${propDef.variantOptions
         ?.map((value) => `  "${value}": "${normalizePropValue(value)}"`)
-        .join(',\n')}})`
+        .join(',\n')}\n})`
     }
   }
   if (propDef.type === 'INSTANCE_SWAP') {
@@ -168,7 +169,7 @@ function generatePropsFromMapping(
   ${unmappedProps
     .map((prop) => {
       // Comment out to make clear these are suggested. Singly-commented out lines for ease of uncommenting
-      return `// ${prop}`
+      return `// ${prop.replace(/\n/g, '\n// ')}`
     })
     .join(',\n')}`
       : ''
@@ -194,6 +195,44 @@ export function generateProps(component: CreateRequestPayload['component']) {
   return `{
   ${props.join(',\n  ')}
 }`
+}
+
+function generateExample(
+  component: string,
+  signature?: ComponentTypeSignature,
+  propMapping?: PropMapping,
+) {
+  if (!signature) {
+    return `<${component} />`
+  }
+  const props = Object.entries(signature)
+    .map(([propName, propDef]) => {
+      // Children are rendered inside of the example body rather than in a prop
+      if (propName === 'children') {
+        return null
+      } else if (propMapping && propMapping[propName]) {
+        return `${propName}={props.${propName}}`
+      } else if (!propDef.startsWith('?')) {
+        return `${propName}={/* TODO */} `
+      } else {
+        return null
+      }
+    })
+    .filter(Boolean)
+    .join('\n')
+
+  // const childProp = propMapping?['children'] ? `{props.${propMapping['children']}}` : null
+
+  // Nest child props inside of the element
+  if (signature['children'] && propMapping?.['children']) {
+    return `<${component}
+  ${props}>
+  {props.children}
+  </${component}>`
+  } else {
+    return `<${component}
+  ${props}/>`
+  }
 }
 
 // returns ES-style import path from given system path
@@ -285,7 +324,7 @@ ${
 
 figma.connect(${importName}, "${figmaNodeUrl}", {
   props: ${hasPropMapping ? generatePropsFromMapping(component, propMapping) : generateProps(component)},
-  example: (props) => <${importName} />
+  example: (props) => ${generateExample(importName, payload.reactTypeSignature, propMapping)},
 })
 `
   let formatted = prettier.format(codeConnect, {

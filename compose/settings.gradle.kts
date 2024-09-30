@@ -8,3 +8,4 @@
 
 rootProject.name = "FigmaCodeConnect"
 include("plugin")
+include("annotations")

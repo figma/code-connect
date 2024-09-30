@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { Intrinsic } from '../connect/intrinsics'
-import { BaseCodeConnectObject } from '../connect/figma_connect'
+import { ComponentTypeSignature } from '../react/parser'
+import { BaseCodeConnectObject } from './figma_connect'
+import { Intrinsic } from './intrinsics'
 
 export type ParseRequestPayload = {
   mode: 'PARSE'
@@ -141,6 +142,8 @@ export type CreateRequestPayload = {
   sourceExport?: string
   // A mapping of how Figma props should map to code properties
   propMapping?: PropMapping
+  // The type signature for the component (React only)
+  reactTypeSignature?: ComponentTypeSignature
   // Information about the Figma component. This matches the REST API (except the
   // figmaNodeUrl and normalizedName fields), which should make it easier to
   // implement and maintain as we can just pass it through

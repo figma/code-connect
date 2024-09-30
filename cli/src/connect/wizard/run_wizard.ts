@@ -18,7 +18,11 @@ import {
 import { parseFigmaNode } from '../validation'
 import chalk from 'chalk'
 import path from 'path'
-import { CreateRequestPayload, CreateResponsePayload } from '../parser_executable_types'
+import {
+  CreateRequestPayload,
+  CreateResponsePayload,
+  PropMapping,
+} from '../parser_executable_types'
 import { normalizeComponentName } from '../create'
 import { createReactCodeConnect } from '../../react/create'
 import { CodeConnectJSON } from '../../connect/figma_connect'
@@ -37,6 +41,7 @@ import { z } from 'zod'
 import { fromError } from 'zod-validation-error'
 import { autoLinkComponents } from './autolinking'
 import { extractSignatureAndGeneratePropMapping } from './prop_mapping'
+import { ComponentTypeSignature } from '../../react/parser'
 
 type ConnectedComponentMappings = { componentName: string; filepathExport: string }[]
 
@@ -454,23 +459,30 @@ async function createCodeConnectFiles({
     const { name } = path.parse(filepath)
 
     const outDir = outDirArg || path.dirname(filepath)
+    // Extract propMapping and signature if applicable
+    let propMapping: PropMapping | undefined = undefined
+    let reactTypeSignature: ComponentTypeSignature | undefined = undefined
+
+    if (projectInfo.config.parser === 'react' && filepath && exportName) {
+      const result = extractSignatureAndGeneratePropMapping({
+        filepath,
+        exportName,
+        projectInfo: projectInfo as ReactProjectInfo,
+        componentPropertyDefinitions: unconnectedComponentsMap[nodeId].componentPropertyDefinitions,
+        cmd,
+      })
+
+      propMapping = result.propMapping
+      reactTypeSignature = result.signature
+    }
 
     const payload: CreateRequestPayload = {
       mode: 'CREATE',
       destinationDir: outDir,
       sourceFilepath: filepath,
       sourceExport: exportName || undefined,
-      propMapping:
-        projectInfo.config.parser === 'react' && filepath && exportName
-          ? extractSignatureAndGeneratePropMapping({
-              filepath,
-              exportName,
-              projectInfo: projectInfo as ReactProjectInfo,
-              componentPropertyDefinitions:
-                unconnectedComponentsMap[nodeId].componentPropertyDefinitions,
-              cmd,
-            })
-          : undefined,
+      propMapping,
+      reactTypeSignature,
       component: {
         figmaNodeUrl: urlObj.toString(),
         normalizedName: normalizeComponentName(name),

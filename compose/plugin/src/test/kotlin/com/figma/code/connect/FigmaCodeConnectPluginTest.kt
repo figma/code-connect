@@ -8,7 +8,7 @@ import kotlin.test.Test
 import kotlin.test.assertNotNull
 
 /**
- * A simple unit test for the 'org.example.greeting' plugin.
+ * Unit test for verify code connect plugin creates tasks.
  */
 class FigmaCodeConnectPluginTest {
     @Test fun `plugin registers task`() {
@@ -17,6 +17,7 @@ class FigmaCodeConnectPluginTest {
         project.plugins.apply("com.figma.code.connect")
 
         // Verify the result
-        assertNotNull(project.tasks.findByName("parseFigmadoc"))
+        assertNotNull(project.tasks.findByName("parseCodeConnect"))
+        assertNotNull(project.tasks.findByName("createCodeConnect"))
     }
 }

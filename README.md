@@ -11,7 +11,7 @@ Code Connect is easy to set up, easy to maintain, type-safe, and extensible. Out
 
 ## CLI installation
 
-To install Code Connect locally to a React project, you can follow the instructions in the [React README](cli/README.md#installation).
+To install Code Connect locally to a React project, you can follow the instructions in the [React README](docs/react.md#installation).
 
 For other platforms, you first need to have Node.js v16 or newer installed on your computer. You can check if you already have Node.js installed and which version by running `node -v`. If you need to install Node.js, instructions for all platforms can be found [on the Node.js website](https://nodejs.org/en/download/package-manager).
 
@@ -38,7 +38,7 @@ Every platform supports some common configuration options, in addition to any pl
 
 ### `include` and `exclude`
 
-`include` and `exclude` are lists of globs for where to parse Code Connect files, and for where to search for your component code when using the [interactive setup](cli/README.md#interactive-setup). `include` and `exclude` paths must be relative to the location of the config file.
+`include` and `exclude` are lists of globs for where to parse Code Connect files, and for where to search for your component code when using the [interactive setup](docs/react.md#interactive-setup). `include` and `exclude` paths must be relative to the location of the config file.
 
 ```jsonp
 {

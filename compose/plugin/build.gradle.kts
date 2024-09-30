@@ -11,7 +11,7 @@ plugins {
     `java-gradle-plugin`
 
     // Apply the Kotlin JVM plugin to add support for Kotlin.
-    alias(libs.plugins.jvm)
+    kotlin("jvm")
 
     // Apply the maven-publish plugin to add support for publishing to Maven repositories.
     `maven-publish`
@@ -41,6 +41,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation(project(":plugin"))
+    implementation(project(":annotations"))
 }
 
 gradlePlugin {

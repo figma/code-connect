@@ -4,7 +4,6 @@ import { PropMappingTestSuite } from './types'
 
 const BASIC: PropMappingTestSuite = {
   name: 'basic',
-  passThreshold: 1,
   testCases: [
     {
       exportName: 'basic',

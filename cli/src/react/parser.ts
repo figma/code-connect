@@ -716,38 +716,7 @@ export function parseRenderFunction(
 
   let templateCode = ''
 
-  // Replace React prop placeholders we inserted above (like
-  // `reactPropName={__PROP__("figmaPropName")}`) with calls to
-  // _fcc_renderReactProp, which renders them correctly (see
-  // parser_template_helpers.ts)
-  exampleCode = exampleCode.replace(
-    // match " reactPropName={__PROP__("figmaPropName")}" and extract the names
-    // We allow hyphens in prop names (unlike React) to support rendering HTML attributes
-    / ([A-Za-z0-9\-]+)=\{__PROP__\("([A-Za-z0-9_\.]+)"\)\}/g,
-    (_match, reactPropName, figmaPropName) => {
-      return `\${_fcc_renderReactProp('${reactPropName}', ${figmaPropName})}`
-    },
-  )
-
-  // Replace React children placeholders like `${__PROP__("propName")}` with
-  // calls to _fcc_renderReactChildren, which renders them correctly (see
-  // parser_template_helpers.ts)
-  exampleCode = exampleCode.replace(
-    /\{__PROP__\("([A-Za-z_\.]+)"\)\}/g,
-    (_match, figmaPropName) => {
-      return `\${_fcc_renderReactChildren(${figmaPropName})}`
-    },
-  )
-
-  // Replace object values like `{ prop: __PROP__("propName") }` or `{
-  // 'aria-prop': __PROP__("propName") }` with `{ prop: ${propName} }`. These
-  // never need special treatment based on their type.
-  exampleCode = exampleCode.replace(
-    /([^\s]+):\s+__PROP__\("([A-Za-z_\.]+)"\)/g,
-    (_match, objectKey, figmaPropName) => {
-      return `${objectKey}: \${_fcc_renderPropValue(${figmaPropName})}`
-    },
-  )
+  exampleCode = replacePropPlaceholders(exampleCode)
 
   // Generate the template code
   // Inject React-specific template helper functions
@@ -785,6 +754,39 @@ export function parseRenderFunction(
     imports,
     nestable,
   }
+}
+
+export function replacePropPlaceholders(exampleCode: string) {
+  // Replace React prop placeholders we inserted above (like
+  // `reactPropName={__PROP__("figmaPropName")}`) with calls to
+  // _fcc_renderReactProp, which renders them correctly (see
+  // parser_template_helpers.ts)
+  exampleCode = exampleCode.replace(
+    // match " reactPropName={__PROP__("figmaPropName")}" and extract the names
+    // We allow hyphens in prop names (unlike React) to support rendering HTML attributes
+    / ([A-Za-z0-9\-]+)=\{__PROP__\("([A-Za-z0-9_\.]+)"\)\}/g,
+    (_match, reactPropName, figmaPropName) => {
+      return `\${_fcc_renderReactProp('${reactPropName}', ${figmaPropName})}`
+    },
+  )
+
+  // Replace React children placeholders like `${__PROP__("propName")}` with
+  // calls to _fcc_renderReactChildren, which renders them correctly (see
+  // parser_template_helpers.ts)
+  exampleCode = exampleCode.replace(
+    /\{__PROP__\("([A-Za-z_\.]+)"\)\}/g,
+    (_match, figmaPropName) => {
+      return `\${_fcc_renderReactChildren(${figmaPropName})}`
+    },
+  )
+
+  // Assume any remaining placeholders are values, e.g.
+  // - { prop: __PROP__("propName") }
+  // - useState(__PROP__("propName"))
+  // These never need special treatment based on their type.
+  return exampleCode.replace(/__PROP__\("([A-Za-z_\.]+)"\)/g, (_match, figmaPropName) => {
+    return `\${_fcc_renderPropValue(${figmaPropName})}`
+  })
 }
 
 function followIdentifierToStringLiteralDeclaration(

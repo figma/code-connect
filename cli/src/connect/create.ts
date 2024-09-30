@@ -72,6 +72,9 @@ export async function createCodeConnectFromUrl({
     if (response.status === 200) {
       logger.info('Parsing response')
       const component = findComponentsInDocument(response.data.document, nodeIds)[0]
+      if (component === undefined) {
+        exitWithError('Could not find a component in the provided URL')
+      }
       const normalizedName = normalizeComponentName(component.name)
 
       const payload: CreateRequestPayload = {
