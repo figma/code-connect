@@ -7,3 +7,7 @@ export function DefinedInDifferentFile(props: { definedInDifferentFile: true }) 
 export function ReExportedComponent(props: { reExportedComponent: true }) {
   return <>Hello world</>
 }
+
+export function AnotherReExportedComponent(props: { anotherReExportedComponent: true }) {
+  return <>Hello world</>
+}

@@ -1,5 +1,5 @@
 import ts, { JsxExpression } from 'typescript'
-import { FIGMA_CONNECT_CALL, IntrinsicKind, PropMappings, intrinsicToString } from './intrinsics'
+import { FIGMA_CONNECT_CALL, PropMappings, valueToString } from './intrinsics'
 import { highlight, reset } from '../common/logging'
 import { error } from 'console'
 import {
@@ -78,7 +78,7 @@ export function makeCreatePropPlaceholder({
   sourceFile,
 }: {
   /** The prop mappings object */
-  propMappings: PropMappings | undefined
+  propMappings?: PropMappings | undefined
   /** The set of referenced props in the current example */
   referencedProps: Set<string>
   /** The source file */
@@ -104,15 +104,18 @@ export function makeCreatePropPlaceholder({
       propReferenceName = name.split('.')[0]
     }
 
-    const mappedProp = propMappings && propMappings[propReferenceName]
-    if (!mappedProp) {
-      throw new ParserError(
-        `Could not find prop mapping for ${propReferenceName} in the props object`,
-        {
-          sourceFile,
-          node,
-        },
-      )
+    // if prop mappings exist, check that the prop reference is in the mappings
+    if (propMappings) {
+      const mappedProp = propMappings[propReferenceName]
+      if (!mappedProp) {
+        throw new ParserError(
+          `Could not find prop mapping for ${propReferenceName} in the props object`,
+          {
+            sourceFile,
+            node,
+          },
+        )
+      }
     }
 
     referencedProps.add(propReferenceName)
@@ -188,7 +191,9 @@ export function visitPropReferencingNode({
   }
   // object destructuring references
   if (ts.isObjectBindingPattern(propsParameter.name)) {
-    const isValidNode = useJsx ? ts.isJsxExpression(node) : ts.isIdentifier(node)
+    const isValidNode = useJsx
+      ? ts.isJsxExpression(node)
+      : ts.isPropertyAccessExpression(node) || ts.isIdentifier(node)
     const target = useJsx ? (node as JsxExpression).expression : node
 
     if (
@@ -213,15 +218,12 @@ export function visitPropReferencingNode({
  * @returns Template code string
  */
 export function getReferencedPropsForTemplate({
-  propMappings,
-  referencedProps,
-  exp,
-  sourceFile,
+  propMappings = {},
 }: {
   /** The prop mappings object */
   propMappings: PropMappings | undefined
   /** The set of referenced props */
-  referencedProps: Set<string>
+  referencedProps?: Set<string>
   /** The top level node, used for error reporting */
   exp: ts.Node
   /** The source file */
@@ -229,17 +231,12 @@ export function getReferencedPropsForTemplate({
 }) {
   let templateCode = ''
 
-  if (propMappings && referencedProps.size > 0) {
-    referencedProps.forEach((prop) => {
+  if (Object.keys(propMappings).length > 0) {
+    for (const prop in propMappings) {
       const propMapping = propMappings[prop]
-      if (!propMapping) {
-        throw new ParserError(`Could not find prop mapping for ${prop}`, {
-          sourceFile,
-          node: exp,
-        })
-      }
-      templateCode += `const ${prop} = ${intrinsicToString(propMapping)}\n`
-    })
+      templateCode += `const ${prop} = ${valueToString(propMapping)}\n`
+    }
+    templateCode += `const __props = { ${Object.keys(propMappings).join(', ')} }\n`
     templateCode += '\n'
   }
 

@@ -18,11 +18,7 @@ import {
 import { parseFigmaNode } from '../validation'
 import chalk from 'chalk'
 import path from 'path'
-import {
-  CreateRequestPayload,
-  CreateResponsePayload,
-  PropMapping,
-} from '../parser_executable_types'
+import { CreateRequestPayload, CreateResponsePayload } from '../parser_executable_types'
 import { normalizeComponentName } from '../create'
 import { createReactCodeConnect } from '../../react/create'
 import { CodeConnectJSON } from '../../connect/figma_connect'
@@ -33,6 +29,7 @@ import {
   getFilepathExportsFromFiles,
   parseFilepathExport,
   getIncludesGlob,
+  isValidFigmaUrl,
 } from './helpers'
 import stripAnsi from 'strip-ansi'
 import { callParser, handleMessages } from '../parser_executables'
@@ -40,8 +37,7 @@ import ora from 'ora'
 import { z } from 'zod'
 import { fromError } from 'zod-validation-error'
 import { autoLinkComponents } from './autolinking'
-import { extractSignatureAndGeneratePropMapping } from './prop_mapping'
-import { ComponentTypeSignature } from '../../react/parser'
+import { extractDataAndGenerateAllPropsMappings } from './prop_mapping_helpers'
 
 type ConnectedComponentMappings = { componentName: string; filepathExport: string }[]
 
@@ -442,6 +438,8 @@ async function createCodeConnectFiles({
   outDir: outDirArg,
   projectInfo,
   cmd,
+  accessToken,
+  useAi,
 }: {
   figmaFileUrl: string
   linkedNodeIdsToFilepathExports: Record<string, string>
@@ -449,7 +447,42 @@ async function createCodeConnectFiles({
   outDir: string | null
   projectInfo: ProjectInfo
   cmd: BaseCommand
+  accessToken: string
+  useAi: boolean
 }) {
+  const filepathExportsToComponents = Object.entries(linkedNodeIdsToFilepathExports).reduce(
+    (map, [nodeId, filepathExport]) => {
+      map[filepathExport] = unconnectedComponentsMap[nodeId]
+      return map
+    },
+    {} as Record<string, FigmaRestApi.Component>,
+  )
+
+  let embeddingsFetchSpinner: ora.Ora | null = null
+
+  if (useAi) {
+    embeddingsFetchSpinner = ora({
+      text: 'Computing embeddings...',
+      color: 'green',
+    }).start()
+  }
+
+  const propMappingsAndData =
+    projectInfo.config.parser === 'react'
+      ? await extractDataAndGenerateAllPropsMappings({
+          filepathExportsToComponents,
+          projectInfo,
+          cmd,
+          figmaUrl: figmaFileUrl,
+          accessToken,
+          useAi,
+        })
+      : null
+
+  if (embeddingsFetchSpinner) {
+    embeddingsFetchSpinner.stop()
+  }
+
   for (const [nodeId, filepathExport] of Object.entries(linkedNodeIdsToFilepathExports)) {
     const urlObj = new URL(figmaFileUrl)
     urlObj.search = ''
@@ -459,30 +492,14 @@ async function createCodeConnectFiles({
     const { name } = path.parse(filepath)
 
     const outDir = outDirArg || path.dirname(filepath)
-    // Extract propMapping and signature if applicable
-    let propMapping: PropMapping | undefined = undefined
-    let reactTypeSignature: ComponentTypeSignature | undefined = undefined
-
-    if (projectInfo.config.parser === 'react' && filepath && exportName) {
-      const result = extractSignatureAndGeneratePropMapping({
-        filepath,
-        exportName,
-        projectInfo: projectInfo as ReactProjectInfo,
-        componentPropertyDefinitions: unconnectedComponentsMap[nodeId].componentPropertyDefinitions,
-        cmd,
-      })
-
-      propMapping = result.propMapping
-      reactTypeSignature = result.signature
-    }
 
     const payload: CreateRequestPayload = {
       mode: 'CREATE',
       destinationDir: outDir,
       sourceFilepath: filepath,
       sourceExport: exportName || undefined,
-      propMapping,
-      reactTypeSignature,
+      reactTypeSignature: propMappingsAndData?.propMappingData[filepathExport]?.signature,
+      propMapping: propMappingsAndData?.propMappings[filepathExport],
       component: {
         figmaNodeUrl: urlObj.toString(),
         normalizedName: normalizeComponentName(name),
@@ -513,9 +530,7 @@ async function createCodeConnectFiles({
 
     const { hasErrors } = handleMessages(result.messages)
 
-    if (hasErrors) {
-      exitWithError('Errors encountered calling parser, exiting')
-    } else {
+    if (!hasErrors) {
       result.createdFiles.forEach((file) => {
         logger.info(success(`Created ${file.filePath}`))
       })
@@ -740,7 +755,7 @@ export async function runWizard(cmd: BaseCommand) {
     type: 'text',
     message: 'What is the URL of the Figma file containing your design system library?',
     name: 'figmaFileUrl',
-    validate: (value: string) => !!parseFileKey(value) || 'Please enter a valid Figma file URL.',
+    validate: (value: string) => isValidFigmaUrl(value) || 'Please enter a valid Figma file URL.',
   })
 
   const componentsFromFile = await fetchTopLevelComponentsFromFile({
@@ -774,6 +789,25 @@ export async function runWizard(cmd: BaseCommand) {
       await createCodeConnectConfig({ dir, componentDirectory, config })
     }
   }
+
+  const { useAi: useAiSelection } = await askQuestionOrExit({
+    type: 'select',
+    name: 'useAi',
+    message:
+      'Code Connect offers AI support for accurate prop mapping between Figma and code components. Data is used only for mapping and is not stored or used for training. To learn more, visit https://help.figma.com/hc/en-us/articles/23920389749655-Code-Connect',
+    choices: [
+      {
+        title: 'Do not use AI for prop mapping (default)',
+        value: 'no',
+      },
+      {
+        title: 'Use AI for prop mapping',
+        value: 'yes',
+      },
+    ],
+  })
+
+  const useAi = useAiSelection === 'yes'
 
   const linkedNodeIdsToFilepathExports = {}
 
@@ -841,5 +875,7 @@ export async function runWizard(cmd: BaseCommand) {
     outDir,
     projectInfo,
     cmd,
+    accessToken,
+    useAi,
   })
 }

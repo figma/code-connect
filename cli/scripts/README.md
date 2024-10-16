@@ -1,6 +1,6 @@
 # Code Connect for icons
 
-This folder includes example scripts for generating Code Connect files for your components. This is useful for icons, where you might have tons of icons that you don't want to manually connect one by one.
+This folder includes example scripts for generating Code Connect files for your components. This is the recommended way of connecting icons, where you might have tons of icons that you don't want to manually connect one by one.
 
 ## Usage
 

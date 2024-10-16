@@ -1,6 +1,9 @@
 const figma = require('figma')
 
-export default figma.tsx`function Example() {
+const disabled = figma.currentLayer.__properties__.boolean('Disabled')
+const __props = { disabled }
+
+export default { ...figma.tsx`function Example() {
     const someExtraCode = 'test';
     return <FunctionComponent disabled={true}>Hello</FunctionComponent>;
-}`
+}`, metadata: { __props } }

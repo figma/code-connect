@@ -1,9 +1,10 @@
 import fs from 'fs'
 import path from 'path'
 import basic from './basic'
-import { generatePropMapping } from '../../prop_mapping'
+import { buildMatchableNamesMap } from '../../prop_mapping'
 import { Intrinsic } from '../../../intrinsics'
 import chalk from 'chalk'
+import { PropMappingData, generateAllPropsMappings } from '../../prop_mapping_helpers'
 
 const PROP_MAPPING_TEST_SUITES = [
   basic,
@@ -71,23 +72,39 @@ function isASubsetOf(a: any, b: any): boolean {
   return a === b
 }
 
-function getPropMappingBenchmarkingResults(
+async function getPropMappingBenchmarkingResults(
   printDiffSinceLastRun = false,
   prevResults?: BenchmarkingSuiteResult[],
-) {
+): Promise<BenchmarkingSuiteResult[]> {
   /**
    * For each suite of components, get the total number of props that have a mapping
    * in the test data, as well as the count of mappings we've correctly generated.
    * We then divide correct / total to get the overall success rate
    */
-  return PROP_MAPPING_TEST_SUITES.map(({ testCases, name }) => {
-    return testCases.reduce(
-      (suiteResults, testCase, caseIndex) => {
+  const results: BenchmarkingSuiteResult[] = []
+  for (const { name, testCases } of PROP_MAPPING_TEST_SUITES) {
+    const propMappingData: PropMappingData = {}
+
+    testCases.forEach((testCase, index) => {
+      propMappingData[`${index}`] = {
+        componentPropertyDefinitions: testCase.componentPropertyDefinitions,
+        signature: testCase.signature,
+        matchableNamesMap: buildMatchableNamesMap(testCase.componentPropertyDefinitions),
+      }
+    })
+
+    const propMappings = await generateAllPropsMappings({
+      propMappingData,
+      accessToken: '123',
+      figmaUrl: 'https://www.figma.com/file/123',
+      mockResponseName: name,
+      useAi: true,
+    })
+
+    const suiteResults = testCases.reduce(
+      (suiteResultsAcc, testCase, caseIndex) => {
         const componentResults: PropResultType[] = []
-        const actualResult = generatePropMapping({
-          componentPropertyDefinitions: testCase.componentPropertyDefinitions,
-          signature: testCase.signature,
-        })
+        const actualResult = propMappings[`${caseIndex}`]
 
         // iterate expected individual prop mappings for current component
         Object.keys(testCase.perfectResult).forEach((prop, propIndex) => {
@@ -104,12 +121,12 @@ function getPropMappingBenchmarkingResults(
           }
           if (printDiffSinceLastRun && prevResults) {
             const prevPropResult = prevResults.find(
-              (prevSuite) => prevSuite.name === suiteResults.name,
+              (prevSuite) => prevSuite.name === suiteResultsAcc.name,
             )?.results[caseIndex]?.results[propIndex]
             if (propResult !== prevPropResult) {
               const text =
-                `Prop mapping result changed: ${PropResultType[prevPropResult!]} -> ${PropResultType[propResult]}` +
-                ` (${suiteResults.name} - ${testCase.exportName} - ${prop})` +
+                chalk.bold(`${PropResultType[prevPropResult!]} -> ${PropResultType[propResult]}`) +
+                ` ${suiteResultsAcc.name}~${testCase.exportName}.${prop}` +
                 (prop in actualResult
                   ? `\nResult: ${JSON.stringify(actualResult[prop], null, 2)}`
                   : '')
@@ -123,27 +140,31 @@ function getPropMappingBenchmarkingResults(
           componentResults.push(propResult)
         })
 
-        suiteResults.results.push({
+        suiteResultsAcc.results.push({
           componentName: testCase.exportName,
           results: componentResults,
         })
 
-        return suiteResults
+        return suiteResultsAcc
       },
       {
         name,
         results: [],
       } as BenchmarkingSuiteResult,
     )
-  })
+
+    results.push(suiteResults)
+  }
+
+  return results
 }
 
-export function runPropMappingBenchmarking() {
+export async function runPropMappingBenchmarking() {
   const prevResults = JSON.parse(
     fs.readFileSync(path.join(__dirname, 'prop_mapping_benchmarking_snapshot.json'), 'utf8'),
   ) as BenchmarkingSuiteResult[]
 
-  const results = getPropMappingBenchmarkingResults(true, prevResults)
+  const results = await getPropMappingBenchmarkingResults(true, prevResults)
 
   const hasChanged = JSON.stringify(results) !== JSON.stringify(prevResults)
 

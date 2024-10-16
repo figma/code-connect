@@ -4,7 +4,13 @@
 // conditionally required - see `client` for an example. Reach out in
 // #feat-code-connect if you're unsure.
 
-import { EnumValue, FigmaConnectAPI, FigmaConnectMeta, ValueOf } from '../connect/api'
+import {
+  EnumValue,
+  FigmaConnectAPI,
+  FigmaConnectMeta,
+  ValueOf,
+  ConnectedComponent,
+} from '../connect/api'
 import * as figma from './external'
 import * as StorybookTypes from '../storybook/external'
 import { FigmaConnectClient } from '../client/figma_client'
@@ -12,7 +18,7 @@ import { getClient } from '../connect/index_common'
 import { ReactMeta } from './types'
 
 const _client: FigmaConnectClient = getClient()
-const _figma: FigmaConnectAPI<JSX.Element> & {
+const _figma: FigmaConnectAPI<ConnectedComponent, JSX.Element> & {
   /**
    * Defines a code snippet that displays in Figma when a component is selected. This function has two signatures:
    * - When called with a component reference as the first argument, it will infer metadata such as the import statement
@@ -97,6 +103,30 @@ const _figma: FigmaConnectAPI<JSX.Element> & {
    * ```
    */
   nestedProps<V>(layer: string, input: V): V
+
+  /**
+   * Maps a Figma instance-swap property for the connected component. This prop is replaced with
+   * a nested connected component matching the Figma instance when viewed in Dev Mode. For example:
+   * ```ts
+   * props: {
+   *  icon: figma.instance('Icon'),
+   * }
+   * ```
+   * Would show the nested example for the component passed to the "Icon" property in Figma.
+   *
+   * If the nested connected component returns something other than JSX in its `example` function,
+   * you can pass a type parameter to `instance` to specify the return type. For example:
+   * ```ts
+   * props: {
+   *  icon: figma.instance<string>('Icon')
+   * }
+   * ```
+   *
+   * @param figmaPropName The name of the property on the Figma component
+   * @returns {ConnectedComponent} The connected component for the instance. The return value
+   * can be modified with helper functions such as `getProps` and `render`
+   */
+  instance<T = ConnectedComponent>(figmaPropName: string): T
 } = figma
 
 export { _figma as figma, _client as client }

@@ -87,7 +87,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
           sourceLocation: { line: 8 },
-          template: getExpectedTemplate('FunctionComponent'),
+          template: getExpectedTemplate('FunctionComponentNoProps'),
         },
       ])
     })
@@ -249,7 +249,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
           sourceLocation: { line: 8 },
-          template: getExpectedTemplate('FunctionComponent'),
+          template: getExpectedTemplate('FunctionComponentNoProps'),
           // name: 'Default',
         },
         {
@@ -272,7 +272,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           source:
             'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
           sourceLocation: { line: 8 },
-          template: getExpectedTemplate('FunctionComponent'),
+          template: getExpectedTemplate('FunctionComponentNoProps'),
           variant: { 'With icon': false },
           // name: 'Default',
         },
@@ -322,7 +322,7 @@ describe('convertStorybookFiles (JS templates)', () => {
           source:
             'https://storybook.com/?path=/docs/cli-src-storybook---test---examples-FunctionComponent',
           sourceLocation: { line: 8 },
-          template: getExpectedTemplate('FunctionComponent'),
+          template: getExpectedTemplate('FunctionComponentNoProps'),
         },
       ])
     })

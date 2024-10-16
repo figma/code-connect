@@ -1,0 +1,3 @@
+const figma = require('figma')
+
+export default figma.tsx`<FunctionComponent disabled={false}>Hello</FunctionComponent>`

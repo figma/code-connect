@@ -40,7 +40,7 @@ ${path.join(testPath, 'test-component.figma.ts')}${maybeLabelMessage}`,
       },
     ])
 
-    expect(json[0].template.startsWith('function _fcc_renderHtmlValue')).toBe(true)
+    expect(json[0].template.startsWith('function _fcc_templateString')).toBe(true)
     // We don't care about checking the contents of the function as this can change
     expect(
       json[0].template.endsWith('export default figma.html`<my-component></my-component>`\n'),

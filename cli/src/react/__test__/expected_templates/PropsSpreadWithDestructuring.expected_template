@@ -13,5 +13,6 @@ const width = figma.currentLayer.__properties__.enum('Size', {
 "Large": undefined,
 "Wide": 'fit-parent'})
 const disabled = figma.currentLayer.__properties__.boolean('Disabled')
+const __props = { variant, width, disabled }
 
-export default figma.tsx`<Button${_fcc_renderReactProp('variant', variant)}${_fcc_renderReactProp('width', width)}${_fcc_renderReactProp('disabled', disabled)}/>`
+export default { ...figma.tsx`<Button${_fcc_renderReactProp('variant', variant)}${_fcc_renderReactProp('width', width)}${_fcc_renderReactProp('disabled', disabled)}/>`, metadata: { __props } }

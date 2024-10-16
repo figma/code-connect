@@ -11,16 +11,16 @@ import { HtmlMeta } from './types'
 
 function connectType<P = {}>(_figmaNodeUrl: string, _meta?: HtmlMeta<P>): void {}
 
-function instanceType(_figmaPropName: string): HtmlTemplateString {
+function childrenType(_layers: string | string[]): HtmlTemplateString {
   return {
     __tag: 'HtmlTemplateString',
   }
 }
 
-function childrenType(_layers: string | string[]): HtmlTemplateString {
+export function instanceType<T = HtmlTemplateString>(_figmaPropName: string): T {
   return {
     __tag: 'HtmlTemplateString',
-  }
+  } as T
 }
 
 export {

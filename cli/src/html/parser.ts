@@ -1,5 +1,4 @@
 import ts, { isTemplateExpression, SyntaxKind } from 'typescript'
-import { getRemoteFileUrl } from '../connect/project'
 import {
   stripQuotesFromNode,
   parsePropertyOfType,
@@ -49,9 +48,9 @@ function getHtmlTaggedTemplateNode(node: ts.Node): ts.TaggedTemplateExpression |
  * extract information which is used in generating the template:
  * 1. A dictionary of template placeholders which correspond to HTML attribute
  *    values. The key is the placeholder index, and the value is the attribute
- *    name. We use this to render attribute placeholders appropriately (either
- *    in quotes for strings, or as either the attribute name or nothing for
- *    booleans).
+ *    name. The attribute name is unused (it used to be used in the output, but
+ *    we need to preserve case to support Angular, which JSDOM can't do unless
+ *    you use XHTML mode, and that doesn't support attributes without a value).
  * 2. Whether the template is "nestable" or not. A template is considered
  *    nestable if it has only one top level element.
  *
@@ -62,9 +61,9 @@ function getHtmlTaggedTemplateNode(node: ts.Node): ts.TaggedTemplateExpression |
  *    detect.
  * 2. Use JSDOM to turn this into a DOM.
  * 3. Iterate over every node in the DOM, and if the node has any attributes
- *    starting `__FIGMA_PLACEHOLDER`, store the info of these attributes.
- *    This allows us to know which template literal placeholders correspond to
- *    HTML attributes when we construct the template.
+ *    starting `__FIGMA_PLACEHOLDER`, store the info of these attributes. This
+ *    allows us to know which template literal placeholders correspond to HTML
+ *    attributes when we construct the template.
  */
 function getInfoFromDom(
   templateExp: ts.TemplateExpression | ts.TaggedTemplateExpression,
@@ -307,7 +306,7 @@ export function parseExampleTemplate(
 
       // If the next placeholder is an attribute, then match the start of the
       // attribute (`attribute=`) at the end of this chunk, so that we can
-      // remove it from the example code
+      // remove it from the example code and store the attribute name
       const attributeMatches = html.match(/(.*\s)([^\s]+)="?$/s)
       if (nextPlaceholderIsAttribute && attributeMatches) {
         // attributeMatches should always have matched here, but we check it
@@ -321,6 +320,12 @@ export function parseExampleTemplate(
         // If we are in this block, we know that we've matched an attribute, so
         // store whether it ends with a quote
         insideAttributeWithQuotes = html.endsWith('"')
+
+        // Return the attribute name so we can use it to construct the attribute
+        // in the output. We do this rather than extract it from the HTML with
+        // JSDOM because we want to preserve case, but do not want to parse the
+        // doc as XHTML, so there's no way to do it otherwise.
+        return attributeMatches[2]
       } else {
         // No attribute to remove, just add the code
         exampleCode += escapeTemplateString(html)
@@ -329,14 +334,17 @@ export function parseExampleTemplate(
     }
 
     // Process the first chunk, which is a special case as it is not in templateSpans
-    handleHtmlChunk(transformedTemplate.head.text, attributePlaceholders[0] !== undefined)
+    let maybeAttributeName = handleHtmlChunk(
+      transformedTemplate.head.text,
+      attributePlaceholders[0] !== undefined,
+    )
 
     // For each section of the template string, check that the expression is a
     // prop placeholder, then add the appropriate template function call
     transformedTemplate.templateSpans.forEach((part, index) => {
       if (!ts.isCallExpression(part.expression)) {
         throw new ParserError(
-          `Expected an call expression as a placeholder in the template, got ${SyntaxKind[part.expression.kind]}`,
+          `Expected a call expression as a placeholder in the template, got ${SyntaxKind[part.expression.kind]}`,
           { sourceFile, node: part.expression },
         )
       }
@@ -350,16 +358,18 @@ export function parseExampleTemplate(
       }
 
       const propVariableName = propNameArg.text
-      referencedProps.add(propVariableName)
 
       if (attributePlaceholders[index]) {
-        exampleCode += `\${_fcc_renderHtmlAttribute('${attributePlaceholders[index]}', ${propVariableName})}`
+        exampleCode += `\${_fcc_renderHtmlAttribute('${maybeAttributeName}', ${propVariableName})}`
       } else {
         exampleCode += `\${_fcc_renderHtmlValue(${propVariableName})}`
       }
 
       // Process the next chunk
-      handleHtmlChunk(part.literal.text, attributePlaceholders[index + 1] !== undefined)
+      maybeAttributeName = handleHtmlChunk(
+        part.literal.text,
+        attributePlaceholders[index + 1] !== undefined,
+      )
     })
   } else if (templateNode.template.kind === ts.SyntaxKind.FirstTemplateToken) {
     // Template string with no placeholders

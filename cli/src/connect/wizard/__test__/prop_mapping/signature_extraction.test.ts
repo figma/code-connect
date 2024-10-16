@@ -1,99 +1,115 @@
 import path from 'path'
-import { ReactProjectInfo, getProjectInfo, getReactProjectInfo } from '../../../project'
 import { extractSignature } from '../../signature_extraction'
 
 describe('extractSignature', () => {
-  let projectInfo: ReactProjectInfo
-  let componentsFilepath: string
+  const componentsFilepath = path.join(__dirname, 'tsProgram', 'react', 'Components.tsx')
 
-  beforeEach(async () => {
-    projectInfo = await getProjectInfo(path.join(__dirname, 'tsProgram', 'react'), '').then((res) =>
-      getReactProjectInfo(res as ReactProjectInfo),
-    )
-    componentsFilepath = path.join(__dirname, 'tsProgram', 'react', 'Components.tsx')
+  const TEST_CASES: {
+    testName: string
+    exportName: string
+    expectedProps: Record<string, string>
+  }[] = [
+    {
+      testName: 'broad set of types',
+      exportName: 'LotsOfProps',
+      expectedProps: {
+        children:
+          'undefined | null | string | number | false | true | ReactElement<any, string | JSXElementConstructor<any>> | ReactFragment | ReactPortal',
+        onClick: 'MouseEventHandler<HTMLDivElement>',
+        title: 'string',
+        hasIcon: 'false | true',
+        count: 'number',
+        anOptionalString: '?string',
+        fuzzyMatchingString: 'string',
+      },
+    },
+    {
+      testName: 'call expression',
+      exportName: 'MemoizedComponent',
+      expectedProps: {
+        unmemoized: 'true',
+      },
+    },
+    {
+      testName: 'variable alias',
+      exportName: 'AliasForComponent',
+      expectedProps: {
+        aliased: 'true',
+      },
+    },
+    {
+      testName: 'alias for variable defined in different file',
+      exportName: 'AliasForComponentInDifferentFile',
+      expectedProps: {
+        definedInDifferentFile: 'true',
+      },
+    },
+    {
+      testName: 'forwardRef wrapped component',
+      exportName: 'WithForwardRef',
+      expectedProps: {
+        forwarded: 'true',
+      },
+    },
+    {
+      testName: 'default export',
+      exportName: 'default',
+      expectedProps: {
+        isDefault: 'true',
+      },
+    },
+    {
+      testName: 're-exported component',
+      exportName: 'ReExportedComponent',
+      expectedProps: {
+        reExportedComponent: 'true',
+      },
+    },
+    {
+      testName: 're-exported component with with alias',
+      exportName: 'ReExportedComponentAsAlias',
+      expectedProps: {
+        reExportedComponent: 'true',
+      },
+    },
+    {
+      testName: 'class component',
+      exportName: 'ClassComponent',
+      expectedProps: {
+        classProp: 'true',
+      },
+    },
+    {
+      testName: 'immediately re-exported component',
+      exportName: 'AnotherReExportedComponent',
+      expectedProps: {
+        anotherReExportedComponent: 'true',
+      },
+    },
+    {
+      testName: 'generic types',
+      exportName: 'WithPickedProps',
+      expectedProps: {
+        withPickedProps: 'true',
+      },
+    },
+    {
+      testName: 'combining extends + assertions',
+      exportName: 'WithExtends',
+      expectedProps: {
+        withExtends: 'true',
+      },
+    },
+  ]
+
+  TEST_CASES.forEach(({ testName, exportName, expectedProps }) => {
+    it(`Extracts types for: ${testName}`, () => {
+      const result = extractSignature({
+        nameToFind: exportName,
+        sourceFilePath: componentsFilepath,
+      })
+
+      expect(result).toEqual(expectedProps)
+    })
   })
-
-  it('Extracts signature containing a broad set of types', async () => {
-    const result = await extractSignature({
-      nameToFind: 'LotsOfProps',
-      sourceFilePath: componentsFilepath,
-      projectInfo,
-    })
-    expect(result).toEqual({
-      children: 'React.ReactNode',
-      onClick: 'React.MouseEventHandler<HTMLDivElement>',
-      title: 'string',
-      hasIcon: 'false | true',
-      count: 'number',
-      anOptionalString: '?string',
-      fuzzyMatchingString: 'string',
-    })
-  })
-
-  it('Extracts signature from a call expression', async () => {
-    const result = await extractSignature({
-      nameToFind: 'MemoizedComponent',
-      sourceFilePath: componentsFilepath,
-      projectInfo,
-    })
-    expect(result).toEqual({
-      unmemoized: 'true',
-    })
-  })
-
-  it('Extracts signature from a variable alias', async () => {
-    const result = await extractSignature({
-      nameToFind: 'AliasForComponent',
-      sourceFilePath: componentsFilepath,
-      projectInfo,
-    })
-    expect(result).toEqual({
-      aliased: 'true',
-    })
-  })
-
-  it('Extracts signature from an alias for variable defined in different file', async () => {
-    const result = await extractSignature({
-      nameToFind: 'AliasForComponentInDifferentFile',
-      sourceFilePath: componentsFilepath,
-      projectInfo,
-    })
-    expect(result).toEqual({
-      definedInDifferentFile: 'true',
-    })
-  })
-
-  it('Extracts signature from a forwardRef wrapped component', async () => {
-    const result = await extractSignature({
-      nameToFind: 'WithForwardRef',
-      sourceFilePath: componentsFilepath,
-      projectInfo,
-    })
-    expect(result).toEqual({
-      forwarded: 'true',
-    })
-  })
-
-  it('Extracts signature from default export', async () => {
-    const result = await extractSignature({
-      nameToFind: 'default',
-      sourceFilePath: componentsFilepath,
-      projectInfo,
-    })
-    expect(result).toEqual({
-      isDefault: 'true',
-    })
-  })
-
-  // TODO support this
-  // it('Extracts signature from a re-exported component', async () => {
-  //   const result = await extractSignature({
-  //     nameToFind: 'ReExportedComponent',
-  //     sourceFilePath: componentsFilepath,
-  //     projectInfo,
-  //   })
-  //   expect(result).toEqual({
-  //     reExportedComponent: 'true',
-  //   })
-  // })
 })

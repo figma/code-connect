@@ -12,6 +12,7 @@ import path from 'path'
 import prompts, { Choice } from 'prompts'
 import { BaseCommand } from '../../commands/connect'
 import { isFigmaConnectFile } from '../parser_common'
+import { parseFileKey } from '../helpers'
 
 export function maybePrefillWizardQuestionsForTesting() {
   if (process.env.JEST_WORKER_ID && process.env.WIZARD_ANSWERS_TO_PREFILL) {
@@ -92,7 +93,7 @@ export function parseFilepathExport(filepathExport: string) {
   }
 }
 
-function getFilepathExport(filepath: string, exp: string) {
+export function getFilepathExport(filepath: string, exp: string) {
   return `${filepath}${FILEPATH_EXPORT_DELIMITER}${exp}`
 }
 
@@ -157,4 +158,19 @@ export function getFilepathExportsFromFiles(projectInfo: ProjectInfo, cmd: BaseC
     }
     return options
   }, [] as string[])
+}
+
+export function isValidFigmaUrl(url: string) {
+  try {
+    const { hostname } = new URL(url)
+    if (
+      !hostname.includes('figma.com')
+    ) {
+      return false
+    }
+
+    return !!parseFileKey(url)
+  } catch (e) {
+    return false
+  }
 }

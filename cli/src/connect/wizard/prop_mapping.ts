@@ -1,20 +1,32 @@
-import { ReactProjectInfo } from '../project'
 import { ComponentTypeSignature } from '../../react/parser'
 import { FigmaRestApi } from '../figma_rest_api'
 import { PropMapping } from '../parser_executable_types'
-import { MatchData, Searcher } from 'fast-fuzzy'
-import { BaseCommand } from '../../commands/connect'
-import { logger } from '../../common/logging'
-import { Intrinsic, IntrinsicKind, ValueMapping, ValueMappingKind } from '../../connect/intrinsics'
-import { extractSignature } from './signature_extraction'
+import { Searcher } from 'fast-fuzzy'
+import { Intrinsic, IntrinsicKind, ValueMapping } from '../../connect/intrinsics'
 import { isBooleanKind } from '../../react/create'
+import { ComponentMatchResults, MatchableNamesMap, PropMatchResult } from './prop_mapping_helpers'
+
+/**
+ * These thresholds were come up with by running the benchmarking
+ * and tweaking until high positives + acceptable false positives
+ * were achieved. It's worth repeating this process whenever making
+ * changes to the mapping algorithm.
+ */
+const MININUM_MATCH_SCORES = {
+  fuzzy: {
+    property: 0.65,
+    variantValue: 0.8,
+  },
+  embeddings: {
+    property: 0.84,
+    variantValue: 0.87,
+  },
+}
 
 /**
  * Used when we should output a placeholder for an unknown value in prop mapping.
  */
 export const PROPERTY_PLACEHOLDER = 'PROPERTY_PLACEHOLDER'
-
-const PROP_MINIMUM_MATCH_THRESHOLD = 0.8
 
 export function generateValueMapping(
   propSignature: string,
@@ -29,6 +41,14 @@ export function generateValueMapping(
     }
     return valueMapping
   }, {} as ValueMapping)
+}
+
+function signatureIsJsxLike(signature: string) {
+  return (
+    signature.includes('ElementType') ||
+    signature.includes('ReactElement') ||
+    signature.includes('ReactNode')
+  )
 }
 
 /**
@@ -84,6 +104,17 @@ function generateIntrinsic({
       }
     }
   }
+  if (
+    signatureIsJsxLike(propSignature) &&
+    figmaPropDef.type === FigmaRestApi.ComponentPropertyType.InstanceSwap
+  ) {
+    return {
+      kind: IntrinsicKind.Instance,
+      args: {
+        figmaPropName,
+      },
+    }
+  }
   return null
 }
 
@@ -99,14 +130,19 @@ export enum MatchableNameTypes {
   // ChildLayer, // TODO
 }
 
-type MatchableName = {
+const MATCHABLE_NAME_TYPES_PRIORITY = [
+  MatchableNameTypes.Property,
+  MatchableNameTypes.VariantValue,
+] as const
+
+export type MatchableName = {
   type: MatchableNameTypes
   name: string
   variantProperty?: string // Only for VariantValue
 }
 
 /**
- * Builds a map of all properties and enum values, indexed by matchable name.
+ * Builds a map of all properties and enum values, indexed by name.
  * @param componentPropertyDefinitions
  * @returns A map of {name: values[]}. Each value is an array to avoid
  * collisions between properties / enum values
@@ -114,28 +150,26 @@ type MatchableName = {
 export function buildMatchableNamesMap(
   componentPropertyDefinitions?: FigmaRestApi.Component['componentPropertyDefinitions'],
 ) {
-  const matchableValues: Record<string, MatchableName[]> = {}
+  const matchableValues: MatchableNamesMap = {}
 
-  function add(matchableStr: string, definition: MatchableName) {
-    matchableValues[matchableStr] = matchableValues[matchableStr] || []
-    matchableValues[matchableStr].push(definition)
+  function add(name: string, definition: MatchableName) {
+    matchableValues[name] = matchableValues[name] || []
+    matchableValues[name].push(definition)
   }
 
   Object.entries(componentPropertyDefinitions || {}).forEach(([propName, propDef]) => {
-    const matchableStr = stripNodeIdFromPropertyName(propName).replace(DELIMITERS_REGEX, '')
+    const name = stripNodeIdFromPropertyName(propName)
 
-    add(matchableStr, {
+    add(name, {
       type: MatchableNameTypes.Property,
       name: propName,
     })
 
     if (propDef.type === FigmaRestApi.ComponentPropertyType.Variant) {
-      propDef.variantOptions?.forEach((variantOption) => {
-        const variantMatchableStr = variantOption.replace(DELIMITERS_REGEX, '')
-
-        add(variantMatchableStr, {
+      propDef.variantOptions?.forEach((variantValue) => {
+        add(variantValue, {
           type: MatchableNameTypes.VariantValue,
-          name: variantOption,
+          name: variantValue,
           variantProperty: propName,
         })
       })
@@ -148,140 +182,115 @@ export function buildMatchableNamesMap(
 export function generatePropMapping({
   componentPropertyDefinitions,
   signature,
+  componentMatchResults,
+  matchableNamesMap,
 }: {
   componentPropertyDefinitions: FigmaRestApi.Component['componentPropertyDefinitions']
   signature: ComponentTypeSignature
+  componentMatchResults?: ComponentMatchResults
+  matchableNamesMap: MatchableNamesMap
 }): PropMapping {
   const propMapping: PropMapping = {}
 
-  const matchableNames = buildMatchableNamesMap(componentPropertyDefinitions)
-
-  const searchSpace = Object.keys(matchableNames)
+  const searchSpace = Object.keys(matchableNamesMap)
   const searcher = new Searcher(searchSpace)
 
-  function findBestMatch(
-    matchData: MatchData<string>[],
-    { score, where }: { score: number; where: (item: MatchableName) => boolean },
-  ) {
-    for (const nameMatches of matchData) {
-      if (nameMatches.score < score) {
-        return null
-      }
-      const items = matchableNames[nameMatches.item]
-      const match = items.find(where)
-      if (match) {
-        return match
+  let minimumMatchScores = MININUM_MATCH_SCORES.fuzzy
+
+  const useEmbeddings = !!componentMatchResults
+  if (useEmbeddings) {
+    minimumMatchScores = MININUM_MATCH_SCORES.embeddings
+  }
+
+  function attemptGetIntrinsicForProp({
+    propMatch,
+    propSignature,
+  }: {
+    propMatch: PropMatchResult
+    propSignature: string
+  }) {
+    const itemsInPriorityOrder = [...matchableNamesMap[propMatch.item]].sort(
+      (a, b) =>
+        MATCHABLE_NAME_TYPES_PRIORITY.indexOf(a.type) -
+        MATCHABLE_NAME_TYPES_PRIORITY.indexOf(b.type),
+    )
+
+    for (const item of itemsInPriorityOrder) {
+      /**
+       * First, look for matching property names with compatible types
+       */
+      if (
+        item.type === MatchableNameTypes.Property &&
+        propMatch.score > minimumMatchScores.property
+      ) {
+        const intrinsic = generateIntrinsic({
+          propSignature,
+          figmaPropName: item.name,
+          figmaPropDef: componentPropertyDefinitions[item.name],
+        })
+        if (intrinsic) {
+          return intrinsic
+        }
+        /**
+         * Then if no match AND a boolean prop, look for matching variant values, e.g:
+         *
+         * disabled: figma.enum('State', {
+         *   Disabled: true,
+         * })
+         */
+      } else if (
+        item.type === MatchableNameTypes.VariantValue &&
+        propSignature === 'false | true' &&
+        propMatch.score > minimumMatchScores.variantValue
+      ) {
+        return {
+          kind: IntrinsicKind.Enum,
+          args: {
+            figmaPropName: item.variantProperty,
+            valueMapping: {
+              [item.name]: true,
+            },
+          },
+        } as Intrinsic
       }
     }
+
     return null
   }
 
+  /**
+   * Attempt to generate an intrinsic for a given property name by looking
+   * for name matches with a minimum threshold
+   *
+   * Embeddings are priorized over fuzzy matching if present (they
+   * may be missing if gated or missing permissions).
+   */
   for (const [propName, propSignatureWithOptionalModifier] of Object.entries(signature)) {
     const propSignature = propSignatureWithOptionalModifier.startsWith('?')
       ? propSignatureWithOptionalModifier.substring(1)
       : propSignatureWithOptionalModifier
 
-    const results = searcher.search(propName, { returnMatchData: true })
+    let matches = searcher.search(propName, { returnMatchData: true }) as PropMatchResult[]
 
-    if (results.length === 0) {
+    if (useEmbeddings) {
+      matches = componentMatchResults[propName]
+    }
+
+    if (matches.length === 0) {
       continue
     }
 
-    /**
-     * First, look for matching property names with compatible types
-     */
-    const matchingProperty = findBestMatch(results, {
-      score: PROP_MINIMUM_MATCH_THRESHOLD,
-      where: (item) => item.type === MatchableNameTypes.Property,
-    })
-    if (matchingProperty) {
-      const { name: figmaPropName } = matchingProperty
-
-      const intrinsic = generateIntrinsic({
+    for (const match of matches) {
+      const intrinsic = attemptGetIntrinsicForProp({
+        propMatch: match,
         propSignature,
-        figmaPropName,
-        figmaPropDef: componentPropertyDefinitions[figmaPropName],
       })
       if (intrinsic) {
         propMapping[propName] = intrinsic
-      }
-    }
-
-    /**
-     * Then if no match AND a boolean prop, look for matching variant values, e.g:
-     *
-     * disabled: figma.enum('State', {
-     *   Disabled: true,
-     * })
-     */
-    if (!propMapping[propName] && propSignature === 'false | true') {
-      const matchingProperty = findBestMatch(results, {
-        score: PROP_MINIMUM_MATCH_THRESHOLD,
-        where: (item) => item.type === MatchableNameTypes.VariantValue,
-      })
-      if (matchingProperty) {
-        const { name: variantValue, variantProperty } = matchingProperty
-        if (!variantProperty) {
-          throw new Error('Expected variant property') // satisfying TS
-        }
-        propMapping[propName] = {
-          kind: IntrinsicKind.Enum,
-          args: {
-            figmaPropName: variantProperty,
-            valueMapping: {
-              [variantValue]: true,
-            },
-          },
-        }
+        break
       }
     }
   }
 
   return propMapping
-}
-
-export function extractSignatureAndGeneratePropMapping({
-  exportName,
-  filepath,
-  projectInfo,
-  componentPropertyDefinitions,
-  cmd,
-}: {
-  exportName: string
-  filepath: string
-  projectInfo: ReactProjectInfo
-  componentPropertyDefinitions: FigmaRestApi.Component['componentPropertyDefinitions']
-  cmd: BaseCommand
-}): {
-  propMapping: PropMapping | undefined
-  signature: ComponentTypeSignature | undefined
-} {
-  let signature: ComponentTypeSignature
-
-  try {
-    signature = extractSignature({
-      nameToFind: exportName,
-      sourceFilePath: filepath,
-      projectInfo,
-    })
-    if (cmd.verbose && Object.keys(signature).length === 0) {
-      logger.warn(`No TS signature found for "${exportName}" in ${filepath}`)
-    }
-  } catch (e) {
-    if (cmd.verbose) {
-      logger.warn(`Could not extract TS signature for "${exportName}" in ${filepath}`)
-    }
-    return {
-      propMapping: undefined,
-      signature: undefined,
-    }
-  }
-
-  return {
-    propMapping: generatePropMapping({
-      componentPropertyDefinitions,
-      signature,
-    }),
-    signature: signature,
-  }
 }

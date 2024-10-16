@@ -1,3 +1,24 @@
+# Code Connect v1.2.0
+
+## Features
+
+### General
+- The interactive setup now offers AI support for accurate prop mapping between Figma and code components. Users will now be given the option to use AI during the setup process, which if chosen will assist in creating Code Connect files and attempting to accurately map your code to Figma properties.
+
+  Data is used only for mapping and is not stored or used for training. To learn more, visit https://help.figma.com/hc/en-us/articles/23920389749655-Code-Connect
+
+### React
+- Added support for returning strings or React components from the `example` function, in addition to JSX
+- Added `getProps` on `figma.instance()` which can be used to access props of a nested connected component
+- Added `render` on `figma.instance()` which can be used to render a nested connected component dynamically
+- Added support for including any custom props in the `props` object, that can be accessed with `getProps` in a parent component
+
+## Fixed
+
+### HTML
+- Case of attribute names is now preserved to support Angular (fixes https://github.com/figma/code-connect/issues/172)
+- Fixed a bug with `nestedProps` (fixes https://github.com/figma/code-connect/issues/176)
+
 # Code Connect v1.1.4 (26th September 2024)
 
 ## Fixed

@@ -20,7 +20,7 @@ async function writeBenchmarkingSnapshot(results: BenchmarkingSuiteResult[]) {
 }
 
 async function runBenchmarking() {
-  const { results, prevResults } = runPropMappingBenchmarking()
+  const { results, prevResults } = await runPropMappingBenchmarking()
   prettyPrintBenchmarkingResults(results, prevResults)
   await writeBenchmarkingSnapshot(results)
 }

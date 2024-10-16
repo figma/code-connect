@@ -8,6 +8,39 @@ export type EnumValue =
   | Function
   | Object
 
+/**
+ * These types are intended to be returned by figma helper functions for exposing the
+ * supported output modifiers for that type. There's no implementation for these types,
+ * they are resolved to primitive types when the `props` object is passed to `example`.
+ */
+export interface ConnectedComponent {
+  /**
+   * Returns the resolved props of the connected component. This is useful for accessing
+   * the `props` object of a child in a parent context. For example:
+   * ```ts
+   * figma.connect("parent", {
+   *  props: {
+   *   iconProps: figma.instance("Icon").getProps(),
+   *  },
+   *  example: (iconProps) => <IconButton iconId={iconProps.iconId} />,
+   * }
+   */
+  getProps<T = any>(): T
+  /**
+   * Renders the instance with the provided render function. The function is passed the resolved
+   * `props` of the nested connected component. This is useful for dynamically rendering a child
+   * component depending on parent context. For example:
+   * ```ts
+   * figma.connect("parent", {
+   *  props: {
+   *   icon: figma.instance("Icon").render(({ iconId }) => <Button.Icon iconId={iconId} />),
+   *  },
+   *  example: ({ icon }) => <Button icon={icon}/>,
+   * }
+   */
+  render<T = unknown>(renderFunction: (props: T) => JSX.Element): JSX.Element
+}
+
 // This contains the base API interface for figma.connect calls across React and
 // HTML. Any parts which are platform-specific (either the function signature or
 // its docblock) are specified in the individual index_<platform> and added to
@@ -15,7 +48,7 @@ export type EnumValue =
 //
 // To override a docblock, all signatures of that function must be moved into
 // the platform-specific index file.
-export interface FigmaConnectAPI<InstanceChildrenT> {
+export interface FigmaConnectAPI<InstanceChildrenT, ChildrenT> {
   /**
    * Maps a Figma Variant property to a set if values for the connected component. This prop is replaced
    * with values from the Figma instance when viewed in Dev Mode. For example:
@@ -60,7 +93,7 @@ export interface FigmaConnectAPI<InstanceChildrenT> {
    *
    * @param figmaPropName The name of the property on the Figma component
    */
-  instance(figmaPropName: string): InstanceChildrenT
+  instance<T = InstanceChildrenT>(figmaPropName: string): T
 
   /**
    * Maps a Figma instance layer to a nested code example. For example:
@@ -82,7 +115,7 @@ export interface FigmaConnectAPI<InstanceChildrenT> {
    *
    * @param figmaPropName The name of the property on the Figma component
    */
-  children(layerNames: string | string[]): InstanceChildrenT
+  children(layerNames: string | string[]): ChildrenT
 
   /**
    * Creates a className string by joining an array of strings. The argument supports both
@@ -130,7 +163,12 @@ export interface FigmaConnectLink {
 // ExampleFnReturnT is the return type of an example function.
 // ExtraExampleT allows us to pass in an extra type to the `example` property,
 // so that in Storybook, we can use strings to refer to non-hoisted functions
-export interface FigmaConnectMeta<T = {}, ExampleFnReturnT = unknown, ExtraExampleT = never> {
+export interface FigmaConnectMeta<
+  PropsT = {},
+  ResolvedPropsT = {},
+  ExampleFnReturnT = unknown,
+  ExtraExampleT = never,
+> {
   /**
    * Restricts this figma connect to any variants that fullfill the given filter.
    * The filter is a map of Figma variant names to values. Example:
@@ -155,7 +193,7 @@ export interface FigmaConnectMeta<T = {}, ExampleFnReturnT = unknown, ExtraExamp
    *   }),
    * }
    */
-  props?: T
+  props?: PropsT
 
   /**
    * The code example to display in Figma. Any mapped `props` are passed to the component,
@@ -163,7 +201,7 @@ export interface FigmaConnectMeta<T = {}, ExampleFnReturnT = unknown, ExtraExamp
    * @param props
    * @returns
    */
-  example?: ((props: T) => ExampleFnReturnT) | ExtraExampleT
+  example?: ((props: ResolvedPropsT) => ExampleFnReturnT) | ExtraExampleT
 
   /**
    * A list of links that will display in Figma along with the examples

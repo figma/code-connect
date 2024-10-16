@@ -33,7 +33,7 @@ import {
  * @param node AST node
  * @returns
  */
-function findJSXElement(
+export function findJSXElement(
   node: ts.Node,
 ): ts.JsxElement | ts.JsxSelfClosingElement | ts.JsxFragment | undefined {
   if (ts.isJsxElement(node) || ts.isJsxFragment(node) || ts.isJsxSelfClosingElement(node)) {
@@ -189,227 +189,7 @@ function getSourceFilesOfImportedIdentifiers(parserContext: ParserContext, _iden
   return imports
 }
 
-function findCallExpression(node: ts.Node): ts.CallExpression {
-  if (ts.isCallExpression(node)) {
-    return node
-  } else {
-    return ts.forEachChild(node, findCallExpression) as ts.CallExpression
-  }
-}
-
-/**
- * Traverses the AST and finds the first arrow function declaration
- * @param node
- * @returns
- */
-function findDescendantArrowFunction(node: ts.Node): ts.ArrowFunction {
-  if (ts.isArrowFunction(node)) {
-    return node
-  } else {
-    return ts.forEachChild(node, findDescendantArrowFunction) as ts.ArrowFunction
-  }
-}
-
-/**
- * Traverses the AST and finds the first function expression
- * (handles forwardRef:d component declarations)
- * @param node
- * @returns
- */
-function findDescendantFunctionExpression(node: ts.Node): ts.FunctionExpression {
-  if (ts.isFunctionExpression(node)) {
-    return node
-  } else {
-    return ts.forEachChild(node, findDescendantFunctionExpression) as ts.FunctionExpression
-  }
-}
-
-function getDeclarationFromSymbol(symbol: ts.Symbol) {
-  if (!symbol.declarations || !symbol.declarations.length) {
-    throw new Error(`No declarations found in symbol ${symbol.escapedName}`)
-  }
-  return symbol.declarations[0]
-}
-
-function resolveIdentifierSymbol(identifier: ts.Identifier, checker: ts.TypeChecker) {
-  const componentSymbol = checker.getSymbolAtLocation(identifier)
-
-  if (!componentSymbol) {
-    throw new Error(`Symbol not found at location ${identifier.getText()}`)
-  }
-
-  const componentDeclaration = getDeclarationFromSymbol(componentSymbol)
-
-  if (ts.isImportSpecifier(componentDeclaration) || ts.isImportClause(componentDeclaration)) {
-    let importDeclaration = findParentImportDeclaration(componentDeclaration)
-
-    if (!importDeclaration) {
-      throw new Error('No import statement found for component')
-    }
-
-    // The component should be imported from another file, we need to follow the
-    // aliased symbol to get the correct function definition
-    if (componentSymbol.flags & ts.SymbolFlags.Alias) {
-      return checker.getAliasedSymbol(componentSymbol)
-    }
-  }
-
-  return componentSymbol
-}
-
-/**
- * This handles a number of cases for finding the function expression of an exported symbol:
- * - A function that is exported directly (function declaration)
- * - A function that is exported as a variable (arrow function)
- * - A function expression wrapped in a forwardRef
- * - A function expression wrapped in a memo call
- * @param declaration an exported function declaration
- * @param checker
- */
-function findFunctionExpression(
-  declaration: ts.Declaration,
-  checker: ts.TypeChecker,
-  sourceFile: ts.SourceFile,
-) {
-  let functionExpression: ts.FunctionExpression | ts.ArrowFunction
-
-  // Example: export function Button() {}
-  if (ts.isFunctionDeclaration(declaration)) {
-    return declaration
-  }
-
-  // Example: export const Button = forwardRef(function Button() {})
-  if ((functionExpression = findDescendantFunctionExpression(declaration))) {
-    return functionExpression
-  }
-
-  // Example: export const Button = () => {}
-  if ((functionExpression = findDescendantArrowFunction(declaration))) {
-    return functionExpression
-  }
-
-  // Example: export const MemoButton = memo(Button)
-  // Example: export const ButtonWithRef = forwardRef(Button)
-  if (ts.isVariableDeclaration(declaration)) {
-    let componentSymbol: ts.Symbol | undefined = undefined
-
-    // Example: export const SomeAlias = Button
-    if (declaration.initializer && ts.isIdentifier(declaration.initializer)) {
-      componentSymbol = resolveIdentifierSymbol(declaration.initializer, checker)
-    } else {
-      const callExpression = findCallExpression(declaration)
-      const component = callExpression.arguments[0]
-      // follow the symbol to its declaration, then try to find the function expression again
-      componentSymbol = checker.getSymbolAtLocation(component)
-    }
-
-    if (!componentSymbol) {
-      throw new Error('No symbol found at location')
-    }
-
-    const componentDeclaration = getDeclarationFromSymbol(componentSymbol)
-    return findFunctionExpression(componentDeclaration, checker, sourceFile)
-  }
-
-  throw new ParserError('Failed to find function expression for component', {
-    sourceFile,
-    node: declaration,
-  })
-}
-
 export type ComponentTypeSignature = Record<string, string>
-
-/**
- * Extracts the type signature from the interface of a React component as a map of
- * keys to strings representing the type of that property. Appends a '?' to the value
- * if it's optional. Example:
- * {
- *  name: string
- *  disabled: ?boolean
- * }
- * @param symbol the symbol of the function declaration of the component (in the source file)
- * @param sourceFile the source file with the component definition
- * @param checker
- * @returns
- */
-export function extractComponentTypeSignature(
-  symbol: ts.Symbol,
-  checker: ts.TypeChecker,
-  sourceFile: ts.SourceFile,
-) {
-  const declaration = getDeclarationFromSymbol(symbol)
-
-  const ReactInterfaceNames = ['HTMLAttributes', 'Attributes', 'AriaAttributes', 'DOMAttributes']
-
-  let propsType: ts.Type | null = null
-
-  /**
-   * Special case for forwardRef as type is passed as generic arg
-   */
-  if (ts.isVariableDeclaration(declaration)) {
-    const callExpression = findCallExpression(declaration)
-
-    if (
-      (callExpression?.expression.getText() === 'forwardRef' ||
-        callExpression?.expression.getText() === 'React.forwardRef') &&
-      callExpression.typeArguments &&
-      callExpression.typeArguments.length === 2
-    ) {
-      propsType = checker.getTypeAtLocation(callExpression.typeArguments[1])
-    }
-  }
-
-  if (!propsType) {
-    const functionExpression = findFunctionExpression(declaration, checker, sourceFile)
-    propsType = checker.getTypeAtLocation(functionExpression.parameters[0])
-  }
-
-  if (!propsType) {
-    throw new InternalError(
-      `Failed to extract props from component declaration: ${declaration.getText()}`,
-    )
-  }
-
-  const propsMap: ComponentTypeSignature = {}
-  const props = propsType.getProperties()
-  for (const prop of props) {
-    // Skip props that are inherited from React types
-    // NOTE: this is pretty naive, in the future we might want to
-    // actually traverse the AST to determine if the types are declared
-    // in the React namespace
-
-    const parent = getDeclarationFromSymbol(prop).parent
-    if (ts.isInterfaceDeclaration(parent)) {
-      const parentInterfaceName = parent.name.getText()
-      if (
-        ReactInterfaceNames.includes(parentInterfaceName) ||
-        (parent.heritageClauses && parent.heritageClauses[0].getText().includes('HTMLAttributes'))
-      ) {
-        continue
-      }
-    }
-
-    if (!prop.valueDeclaration) {
-      throw new Error(`No valueDeclaration for symbol ${prop.escapedName}`)
-    }
-
-    const propType = checker.getTypeOfSymbolAtLocation(prop, prop.valueDeclaration)
-    let propTypeString = checker.typeToString(propType)
-
-    if (propType.isUnion()) {
-      // Get the types of the union
-      const unionTypes = propType.types
-
-      // Map each type to its string representation and join them with a comma
-      propTypeString = unionTypes.map((type) => checker.typeToString(type)).join(' | ')
-    }
-
-    propsMap[prop.name] =
-      prop.flags & ts.SymbolFlags.Optional ? `?${propTypeString}` : propTypeString
-  }
-
-  return propsMap
-}
 
 /**
  * Extract metadata about the referenced React component. Used by both the
@@ -535,7 +315,7 @@ export async function parseComponentMetadata(
 }
 
 /**
- * Parses the render function passed to `figma.connect()`, extracting the code and
+ * Parses a render function and ouputs a template string, extracting the code and
  * any import statements matching the JSX elements used in the function body
  *
  * @param exp A function or arrow function expression
@@ -544,14 +324,14 @@ export async function parseComponentMetadata(
  *
  * @returns The code of the render function and a list of imports
  */
-export function parseRenderFunction(
+export function parseRenderFunctionExpression(
   exp: ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration,
   parserContext: ParserContext,
   propMappings?: PropMappings,
 ) {
   const { sourceFile } = parserContext
 
-  let exampleCode: string
+  let renderFunctionCode: string
 
   if (exp.parameters.length > 1) {
     throw new ParserError(
@@ -562,8 +342,7 @@ export function parseRenderFunction(
 
   const propsParameter = exp.parameters[0]
 
-  // Keep track of any props which are referenced in the example so that we can
-  // insert the appropriate `figma.properties` call in the JS template
+  // Keep track of any props which are referenced in the example
   const referencedProps = new Set<string>()
 
   const createPropPlaceholder = makeCreatePropPlaceholder({
@@ -687,7 +466,7 @@ export function parseRenderFunction(
 
   if (jsx && (!block || (block && block.statements.length <= 1))) {
     // The function body is a single JSX element
-    exampleCode = printer.printNode(ts.EmitHint.Unspecified, jsx, sourceFile)
+    renderFunctionCode = printer.printNode(ts.EmitHint.Unspecified, jsx, sourceFile)
     nestable = true
   } else if (block) {
     // The function body has more stuff in it, so we wrap the body in a function
@@ -706,7 +485,7 @@ export function parseRenderFunction(
       block,
     )
     const printer = ts.createPrinter()
-    exampleCode = printer.printNode(ts.EmitHint.Unspecified, functionExpression, sourceFile)
+    renderFunctionCode = printer.printNode(ts.EmitHint.Unspecified, functionExpression, sourceFile)
   } else {
     throw new ParserError(
       `Expected a single JSX element or a block statement in the render function, got ${exp.getText()}`,
@@ -714,9 +493,54 @@ export function parseRenderFunction(
     )
   }
 
-  let templateCode = ''
+  renderFunctionCode = replacePropPlaceholders(renderFunctionCode)
 
-  exampleCode = replacePropPlaceholders(exampleCode)
+  // Escape backticks from the example code, as otherwise those would terminate the `figma.tsx` template literal
+  renderFunctionCode = renderFunctionCode.replace(/`/g, '\\`')
+
+  // Finally, output the render function as a figma.tsx call
+  const figmaTsxCall = `figma.tsx\`${renderFunctionCode}\``
+
+  // Find all JSX elements in the function body and extract their import
+  // statements
+  const jsxTags = findDescendants(
+    exp,
+    (element) => ts.isJsxElement(element) || ts.isJsxSelfClosingElement(element),
+  ) as (ts.JsxElement | ts.JsxSelfClosingElement)[]
+  const imports = getSourceFilesOfImportedIdentifiers(parserContext, jsxTags.map(getTagName))
+
+  return {
+    code: figmaTsxCall,
+    imports,
+    nestable,
+    referencedProps,
+  }
+}
+
+/**
+ * Parses the render function passed to `figma.connect()`, extracting the code and
+ * any import statements matching the JSX elements used in the function body
+ *
+ * @param exp A function or arrow function expression
+ * @param parserContext Parser context
+ * @param propMappings Prop mappings object as returned by parseProps
+ *
+ * @returns The code of the render function and a list of imports
+ */
+export function parseJSXRenderFunction(
+  exp: ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration,
+  parserContext: ParserContext,
+  propMappings?: PropMappings,
+) {
+  const { sourceFile } = parserContext
+
+  const { code, imports, nestable, referencedProps } = parseRenderFunctionExpression(
+    exp,
+    parserContext,
+    propMappings,
+  )
+
+  let templateCode = ''
 
   // Generate the template code
   // Inject React-specific template helper functions
@@ -734,20 +558,81 @@ export function parseRenderFunction(
     sourceFile,
   })
 
-  // Escape backticks from the example code, as otherwise those would terminate the `figma.tsx` template literal
-  exampleCode = exampleCode.replace(/`/g, '\\`')
+  const includeMetadata = propMappings && Object.keys(propMappings).length > 0
 
   // Finally, output the example code
-  templateCode += `export default figma.tsx\`${exampleCode}\`\n`
+  templateCode += includeMetadata
+    ? `export default { ...${code}, metadata: { __props } }\n`
+    : `export default ${code}\n`
 
-  // Find all JSX elements in the function body and extract their import
-  // statements
-  const jsxTags = findDescendants(
+  return {
+    code: templateCode,
+    imports,
+    nestable,
+  }
+}
+
+/**
+ * Parses the render function for a value (i.e. example which returns a string or React
+ * component reference, not JSX) passed to `figma.connect()`
+ */
+export function parseValueRenderFunction(
+  exp: ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration,
+  parserContext: ParserContext,
+  propMappings?: PropMappings,
+) {
+  const { sourceFile } = parserContext
+  const printer = ts.createPrinter()
+  if (!exp.body) {
+    throw new ParserError('Expected a function body', {
+      sourceFile: parserContext.sourceFile,
+      node: exp,
+    })
+  }
+
+  let exampleCode = printer.printNode(ts.EmitHint.Unspecified, exp.body, sourceFile)
+  const nestable = true
+
+  let templateCode = ''
+  // Generate the template code
+  // Inject React-specific template helper functions
+  templateCode = getParsedTemplateHelpersString() + '\n\n'
+
+  // Require the template API
+  templateCode += `const figma = require('figma')\n\n`
+
+  // Then we output `const propName = figma.properties.<kind>('propName')` calls
+  // for each referenced prop, so these are accessible to the template code.
+  templateCode += getReferencedPropsForTemplate({
+    propMappings,
     exp,
-    (element) => ts.isJsxElement(element) || ts.isJsxSelfClosingElement(element),
-  ) as (ts.JsxElement | ts.JsxSelfClosingElement)[]
+    sourceFile,
+  })
 
-  const imports = getSourceFilesOfImportedIdentifiers(parserContext, jsxTags.map(getTagName))
+  // Escape backticks from the example code
+  exampleCode = exampleCode.replace(/`/g, '\\`')
+
+  let imports: {
+    statement: string
+    file: string
+  }[] = []
+
+  const includeMetadata = propMappings && Object.keys(propMappings).length > 0
+
+  if (ts.isStringLiteral(exp.body)) {
+    // The value is a string, which is already wrapped in quotes
+    templateCode += includeMetadata
+      ? `export default { ...figma.value(${exampleCode}), metadata: { __props } }\n`
+      : `export default figma.value(${exampleCode})\n`
+  } else if (ts.isIdentifier(exp.body)) {
+    // The value is an identifier, i.e. a React component reference
+    const value = `_fcc_reactComponent("${exp.body.getText()}")`
+    const preview = `_fcc_renderPropValue(${value})`
+    templateCode += includeMetadata
+      ? `export default { ...figma.value(${value}, ${preview}), metadata: { __props } }\n`
+      : `export default figma.value(${value}, ${preview})\n`
+    imports = getSourceFilesOfImportedIdentifiers(parserContext, [exp.body.getText()])
+  }
 
   return {
     code: templateCode,
@@ -1013,7 +898,11 @@ export async function parseReactDoc(
     : undefined
 
   const props = propsArg ? parsePropsObject(propsArg, parserContext) : undefined
-  const render = exampleArg ? parseRenderFunction(exampleArg, parserContext, props) : undefined
+  const render = exampleArg
+    ? findJSXElement(exampleArg)
+      ? parseJSXRenderFunction(exampleArg, parserContext, props)
+      : parseValueRenderFunction(exampleArg, parserContext, props)
+    : undefined
   const variant = variantArg ? parseVariant(variantArg, sourceFile, checker) : undefined
   const links = linksArg ? parseLinks(linksArg, parserContext) : undefined
 

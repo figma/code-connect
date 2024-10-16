@@ -6,6 +6,21 @@
 
 declare const figma: { html: (template: TemplateStringsArray, ...args: any[]) => string }
 
+export function _fcc_templateString($value: string) {
+  return {
+    $value,
+    $type: 'template-string',
+  } as const
+}
+
+export function _fcc_object($value: Record<string, any>) {
+  return {
+    $value,
+    $type: 'object',
+    ...$value,
+  } as const
+}
+
 /**
  * Render a value to HTML, following sensible rules according to the type.
  *
@@ -50,7 +65,6 @@ function _fcc_renderHtmlAttribute(name: string, value: any) {
       return ''
     }
   } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint') {
-    // Some types might not make sense here but we'll allow anything to be stringified
     return `${name}="${value.toString().replaceAll('\n', '\\n').replaceAll('"', '\\"')}"`
   } else {
     // TODO make this show a proper error in the UI
@@ -59,5 +73,7 @@ function _fcc_renderHtmlAttribute(name: string, value: any) {
 }
 
 export function getParsedTemplateHelpersString() {
-  return [_fcc_renderHtmlValue, _fcc_renderHtmlAttribute].map((fn) => fn.toString()).join('\n')
+  return [_fcc_templateString, _fcc_object, _fcc_renderHtmlValue, _fcc_renderHtmlAttribute]
+    .map((fn) => fn.toString())
+    .join('\n')
 }

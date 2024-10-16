@@ -1,4 +1,4 @@
-import { PropMapping, ValueOf, EnumValue } from './api'
+import { PropMapping, ValueOf, EnumValue, ConnectedComponent } from './api'
 
 export function booleanType(_figmaPropName: string): boolean
 export function booleanType<V extends EnumValue>(
@@ -32,4 +32,8 @@ export function classNameType(_className: (string | undefined)[]) {
 
 export function textContentType(_layer: string) {
   return ''
+}
+
+export function instanceType<T = ConnectedComponent>(_figmaPropName: string): T {
+  return undefined as T
 }

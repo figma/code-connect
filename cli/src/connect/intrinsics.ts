@@ -1,5 +1,5 @@
 import * as ts from 'typescript'
-import { InternalError, ParserContext, ParserError } from './parser_common'
+import { InternalError, ParserContext, ParserError, findDescendants } from './parser_common'
 import {
   assertIsArrayLiteralExpression,
   assertIsStringLiteral,
@@ -18,6 +18,7 @@ import {
 } from '../react/parser_template_helpers'
 import htmlApi from '../html/index_html'
 import reactApi from '../react/index_react'
+import { Modifier, modifierToString, parseModifier } from './modifiers'
 
 export const API_PREFIX = 'figma'
 export const FIGMA_CONNECT_CALL = `${API_PREFIX}.connect`
@@ -36,6 +37,7 @@ export enum IntrinsicKind {
 export interface IntrinsicBase {
   kind: IntrinsicKind
   args: {}
+  modifiers?: Modifier[]
 }
 
 export type ValueMappingKind = FCCValue | Intrinsic
@@ -135,7 +137,7 @@ function makeIntrinsic<K extends keyof typeof htmlApi | typeof reactApi>(
   const name = `${API_PREFIX}.${intrinsicName}`
   Intrinsics[name] = {
     match: (exp: ts.CallExpression) => {
-      return ts.isCallExpression(exp) && exp.getText().startsWith(name)
+      return ts.isCallExpression(exp) && exp.getText().replace(/\s/g, '').startsWith(name)
     },
     ...obj(name),
   }
@@ -226,11 +228,13 @@ makeIntrinsic('instance', (name) => {
     parse: (exp: ts.CallExpression, ctx: ParserContext): FigmaInstance => {
       const { sourceFile } = ctx
       const figmaPropNameIdentifier = exp.arguments?.[0]
+
       assertIsStringLiteral(
         figmaPropNameIdentifier,
         sourceFile,
         `${name} takes at least one argument, which is the Figma property name`,
       )
+
       return {
         kind: IntrinsicKind.Instance,
         args: {
@@ -382,7 +386,41 @@ makeIntrinsic('textContent', (name) => {
 export function parseIntrinsic(exp: ts.CallExpression, parserContext: ParserContext): Intrinsic {
   for (const key in Intrinsics) {
     if (Intrinsics[key].match(exp)) {
-      return Intrinsics[key].parse(exp, parserContext)
+      // Chained call expressions in TS are nested with the innermost call expression
+      // being the first in the chain. We need to reverse the chain so that the intrinsic
+      // is the first element in the array. The TS AST looks like this for a().b():
+      // CallExpression [a().b()] ->
+      //   PropertyAccessExpression [a().b] ->
+      //     CallExpression [a()]
+
+      let callChain = []
+      let current: any = exp
+      while (current) {
+        if (ts.isCallExpression(current)) {
+          callChain.push(current)
+          current = current.expression
+        } else if (ts.isPropertyAccessExpression(current)) {
+          current = current.expression
+        } else {
+          current = null
+        }
+      }
+
+      // If there's only one call expression just return the matching intrinsic
+      callChain = callChain.reverse()
+      if (callChain.length <= 1) {
+        return Intrinsics[key].parse(exp, parserContext)
+      }
+
+      // The first call expression is the intrinsic itself, and any following call
+      // expressions are modifiers
+      const intrinsic = Intrinsics[key].parse(callChain.shift()!, parserContext)
+      const modifiers = callChain.map((modifier) => parseModifier(modifier, parserContext))
+
+      return {
+        ...intrinsic,
+        modifiers,
+      }
     }
   }
 
@@ -400,6 +438,42 @@ function replaceNewlines(str: string) {
   return str.toString().replaceAll('\n', '\\n').replaceAll("'", "\\'")
 }
 
+export function valueToString(value: ValueMappingKind, childLayer?: string) {
+  if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'undefined') {
+    return `${value}`
+  }
+
+  if (typeof value === 'string') {
+    return `'${replaceNewlines(value)}'`
+  }
+
+  if ('kind' in value) {
+    // Mappings can be nested, e.g. an enum value can be figma.instance(...)
+    return `${intrinsicToString(value as Intrinsic, childLayer)}`
+  }
+
+  // Convert objects to strings
+  const str = typeof value.$value === 'string' ? value.$value : `${JSON.stringify(value.$value)}`
+  const v = replaceNewlines(str)
+
+  switch (value.$type) {
+    case 'function':
+      return `_fcc_function('${v}')`
+    case 'identifier':
+      return `_fcc_identifier('${v}')`
+    case 'object':
+      // Don't pass the object itself wrapped in quotes - this helper needs to instantiate the actual
+      // object, as it may be used in the snippet code
+      return `_fcc_object(${v})`
+    case 'template-string':
+      return `_fcc_templateString('${v}')`
+    case 'jsx-element':
+      return `_fcc_jsxElement('${v}')`
+    default:
+      throw new InternalError(`Unknown helper type: ${value}`)
+  }
+}
+
 export function valueMappingToString(valueMapping: ValueMapping, childLayer?: string): string {
   // For enums (and booleans with a valueMapping provided), convert the
   // value mapping to an object.
@@ -407,44 +481,7 @@ export function valueMappingToString(valueMapping: ValueMapping, childLayer?: st
     '{\n' +
     Object.entries(valueMapping)
       .map(([key, value]) => {
-        if (
-          typeof value === 'boolean' ||
-          typeof value === 'number' ||
-          typeof value === 'undefined'
-        ) {
-          return `"${key}": ${value}`
-        }
-
-        if (typeof value === 'string') {
-          return `"${key}": '${replaceNewlines(value)}'`
-        }
-
-        if ('kind' in value) {
-          // Mappings can be nested, e.g. an enum value can be figma.instance(...)
-          return `"${key}": ${intrinsicToString(value as Intrinsic, childLayer)}`
-        }
-
-        // Convert objects to strings
-        const str =
-          typeof value.$value === 'string' ? value.$value : `${JSON.stringify(value.$value)}`
-        const v = replaceNewlines(str)
-
-        switch (value.$type) {
-          case 'function':
-            return `"${key}": _fcc_function('${v}')`
-          case 'identifier':
-            return `"${key}": _fcc_identifier('${v}')`
-          case 'object':
-            // Don't pass the object itself wrapped in quotes - this helper needs to instantiate the actual
-            // object, as it may be used in the snippet code
-            return `"${key}": _fcc_object(${v})`
-          case 'template-string':
-            return `"${key}": _fcc_templateString('${v}')`
-          case 'jsx-element':
-            return `"${key}": _fcc_jsxElement('${v}')`
-          default:
-            throw new InternalError(`Unknown helper type: ${value}`)
-        }
+        return `"${key}": ${valueToString(value, childLayer)}`
       })
       .join(',\n') +
     '}'
@@ -453,16 +490,24 @@ export function valueMappingToString(valueMapping: ValueMapping, childLayer?: st
 
 let nestedLayerCount = 0
 
-export function intrinsicToString({ kind, args }: Intrinsic, childLayer?: string): string {
+export function intrinsicToString(
+  { kind, args, modifiers = [] }: Intrinsic,
+  childLayer?: string,
+): string {
   const selector = childLayer ?? `figma.currentLayer`
   switch (kind) {
     case IntrinsicKind.String:
+      return `${selector}.__properties__.string('${args.figmaPropName}')`
     case IntrinsicKind.Instance: {
       // Outputs:
       // `const propName = figma.properties.string('propName')`, or
       // `const propName = figma.properties.boolean('propName')`, or
       // `const propName = figma.properties.instance('propName')`
-      return `${selector}.__properties__.${kind}('${args.figmaPropName}')`
+      if (modifiers.length > 0) {
+        const instance = `${selector}.__properties__.__instance__('${args.figmaPropName}')`
+        return [instance, ...modifiers.map(modifierToString)].join('.')
+      }
+      return `${selector}.__properties__.instance('${args.figmaPropName}')`
     }
     case IntrinsicKind.Boolean: {
       if (args.valueMapping) {

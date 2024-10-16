@@ -12,7 +12,7 @@ import { getClient } from '../connect/index_common'
 import { HtmlMeta } from './types'
 
 const _client: FigmaConnectClient = getClient()
-const _figma: FigmaConnectAPI<HtmlTemplateString> & {
+const _figma: FigmaConnectAPI<HtmlTemplateString, HtmlTemplateString> & {
   /**
    * Defines a code snippet that displays in Figma when a component is selected.
    *

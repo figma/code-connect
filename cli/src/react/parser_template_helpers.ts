@@ -5,6 +5,9 @@
 // `new Function()`
 
 declare const figma: { tsx: (template: TemplateStringsArray, ...args: any[]) => string }
+declare type CodeSection = { type: 'CODE'; code: string }
+declare type InstanceSection = { type: 'INSTANCE' }
+declare type ErrorSection = { type: 'ERROR' }
 
 // This file contains helper functions which hare included in the React template
 // example - i.e. they are run on the client side, but are not part of the
@@ -31,6 +34,7 @@ export type FCCValue =
       | typeof _fcc_identifier
       | typeof _fcc_object
       | typeof _fcc_templateString
+      | typeof _fcc_reactComponent
     >
 
 export function _fcc_jsxElement($value: string) {
@@ -69,9 +73,16 @@ export function _fcc_templateString($value: string) {
   } as const
 }
 
+export function _fcc_reactComponent($value: string) {
+  return {
+    $value,
+    $type: 'react-component',
+  } as const
+}
+
 // Render a prop value passed to an object literal based on its type.
 // for example: <Button sx={{ key: value }} />
-function _fcc_renderPropValue(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) {
+function _fcc_renderPropValue(prop: FCCValue | (CodeSection | InstanceSection)[]) {
   if (Array.isArray(prop)) {
     return prop
   }
@@ -94,7 +105,12 @@ function _fcc_renderPropValue(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) 
     return prop
   }
 
-  if (prop.$type === 'function' || prop.$type === 'identifier' || prop.$type === 'jsx-element') {
+  if (
+    prop.$type === 'function' ||
+    prop.$type === 'identifier' ||
+    prop.$type === 'jsx-element' ||
+    prop.$type === 'react-component'
+  ) {
     return prop.$value
   }
 
@@ -112,7 +128,7 @@ function _fcc_renderPropValue(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) 
 // Render a React prop correctly, based on its type
 function _fcc_renderReactProp(
   name: string,
-  prop: FCCValue | { type: 'CODE' | 'INSTANCE' | 'ERROR' }[],
+  prop: FCCValue | (CodeSection | InstanceSection | ErrorSection)[],
 ) {
   // If the value is an array, then it's an array of objects representing React
   // children (either of type INSTANCE for pills, or CODE for inline code). The
@@ -159,7 +175,12 @@ function _fcc_renderReactProp(
     return ''
   }
 
-  if (prop.$type === 'function' || prop.$type === 'identifier' || prop.$type === 'jsx-element') {
+  if (
+    prop.$type === 'function' ||
+    prop.$type === 'identifier' ||
+    prop.$type === 'jsx-element' ||
+    prop.$type === 'react-component'
+  ) {
     return ` ${name}={${prop.$value}}`
   }
 
@@ -175,7 +196,7 @@ function _fcc_renderReactProp(
 }
 
 // Renders React children correctly, based on their type
-function _fcc_renderReactChildren(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }[]) {
+function _fcc_renderReactChildren(prop: FCCValue | (CodeSection | InstanceSection)[]) {
   if (Array.isArray(prop)) {
     return prop
   }
@@ -206,6 +227,10 @@ function _fcc_renderReactChildren(prop: FCCValue | { type: 'CODE' | 'INSTANCE' }
   if (prop.$type === 'object') {
     return `{${_fcc_stringifyObject(prop.$value)}}`
   }
+
+  if (prop.$type === 'react-component') {
+    return `<${prop.$value} />`
+  }
 }
 
 function _fcc_stringifyObject(obj: any): string {
@@ -234,6 +259,7 @@ export function getParsedTemplateHelpersString() {
     _fcc_templateString,
     _fcc_renderPropValue,
     _fcc_stringifyObject,
+    _fcc_reactComponent,
   ]
     .map((fn) => fn.toString())
     .join('\n')

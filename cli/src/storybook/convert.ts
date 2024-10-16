@@ -7,7 +7,7 @@ import {
 } from '../typescript/compiler'
 import {
   parseComponentMetadata,
-  parseRenderFunction,
+  parseJSXRenderFunction,
   getDefaultTemplate,
   findAndResolveImports,
 } from '../react/parser'
@@ -210,7 +210,7 @@ async function convertStorybookFile({
         )
       }
 
-      let render = parseRenderFunction(statementToParse, parserContext, propMappings)
+      let render = parseJSXRenderFunction(statementToParse, parserContext, propMappings)
 
       if (!render) {
         continue

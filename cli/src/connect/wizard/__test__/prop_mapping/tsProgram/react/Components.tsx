@@ -1,6 +1,7 @@
-import React, { memo, forwardRef } from 'react'
+import React, { memo, forwardRef, HTMLAttributes } from 'react'
 import { DefinedInDifferentFile } from './Components2'
 import { ReExportedComponent } from './Components2'
+export { AnotherReExportedComponent } from './Components2'
 
 export function LotsOfProps({
   children,
@@ -59,4 +60,20 @@ export const WithForwardRef = forwardRef<HTMLDivElement, { forwarded: true }>((p
   return <div ref={ref}>Hello world</div>
 })
 
-export { ReExportedComponent }
+export { ReExportedComponent, ReExportedComponent as ReExportedComponentAsAlias }
+
+export class ClassComponent extends React.Component<{ classProp: true }> {
+  render() {
+    return <>Hello world</>
+  }
+}
+
+export const WithPickedProps: React.FC<Pick<{ withPickedProps: true }, 'withPickedProps'>> = (
+  props,
+) => null
+
+interface WithExtendsProps extends Omit<HTMLAttributes<HTMLElement>, 'onChange'> {
+  withExtends: true
+}
+
+export const WithExtends: React.FC<WithExtendsProps> = (props) => null

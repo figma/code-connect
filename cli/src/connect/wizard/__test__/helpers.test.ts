@@ -6,7 +6,12 @@ import {
   getProjectInfo,
   getReactProjectInfo,
 } from '../../project'
-import { getIncludesGlob, getComponentOptionsMap, getFilepathExportsFromFiles } from '../helpers'
+import {
+  getIncludesGlob,
+  getComponentOptionsMap,
+  getFilepathExportsFromFiles,
+  isValidFigmaUrl,
+} from '../helpers'
 
 describe('getIncludesGlob', () => {
   it('returns default includes glob if no component directory', () => {
@@ -92,5 +97,26 @@ describe('getFilepathExportsFromFiles', () => {
       'MultipleComponents.tsx~AnotherComponent1',
       'MultipleComponents.tsx~AnotherComponent2',
     ])
+  })
+})
+
+describe('isValidFigmaUrl', () => {
+  it('works as expected', () => {
+    const shouldPass = [
+      'https://www.figma.com/file/1234567890/My-File',
+      'https://figma.com/file/1234567890/My-File',
+      'https://figma.com/design/1234567890/My-File',
+    ]
+    shouldPass.forEach((url) => {
+      expect(isValidFigmaUrl(url)).toBe(true)
+    })
+    const shouldFail = [
+      'https://www.something.com/file/1234567890/My-File',
+      'https://figma.com/file',
+      'https://something.com/https://figma.com/design/1234567890/My-File',
+    ]
+    shouldFail.forEach((url) => {
+      expect(isValidFigmaUrl(url)).toBe(false)
+    })
   })
 })
