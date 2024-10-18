@@ -80,7 +80,7 @@ This allows you to use different config files to switch publishing Code Connect 
 
 For example, the config:
 
-```
+```json
 {
   "codeConnect": {
     "documentUrlSubstitutions": {
