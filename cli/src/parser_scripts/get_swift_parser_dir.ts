@@ -1,4 +1,4 @@
-import { execSync, spawnSync } from 'child_process'
+import { spawnSync } from 'child_process'
 import { exitWithError, logger } from '../common/logging'
 import { getFileIfExists } from './get_file_if_exists'
 import path from 'path'

@@ -7,7 +7,19 @@ const enumProp = figma.currentLayer.__properties__.enum('Size', {
 const booleanProp = figma.currentLayer.__properties__.boolean('Boolean Prop')
 const stringProp = figma.currentLayer.__properties__.string('Text')
 const children = figma.currentLayer.__properties__.string('Text')
-const __props = { enumProp, booleanProp, stringProp, children }
+const __props = {}
+if (enumProp && enumProp.type !== 'ERROR') {
+  __props["enumProp"] = enumProp
+}
+if (booleanProp && booleanProp.type !== 'ERROR') {
+  __props["booleanProp"] = booleanProp
+}
+if (stringProp && stringProp.type !== 'ERROR') {
+  __props["stringProp"] = stringProp
+}
+if (children && children.type !== 'ERROR') {
+  __props["children"] = children
+}
 
 export default { ...figma.tsx`<PropMapping${_fcc_renderReactProp('stringProp', stringProp)}${_fcc_renderReactProp('booleanProp', booleanProp)}${_fcc_renderReactProp('enumProp', enumProp)}>
       ${_fcc_renderReactChildren(children)}

@@ -1,6 +1,6 @@
 import ts from 'typescript'
-import { CodeConnectReactConfig, getRemoteFileUrl, mapImportPath } from '../connect/project'
-import { error, highlight, logger, reset } from '../common/logging'
+import { getRemoteFileUrl, mapImportPath } from '../connect/project'
+import { logger } from '../common/logging'
 import {
   bfsFindNode,
   getTagName,
@@ -21,7 +21,6 @@ import {
   visitPropReferencingNode,
   getReferencedPropsForTemplate,
   findDescendants,
-  isFigmaConnectCall,
   parseLinks,
   parseVariant,
   parseImports,

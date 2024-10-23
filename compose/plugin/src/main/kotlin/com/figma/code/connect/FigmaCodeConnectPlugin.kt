@@ -30,7 +30,7 @@ import java.io.File
 
 /**
  * This plugin is intended to be used in conjunction with the `figma` command line tool which
- * invokes gradle tasks by passing in input parameters and reads the output
+ * invokes gradle tasks by passing in input parameters and writes the output to a file
  *
  * It can be run standalone as a Gradle task as well, but the `figma` command line tool is still
  * required in order to upload the Code Connect files to Figma.
@@ -58,9 +58,9 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
     @OptIn(ExperimentalSerializationApi::class)
     override fun apply(project: Project) {
         /**
-         * `parseCodeConnect` takes an argument `filePath` which is the path to the input JSON file and parses
-         * through a set of files and finds Code Connect files. It takes a single argument,
-         * `filePath`, which is the path to the input JSON file.
+         * `parseCodeConnect` takes an argument `filePath` which is the path to the input/output JSON
+         * file and parses through a set of files and finds Code Connect files. It takes a single
+         * argument, `filePath`, which is the path to the input/output JSON file.
          * The input JSON is documented in the `CodeConnectParserInput` class.
          */
         project.tasks.register("parseCodeConnect") { task ->
@@ -130,7 +130,8 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
                         }
                     }
 
-                    println(json.encodeToString(CodeConnectPluginParserOutput(documents, messages)).trimIndent())
+                    val outputStr = json.encodeToString(CodeConnectPluginParserOutput(documents, messages)).trimIndent()
+                    File(filePath).writeText(outputStr)
                 } else {
                     throw IllegalArgumentException("filePath property is required")
                 }
@@ -141,9 +142,10 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
         }
 
         /**
-         * `createCodeConnect` takes an argument `filePath` which is the path to the input JSON file
-         * and create a Code Connect file based on information provided about the Figma Component.
-         * It takes a single argument `filePath`, which is the path to the input JSON file.
+         * `createCodeConnect` takes an argument `filePath` which is the path to the input/output
+         * JSON file and create a Code Connect file based on information provided about the Figma
+         * Component. It takes a single argument `filePath`, which is the path to the input/output
+         * JSON file.
          * The input JSON is documented in the `CodeConnectParserCreateInput` class.
          */
         project.tasks.register("createCodeConnect") { task ->
@@ -163,7 +165,8 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
                         json.decodeFromString<CodeConnectParserCreateInput>(tempFile.readText())
 
                     val output = CodeConnectCreator.create(codeConnectParserCreateInput)
-                    println(json.encodeToString(output))
+                    val outputStr = json.encodeToString(output)
+                    File(filePath).writeText(outputStr)
                 }
             }
             task.notCompatibleWithConfigurationCache(

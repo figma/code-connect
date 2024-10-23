@@ -1,4 +1,4 @@
-import axios, { isAxiosError } from 'axios'
+import { isFetchError, request } from '../common/fetch'
 import { logger } from '../common/logging'
 
 const version = require('../../package.json').version
@@ -54,28 +54,30 @@ export namespace FigmaRestApi {
 export async function getDocument(url: string, accessToken: string): Promise<FigmaRestApi.Node> {
   try {
     logger.info('Fetching component information from Figma...')
-    const response = await axios.get(url, {
+    const response = await request.get<{ document: FigmaRestApi.Node }>(url, {
       headers: getHeaders(accessToken),
     })
 
-    if (response.status === 200) {
+    if (response.response.status === 200) {
       logger.info('Successfully fetched component information from Figma')
       return response.data.document
     } else {
-      logger.error(`Failed to get node information from Figma with status: ${response.status}`)
+      logger.error(
+        `Failed to get node information from Figma with status: ${response.response.status}`,
+      )
       logger.debug('Failed to get node information from Figma with Body:', response.data)
       return Promise.reject()
     }
   } catch (err) {
-    if (isAxiosError(err)) {
+    if (isFetchError(err)) {
       if (err.response) {
         logger.error(
-          `Failed to get node data from Figma (${err.code}): ${err.response?.status} ${err.response?.data?.err ?? err.response?.data?.message}`,
+          `Failed to get node data from Figma (${err.response.status}): ${err.response.status} ${err.data?.err ?? err.data?.message}`,
         )
       } else {
         logger.error(`Failed to get node data from Figma: ${err.message}`)
       }
-      logger.debug(JSON.stringify(err.response?.data))
+      logger.debug(JSON.stringify(err.data))
     } else {
       logger.error(`Failed to create: ${err}`)
     }

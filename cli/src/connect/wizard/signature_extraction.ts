@@ -7,7 +7,11 @@ const DEFAULT_COMPONENT = 'DefaultComponent'
 const REACT_INTERFACE_NAMES = ['HTMLAttributes', 'Attributes', 'AriaAttributes', 'DOMAttributes']
 const IGNORE_REACT_PROPS = ['ref', 'key']
 
-let tsMorphProject: Project
+/**
+ * Initializing a ts-morph project can take time so lets cache it.
+ * We are assuming the underlying project does not change during the course of the CLI run.
+ */
+let cachedTsMorphProject: Project
 export function extractSignature({
   nameToFind,
   sourceFilePath,
@@ -15,7 +19,7 @@ export function extractSignature({
   nameToFind: string
   sourceFilePath: string
 }) {
-  if (!tsMorphProject) {
+  if (!cachedTsMorphProject) {
     const tsConfigFilePath = findTsConfigPath(path.dirname(sourceFilePath))
     const options = tsConfigFilePath
       ? { tsConfigFilePath }
@@ -31,10 +35,27 @@ export function extractSignature({
             rootDir: 'src',
           },
         }
-    tsMorphProject = new Project(options)
+    cachedTsMorphProject = new Project(options)
   }
 
+  return extractSignatureFromProject({
+    tsMorphProject: cachedTsMorphProject,
+    sourceFilePath,
+    nameToFind,
+  })
+}
+
+export function extractSignatureFromProject({
+  tsMorphProject,
+  sourceFilePath,
+  nameToFind,
+}: {
+  tsMorphProject: Project
+  sourceFilePath: string
+  nameToFind: string
+}) {
   tsMorphProject.addSourceFileAtPath(sourceFilePath)
+
   const signatureSourcePath = path.join(path.dirname(sourceFilePath), 'extracted_signature.ts')
 
   const signatureSourceFile = tsMorphProject.createSourceFile(signatureSourcePath)
@@ -84,7 +105,7 @@ export function extractSignature({
     const result: Record<string, string> = {}
 
     for (const prop of props) {
-      const propString = getPropString(prop, signatureSourceFile)
+      const propString = getPropString(tsMorphProject, prop, signatureSourceFile)
       if (propString) {
         result[prop.getName()] = propString
       }
@@ -95,7 +116,7 @@ export function extractSignature({
   }
 }
 
-function getPropString(prop: Symbol, sourceFile: SourceFile) {
+function getPropString(tsMorphProject: Project, prop: Symbol, sourceFile: SourceFile) {
   if (IGNORE_REACT_PROPS.includes(prop.getName())) {
     return null
   }

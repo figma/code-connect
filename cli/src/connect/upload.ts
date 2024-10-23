@@ -1,9 +1,9 @@
 import { CodeConnectJSON } from '../connect/figma_connect'
 import { logger, underline, highlight } from '../common/logging'
-import axios, { isAxiosError } from 'axios'
 import { getApiUrl, getHeaders } from './figma_rest_api'
 import { exitWithFeedbackMessage } from './helpers'
 import { parseFigmaNode } from './validation'
+import { isFetchError, request } from '../common/fetch'
 
 interface Args {
   accessToken: string
@@ -82,7 +82,7 @@ export async function upload({ accessToken, docs, batchSize, verbose }: Args) {
 
         logger.debug(`Uploading ${size.toFixed(2)}mb to Figma`)
 
-        await axios.post(apiUrl, batch, {
+        await request.post(apiUrl, batch, {
           headers: getHeaders(accessToken),
         })
         currentBatch++
@@ -102,7 +102,7 @@ export async function upload({ accessToken, docs, batchSize, verbose }: Args) {
 
       logger.debug(`Uploading ${size.toFixed(2)}mb to Figma`)
 
-      await axios.post(apiUrl, docs, {
+      await request.post(apiUrl, docs, {
         headers: getHeaders(accessToken),
       })
     }
@@ -125,15 +125,15 @@ export async function upload({ accessToken, docs, batchSize, verbose }: Args) {
       )
     }
   } catch (err) {
-    if (isAxiosError(err)) {
+    if (isFetchError(err)) {
       if (err.response) {
         logger.error(
-          `Failed to upload to Figma (${err.code}): ${err.response?.status} ${err.response?.data?.message}`,
+          `Failed to upload to Figma (${err.response.status}): ${err.response.status} ${err.data?.message}`,
         )
       } else {
         logger.error(`Failed to upload to Figma: ${err.message}`)
       }
-      logger.debug(JSON.stringify(err.response?.data))
+      logger.debug(JSON.stringify(err?.data))
     } else {
       logger.error(`Failed to upload to Figma: ${err}`)
     }

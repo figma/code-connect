@@ -1,12 +1,12 @@
 import * as url from 'url'
-import { chunk, get } from 'lodash'
-import axios, { isAxiosError } from 'axios'
+import { chunk } from 'lodash'
 
 import { CodeConnectJSON } from '../connect/figma_connect'
 import { logger } from '../common/logging'
 import { validateNodeId } from './helpers'
 import { getApiUrl, getHeaders } from './figma_rest_api'
 import { BaseCommand } from '../commands/connect'
+import { isFetchError, request } from '../common/fetch'
 
 export function parseFigmaNode(
   verbose: boolean,
@@ -41,25 +41,27 @@ async function fetchNodeInfo(
   accessToken: string,
 ): Promise<any> {
   try {
-    const response = await axios.get(
+    const response = await request.get<{ message: string; nodes: any }>(
       `${baseApiUrl}${fileKey}/nodes?ids=${nodeIdsChunk.join(',')}`,
       { headers: getHeaders(accessToken) },
     )
-    if (response.status !== 200) {
-      logger.error('Failed to fetch node info: ' + response.status + ' ' + response.data?.message)
+    if (response.response.status !== 200) {
+      logger.error(
+        'Failed to fetch node info: ' + response.response.status + ' ' + response.data?.message,
+      )
       return null
     }
     return response.data.nodes
   } catch (err) {
-    if (isAxiosError(err)) {
+    if (isFetchError(err)) {
       if (err.response) {
         logger.error(
-          `Failed to to fetch node info (${err.code}): ${err.response?.status} ${err.response?.data?.err ?? err.response?.data?.message}`,
+          `Failed to to fetch node info (${err.response.status}): ${err.response.status} ${err.data?.err ?? err.data?.message}`,
         )
       } else {
         logger.error(`Failed to to fetch node info: ${err.message}`)
       }
-      logger.debug(JSON.stringify(err.response?.data))
+      logger.debug(JSON.stringify(err.data))
     } else {
       logger.error(`Failed to to fetch node info: ${err}`)
     }

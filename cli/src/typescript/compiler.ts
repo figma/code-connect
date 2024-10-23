@@ -1,4 +1,4 @@
-import ts, { isTaggedTemplateExpression, isTemplateExpression } from 'typescript'
+import ts, { isTaggedTemplateExpression } from 'typescript'
 import { ParserContext, ParserError } from '../connect/parser_common'
 
 /**
@@ -218,7 +218,7 @@ export function parseFunctionArgument<T extends ts.Node>(
   required = false,
   errorMessage?: string,
 ): T | undefined {
-  const { sourceFile, checker } = parserContext
+  const { sourceFile } = parserContext
 
   if (fn.arguments.length <= index && !required) {
     return undefined

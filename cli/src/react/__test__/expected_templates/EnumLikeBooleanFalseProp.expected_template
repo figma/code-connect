@@ -3,6 +3,9 @@ const figma = require('figma')
 const icon = figma.currentLayer.__properties__.boolean('Prop', {
 "true": 'yes',
 "false": 'no'})
-const __props = { icon }
+const __props = {}
+if (icon && icon.type !== 'ERROR') {
+  __props["icon"] = icon
+}
 
 export default { ...figma.tsx`<Button${_fcc_renderReactProp('icon', icon)}/>`, metadata: { __props } }

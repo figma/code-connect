@@ -6,7 +6,6 @@ import { createCodeConnectFromUrl } from '../connect/create'
 import {
   CodeConnectConfig,
   CodeConnectExecutableParserConfig,
-  CodeConnectHtmlConfig,
   CodeConnectReactConfig,
   ProjectInfo,
   getProjectInfo,

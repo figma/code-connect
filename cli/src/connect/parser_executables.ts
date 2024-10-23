@@ -5,11 +5,7 @@ import {
   FirstPartyExecutableParser,
   FirstPartyParser,
 } from './project'
-import {
-  CreateResponsePayload,
-  ParserExecutableMessages,
-  ParserRequestPayload,
-} from './parser_executable_types'
+import { ParserExecutableMessages, ParserRequestPayload } from './parser_executable_types'
 import { spawn } from 'cross-spawn'
 import { getSwiftParserDir } from '../parser_scripts/get_swift_parser_dir'
 import fs from 'fs'
@@ -20,7 +16,7 @@ import {
 } from '../parser_scripts/get_gradlew_path'
 import { getComposeErrorSuggestion } from '../parser_scripts/compose_errors'
 
-const temporaryInputFilePath = 'tmp/figma-code-connect-parser-input.json.tmp'
+const temporaryIOFilePath = 'tmp/figma-code-connect-parser-io.json.tmp'
 
 type ParserInfo = {
   command: (
@@ -28,12 +24,12 @@ type ParserInfo = {
     config: CodeConnectExecutableParserConfig,
     mode: ParserRequestPayload['mode'],
   ) => Promise<string>
-  temporaryInputFilePath?: string
+  temporaryIOFilePath?: string
 }
 
 const FIRST_PARTY_PARSERS: Record<FirstPartyExecutableParser, ParserInfo> = {
   swift: {
-    command: async (cwd, config, mode) => {
+    command: async (cwd, config) => {
       return `swift run --package-path ${await getSwiftParserDir(cwd, (config as any).xcodeprojPath, (config as any).swiftPackagePath)} figma-swift`
     },
   },
@@ -42,12 +38,12 @@ const FIRST_PARTY_PARSERS: Record<FirstPartyExecutableParser, ParserInfo> = {
       const gradlewPath = await getGradleWrapperPath(cwd, (config as any).gradleWrapperPath)
       const gradleExecutableInvocation = getGradleWrapperExecutablePath(gradlewPath)
       if (mode === 'CREATE') {
-        return `${gradleExecutableInvocation} -p ${gradlewPath} createCodeConnect -PfilePath=${temporaryInputFilePath} -q`
+        return `${gradleExecutableInvocation} -p ${gradlewPath} createCodeConnect -PfilePath=${temporaryIOFilePath} -q`
       } else {
-        return `${gradleExecutableInvocation} -p ${gradlewPath} parseCodeConnect -PfilePath=${temporaryInputFilePath} -q`
+        return `${gradleExecutableInvocation} -p ${gradlewPath} parseCodeConnect -PfilePath=${temporaryIOFilePath} -q`
       }
     },
-    temporaryInputFilePath: temporaryInputFilePath,
+    temporaryIOFilePath: temporaryIOFilePath,
   },
   __unit_test__: {
     command: async () => 'node parser/unit_test_parser.js',
@@ -75,9 +71,9 @@ export async function callParser(
     try {
       const parser = getParser(config)
       const command = await parser.command(cwd, config, payload.mode)
-      if (parser.temporaryInputFilePath) {
-        fs.mkdirSync(path.dirname(parser.temporaryInputFilePath), { recursive: true })
-        fs.writeFileSync(temporaryInputFilePath, JSON.stringify(payload))
+      if (parser.temporaryIOFilePath) {
+        fs.mkdirSync(path.dirname(parser.temporaryIOFilePath), { recursive: true })
+        fs.writeFileSync(temporaryIOFilePath, JSON.stringify(payload))
       }
       logger.debug(`Running parser: ${command}`)
       const commandSplit = command.split(' ')
@@ -128,17 +124,23 @@ export async function callParser(
             reject(new Error(`Parser exited with code ${code}`))
           }
         } else {
-          resolve(JSON.parse(stdout))
+          resolve(
+            JSON.parse(
+              parser.temporaryIOFilePath
+                ? fs.readFileSync(parser.temporaryIOFilePath, 'utf8')
+                : stdout,
+            ),
+          )
         }
-        if (parser.temporaryInputFilePath) {
-          fs.unlinkSync(parser.temporaryInputFilePath)
+        if (parser.temporaryIOFilePath) {
+          fs.unlinkSync(parser.temporaryIOFilePath)
         }
       })
 
       child.on('error', (e) => {
         reject(e)
       })
-      if (!parser.temporaryInputFilePath) {
+      if (!parser.temporaryIOFilePath) {
         child.stdin.write(JSON.stringify(payload))
         child.stdin.end()
       }

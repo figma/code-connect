@@ -1,5 +1,5 @@
 import * as ts from 'typescript'
-import { InternalError, ParserContext, ParserError, findDescendants } from './parser_common'
+import { InternalError, ParserContext, ParserError } from './parser_common'
 import {
   assertIsArrayLiteralExpression,
   assertIsStringLiteral,

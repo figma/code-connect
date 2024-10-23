@@ -1,3 +1,20 @@
+# Code Connect v1.2.1 (23rd October 2024)
+
+## Fixed
+
+### React
+- Fixed a bug introduced in 1.2.0 where `nestedProps` referencing a hidden layer would result in an error rendering Code Connect
+
+### SwiftUI
+- Fixed potential "index is out of bounds" error.
+
+### General
+- Changed how the extension makes HTTP requests to resolve issues when connecting through a proxy. Please [submit a support ticket](https://help.figma.com/hc/en-us/requests/new?ticket_form_id=360001744374) if you continue to have connection issues after this update.
+
+### Compose
+
+- Fixed some parsing errors when running the `create` and `publish` commands
+
 # Code Connect v1.2.0
 
 ## Features
@@ -18,6 +35,8 @@
 ### HTML
 - Case of attribute names is now preserved to support Angular (fixes https://github.com/figma/code-connect/issues/172)
 - Fixed a bug with `nestedProps` (fixes https://github.com/figma/code-connect/issues/176)
+
+## Fixed
 
 # Code Connect v1.1.4 (26th September 2024)
 

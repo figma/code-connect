@@ -236,8 +236,21 @@ export function getReferencedPropsForTemplate({
       const propMapping = propMappings[prop]
       templateCode += `const ${prop} = ${valueToString(propMapping)}\n`
     }
-    templateCode += `const __props = { ${Object.keys(propMappings).join(', ')} }\n`
-    templateCode += '\n'
+    templateCode += `const __props = {}\n`
+    Object.keys(propMappings).forEach((prop) => {
+      // If trying to render prop resulted in an error (e.g. layer was not found
+      // because it was invisible), don't include it in the __props object as
+      // this will result in a runtime error.
+      //
+      // TODO Note that this can also happen if there is a typo in the prop name
+      // of a nested prop, because we don't validate these at publish time,
+      // which would be confusing. Perhaps we should have a way to show a
+      // warning but not an error to the user.
+      templateCode += `if (${prop} && ${prop}.type !== 'ERROR') {
+  __props["${prop}"] = ${prop}
+}\n`
+    })
+    templateCode += `\n`
   }
 
   return templateCode

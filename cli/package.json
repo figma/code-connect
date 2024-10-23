@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -61,6 +61,7 @@
     "benchmarking:run": "npx tsx ./src/connect/wizard/__test__/prop_mapping/prop_mapping_benchmarking.ts"
   },
   "devDependencies": {
+    
     "@types/cross-spawn": "^6.0.6",
     "@types/jest": "^29.5.13",
     "@types/jsdom": "^21.1.7",
@@ -80,13 +81,12 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "@babel/core": "^7.25.2",
-    "@babel/generator": "^7.25.2",
-    "@babel/parser": "^7.25.2",
-    "@babel/types": "^7.25.2",
+    "@babel/core": "7.25.8",
+    "@babel/generator": "7.25.7",
+    "@babel/parser": "7.25.8",
+    "@babel/types": "7.25.8",
     
     "@storybook/csf-tools": "^7.6.7",
-    "axios": "^1.7.4",
     "boxen": "5.1.1",
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
@@ -106,7 +106,8 @@
     "strip-ansi": "^6.0.0",
     "ts-morph": "^23.0.0",
     "typescript": "5.4.2",
-    "zod": "^3.23.6",
+    "undici": "^5.28.4",
+    "zod": "^3.23.8",
     "zod-validation-error": "^3.2.0"
   }
 }

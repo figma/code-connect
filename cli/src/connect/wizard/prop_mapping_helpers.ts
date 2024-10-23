@@ -4,13 +4,13 @@ import { BaseCommand } from '../../commands/connect'
 import { logger } from '../../common/logging'
 import { ComponentTypeSignature } from '../../react/parser'
 import { FigmaRestApi } from '../figma_rest_api'
-import { ProjectInfo, ReactProjectInfo } from '../project'
+import { ProjectInfo } from '../project'
 import { parseFilepathExport } from './helpers'
 import { MatchableName, buildMatchableNamesMap, generatePropMapping } from './prop_mapping'
 import { extractSignature } from './signature_extraction'
 import { PropMapping } from '../parser_executable_types'
 import { EmbeddingsResponse, fetchEmbeddings } from './embeddings'
-import { isAxiosError } from 'axios'
+import { isFetchError } from '../../common/fetch'
 
 export type MatchableNamesMap = Record<string, MatchableName[]>
 
@@ -200,10 +200,8 @@ export async function generateAllPropsMappings({
         mockResponseName,
       })
     } catch (e) {
-      if (isAxiosError(e)) {
-        logger.error(
-          `Failed to fetch embeddings: ${e.response?.data?.message || e.response?.status}`,
-        )
+      if (isFetchError(e)) {
+        logger.error(`Failed to fetch embeddings: ${e.data?.message || e.response?.status}`)
       } else {
         logger.error(`Failed to compute embeddings: ${e}`)
       }

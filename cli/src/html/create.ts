@@ -10,7 +10,7 @@ import { getOutFileName } from '../connect/create_common'
 export async function createHtmlCodeConnect(
   payload: CreateRequestPayload,
 ): Promise<z.infer<typeof CreateResponsePayload>> {
-  const { component, destinationFile, destinationDir, sourceFilepath, sourceExport } = payload
+  const { component, destinationFile, destinationDir, sourceFilepath } = payload
   const { normalizedName, figmaNodeUrl } = component
 
   const webComponentName = kebabCase(normalizedName)

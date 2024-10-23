@@ -3,8 +3,7 @@ import prompts from 'prompts'
 import fs from 'fs'
 import { exitWithFeedbackMessage, findComponentsInDocument, parseFileKey } from '../helpers'
 import { FigmaRestApi, getApiUrl } from '../figma_rest_api'
-import { exitWithError, logger, success, warn } from '../../common/logging'
-import axios, { isAxiosError } from 'axios'
+import { exitWithError, logger, success } from '../../common/logging'
 import {
   ReactProjectInfo,
   getReactProjectInfo,
@@ -38,11 +37,11 @@ import { z } from 'zod'
 import { fromError } from 'zod-validation-error'
 import { autoLinkComponents } from './autolinking'
 import { extractDataAndGenerateAllPropsMappings } from './prop_mapping_helpers'
+import { isFetchError, request } from '../../common/fetch'
 
 type ConnectedComponentMappings = { componentName: string; filepathExport: string }[]
 
 const NONE = '(None)'
-const DELIMITERS_REGEX = /[\s-_]/g
 
 function clearQuestion(prompt: prompts.PromptObject<string>, answer: string) {
   const displayedAnswer =
@@ -54,6 +53,12 @@ function clearQuestion(prompt: prompts.PromptObject<string>, answer: string) {
 
   process.stdout.moveCursor(0, -rowsToRemove)
   process.stdout.clearScreenDown()
+}
+
+type CliDataResponse = {
+  document: FigmaRestApi.Node
+  componentSets: string[]
+  components: Record<string, { componentSetId: string }>
 }
 
 async function fetchTopLevelComponentsFromFile({
@@ -75,13 +80,16 @@ async function fetchTopLevelComponentsFromFile({
       text: `Fetching component information from ${cmd.verbose ? `${apiUrl}\n` : 'Figma...'}`,
       color: 'green',
     }).start()
+
     const response = await (
       process.env.CODE_CONNECT_MOCK_DOC_RESPONSE
         ? Promise.resolve({
-            status: 200,
-            data: JSON.parse(fs.readFileSync(process.env.CODE_CONNECT_MOCK_DOC_RESPONSE, 'utf-8')),
+            response: { status: 200 },
+            data: JSON.parse(
+              fs.readFileSync(process.env.CODE_CONNECT_MOCK_DOC_RESPONSE, 'utf-8'),
+            ) as CliDataResponse,
           })
-        : axios.get(apiUrl, {
+        : request.get<CliDataResponse>(apiUrl, {
             headers: {
               'X-Figma-Token': accessToken,
               'Content-Type': 'application/json',
@@ -95,27 +103,27 @@ async function fetchTopLevelComponentsFromFile({
       }
     })
 
-    if (response.status === 200) {
+    if (response.response.status === 200) {
       return findComponentsInDocument(response.data.document).filter(
         ({ id }) =>
           id in response.data.componentSets || !response.data.components[id].componentSetId,
       )
     } else {
-      logger.error(`Failed to fetch components from Figma with status: ${response.status}`)
+      logger.error(`Failed to fetch components from Figma with status: ${response.response.status}`)
       logger.debug('Failed to fetch components from Figma with Body:', response.data)
     }
   } catch (err) {
-    if (isAxiosError(err)) {
+    if (isFetchError(err)) {
       if (err.response) {
         logger.error(
-          `Failed to fetch components from Figma (${err.code}): ${err.response?.status} ${
-            err.response?.data?.err ?? err.response?.data?.message
+          `Failed to fetch components from Figma (${err.response.status}): ${err.response.status} ${
+            err.data?.err ?? err.data?.message
           }`,
         )
       } else {
         logger.error(`Failed to fetch components from Figma: ${err.message}`)
       }
-      logger.debug(JSON.stringify(err.response?.data))
+      logger.debug(JSON.stringify(err.data))
     }
     exitWithFeedbackMessage(1)
   }

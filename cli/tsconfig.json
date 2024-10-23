@@ -1,17 +1,18 @@
 {
+  "extends": "./tsconfig-base.json",
   "compilerOptions": {
     "jsx": "react",
     "module": "commonjs",
     "target": "ES2021",
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "lib": ["ES2021"],
-    "strict": true,
+    "lib": [
+      "ES2021"
+    ],
     "outDir": "dist",
     "rootDir": "src",
+
+    // TODO: fix violations and remove
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
   },
   "exclude": [
     "node_modules",
@@ -23,6 +24,6 @@
     "src/connect/wizard/__test__",
     "src/storybook/__test__",
     "src/components",
-    "scripts",
-  ],
+    "scripts"
+  ]
 }

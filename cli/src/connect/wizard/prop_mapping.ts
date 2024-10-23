@@ -122,8 +122,6 @@ function stripNodeIdFromPropertyName(propertyName: string) {
   return propertyName.replace(/#\d+:\d+/, '')
 }
 
-const DELIMITERS_REGEX = /[\s-_]/g
-
 export enum MatchableNameTypes {
   Property,
   VariantValue,

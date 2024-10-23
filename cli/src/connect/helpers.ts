@@ -1,6 +1,6 @@
 import { FigmaRestApi } from './figma_rest_api'
 import * as url from 'url'
-import { exitWithError, logger } from '../common/logging'
+import { logger } from '../common/logging'
 
 const guidRegex = /^I?[0-9]+:[0-9]+(;[0-9]+:[0-9]+)*$/
 

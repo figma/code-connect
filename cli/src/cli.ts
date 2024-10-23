@@ -2,7 +2,6 @@
 
 import * as commander from 'commander'
 import { addConnectCommandToProgram } from './commands/connect'
-import { updateCli } from './common/updates'
 import { maybePrefillWizardQuestionsForTesting } from './connect/wizard/helpers'
 
 require('dotenv').config()

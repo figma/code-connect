@@ -304,14 +304,18 @@ fileprivate extension String {
             var startReplacementIndex: Index
             // Get the leading text after the nearest newline, preserving the existing newline.
             // Only prepend the prefix if its whitespace only
-            if let lastNewline = currentCode.prefix(upTo: replacementStringLoc.lowerBound).lastIndex(of: "\n"),
-               String(currentCode[index(after: lastNewline) ..< replacementStringLoc.lowerBound]).isWhitespaceOnly
-            {
-                startReplacementIndex = index(after: lastNewline)
+            if let lastNewline = currentCode.prefix(upTo: replacementStringLoc.lowerBound).lastIndex(of: "\n") {
+                let startIdx = currentCode.index(after: lastNewline)
+                if startIdx < replacementStringLoc.lowerBound &&
+                   String(currentCode[startIdx ..< replacementStringLoc.lowerBound]).isWhitespaceOnly {
+                    startReplacementIndex = startIdx
+                } else {
+                    startReplacementIndex = replacementStringLoc.lowerBound
+                }
             } else {
                 startReplacementIndex = replacementStringLoc.lowerBound
             }
-            
+
             let prefix = String(currentCode[startReplacementIndex ..< replacementStringLoc.lowerBound])
             
             currentCode.replaceSubrange(

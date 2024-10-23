@@ -531,7 +531,7 @@ function parseConfigObjectArg(
 export async function parseHtmlDoc(
   node: ts.CallExpression,
   parserContext: ParserContext,
-  { repoUrl, silent }: ParseOptions,
+  _: ParseOptions,
 ): Promise<CodeConnectJSON> {
   const { checker, sourceFile, config } = parserContext
 

@@ -1,8 +1,6 @@
-import { CodeConnectJSON } from '../connect/figma_connect'
-import { logger, underline, highlight } from '../common/logging'
-import axios, { isAxiosError } from 'axios'
+import { isFetchError, request } from '../common/fetch'
+import { logger } from '../common/logging'
 import { getApiUrl, getHeaders } from './figma_rest_api'
-import { get } from 'lodash'
 import { exitWithFeedbackMessage } from './helpers'
 
 interface NodesToDeleteInfo {
@@ -21,24 +19,27 @@ export async function delete_docs({ accessToken, docs }: Args) {
   try {
     logger.info(`Unpublishing Code Connect files from Figma...`)
 
-    const response = await axios.delete(apiUrl, {
-      headers: getHeaders(accessToken),
-      data: { nodes_to_delete: docs },
-    })
+    await request.delete(
+      apiUrl,
+      { nodes_to_delete: docs },
+      {
+        headers: getHeaders(accessToken),
+      },
+    )
 
     logger.info(
       `Successfully deleted:\n${docs.map((doc) => `-> ${doc.figmaNode} (${doc.label})`).join('\n')}`,
     )
   } catch (err) {
-    if (isAxiosError(err)) {
+    if (isFetchError(err)) {
       if (err.response) {
         logger.error(
-          `Failed to upload to Figma (${err.code}): ${err.response?.status} ${err.response?.data?.err ?? err.response?.data?.message}`,
+          `Failed to upload to Figma (${err.response.status}): ${err.response.status} ${err.data?.err ?? err.data?.message}`,
         )
       } else {
         logger.error(`Failed to upload to Figma: ${err.message}`)
       }
-      logger.debug(JSON.stringify(err.response?.data))
+      logger.debug(JSON.stringify(err.data))
     } else {
       logger.error(`Failed to delete docs: ${err}`)
     }

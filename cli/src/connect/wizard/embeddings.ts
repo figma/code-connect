@@ -1,4 +1,4 @@
-import axios from 'axios'
+import { request } from '../../common/fetch'
 import { getApiUrl, getHeaders } from '../figma_rest_api'
 import { parseFileKey } from '../helpers'
 
@@ -22,12 +22,12 @@ export async function fetchEmbeddings({
   const apiUrl = getApiUrl(figmaUrl)
   const fileKey = parseFileKey(figmaUrl)
 
-  const result = await axios.post<EmbeddingsResponse>(
+  const result = await request.post<EmbeddingsResponse>(
     apiUrl + '/code_connect/name_embeddings',
     uniqueMatchableNames,
     {
       headers: getHeaders(accessToken),
-      params: {
+      query: {
         file_key: fileKey,
       },
     },

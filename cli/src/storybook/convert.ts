@@ -1,4 +1,4 @@
-import { readFileSync, stat } from 'fs'
+import { readFileSync } from 'fs'
 import {
   bfsFindNode,
   convertObjectLiteralToJs,
@@ -104,7 +104,7 @@ async function convertStorybookFile({
 
   let source = readFileSync(path).toString()
   // Replace backticks with ' as csf-tools can't parse dynamic titles
-  source = source.replace(/title: `(.*)`/g, (match, title) => {
+  source = source.replace(/title: `(.*)`/g, (_, title) => {
     return `title: '${title}'`
   })
 
@@ -126,8 +126,7 @@ async function convertStorybookFile({
       return
     }
 
-    const { figmaStoryMetadata, componentDeclaration, propMappings, mappedProps, examples } =
-      parseResult
+    const { figmaStoryMetadata, componentDeclaration, propMappings, examples } = parseResult
 
     const componentMetadata = await parseComponentMetadata(componentDeclaration, parserContext)
 
@@ -231,14 +230,6 @@ async function convertStorybookFile({
     logger.error(`Error parsing story ${path}: ${e}`)
     throw e
   }
-}
-
-type AnyJsxElement = ts.JsxElement | ts.JsxSelfClosingElement | ts.JsxFragment
-
-function isJsxElement(
-  node: ts.Node,
-): node is AnyJsxElement | ts.JsxSelfClosingElement | ts.JsxFragment {
-  return ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)
 }
 
 /**

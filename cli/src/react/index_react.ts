@@ -133,3 +133,4 @@ export { _figma as figma, _client as client }
 export default _figma
 
 export type StoryParameters<T = {}> = StorybookTypes.StoryParameters<T>
+
