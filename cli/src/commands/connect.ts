@@ -45,6 +45,7 @@ export type BaseCommand = commander.Command & {
   dir: string
   jsonFile: string
   skipUpdateCheck: boolean
+  exitOnUnreadableFiles: boolean
 }
 
 function addBaseCommand(command: commander.Command, name: string, description: string) {
@@ -59,6 +60,10 @@ function addBaseCommand(command: commander.Command, name: string, description: s
     .option('-o --outDir <dir>', 'specify a directory to output generated Code Connect')
     .option('-c --config <path>', 'path to a figma config file')
     .option('--skip-update-check', 'skips checking for an updated version of the Figma CLI')
+    .option(
+      '--exit-on-unreadable-files',
+      'exit if any Code Connect files cannot be parsed. We recommend using this option for CI/CD.',
+    )
     .option('--dry-run', 'tests publishing without actually publishing')
     .addHelpText(
       'before',
@@ -316,6 +321,10 @@ async function getCodeConnectObjectsFromParseFn({
           } else {
             logger.error(e.toString())
           }
+          if (cmd.exitOnUnreadableFiles) {
+            logger.info('Exiting due to unreadable files')
+            process.exit(1)
+          }
         } else {
           if (cmd.verbose) {
             console.trace(e)
@@ -354,7 +363,11 @@ async function getReactCodeConnectObjects(
 }
 
 async function handlePublish(
-  cmd: BaseCommand & { skipValidation: boolean; label: string; batchSize: string },
+  cmd: BaseCommand & {
+    skipValidation: boolean
+    label: string
+    batchSize: string
+  },
 ) {
   setupHandler(cmd)
 

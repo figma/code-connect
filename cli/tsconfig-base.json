@@ -1,24 +1,60 @@
+/*
+ * See README.md for instructions on how to use this file.
+ *
+ * Note: This file is published publically via public npm packages. Do not include any private or sensitive information.
+ */
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "Default",
   "compilerOptions": {
+    // Interoperability
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "node", // TODO: should be "node16"
+
+    // Emit
+    "target": "esnext",
+    "preserveConstEnums": true, // TODO: not necessary, implied by isolatedModules
+
+    // Support single-file transpilation processes (esbuild, swc, etc.)
+    "isolatedModules": true,
+    // TODO: "isolatedDeclarations": true,
+    // TODO: "verbatimModuleSyntax": true,
+
+    // Enable source maps, declaration files, and declaration maps. These are often necessary/useful,
+    // and there's little reason not to generate them by default.
+    "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "isolatedModules": true,
-    "moduleResolution": "node",
-    "noUnusedLocals": true,
-    "noFallthroughCasesInSwitch": true,
-    "preserveConstEnums": true,
-    "pretty": true,
-    "noUnusedParameters": true,
-    "preserveWatchOutput": true,
-    "skipLibCheck": true,
-    "sourceMap": true,
+
+    // Maximize strictness.
     "strict": true,
-    "target": "esnext"
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    // TODO:
+    // "allowUnreachableCode": false,
+    // "noImplicitAny": true,
+    // "noImplicitThis": true,
+    // "noImplicitReturns": true,
+    // "noUncheckedIndexedAccess": true,
+    // "useUnknownInCatchVariables": true,
+
+    // By default, all `@types` packages in all ancestor node_modules trees are visible. This
+    // is slow and the wrong behavior for monorepos. For example, it makes it very easy to
+    // load conflicting global types. Setting the default to `[]` instead forces explicit
+    // declaration of the desired global `@types` packages.
+    // TODO: "types": [],
+
+    // Save time during compilation at the expense of type-system accuracy.
+    "skipLibCheck": true,
+
+    // Improve output formatting and behavior.
+    "pretty": true,
+    "preserveWatchOutput": true
   },
+  // This is the same as the tsc default, but recapitulating it here avoids an undesirable
+  // interaction with `--outDir`: https://github.com/microsoft/TypeScript/issues/59036
   "exclude": ["node_modules"]
 }

@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import { exitWithError, logger } from '../common/logging'
 import {
+  CodeConnectCustomExecutableParserConfig,
   CodeConnectExecutableParserConfig,
-  FirstPartyExecutableParser,
-  FirstPartyParser,
+  CodeConnectExecutableParser,
+  CodeConnectParser,
 } from './project'
 import { ParserExecutableMessages, ParserRequestPayload } from './parser_executable_types'
 import { spawn } from 'cross-spawn'
@@ -21,13 +22,13 @@ const temporaryIOFilePath = 'tmp/figma-code-connect-parser-io.json.tmp'
 type ParserInfo = {
   command: (
     cwd: string,
-    config: CodeConnectExecutableParserConfig,
+    config: CodeConnectExecutableParserConfig | CodeConnectCustomExecutableParserConfig,
     mode: ParserRequestPayload['mode'],
   ) => Promise<string>
   temporaryIOFilePath?: string
 }
 
-const FIRST_PARTY_PARSERS: Record<FirstPartyExecutableParser, ParserInfo> = {
+const FIRST_PARTY_PARSERS: Record<CodeConnectExecutableParser, ParserInfo> = {
   swift: {
     command: async (cwd, config) => {
       return `swift run --package-path ${await getSwiftParserDir(cwd, (config as any).xcodeprojPath, (config as any).swiftPackagePath)} figma-swift`
@@ -44,6 +45,16 @@ const FIRST_PARTY_PARSERS: Record<FirstPartyExecutableParser, ParserInfo> = {
       }
     },
     temporaryIOFilePath: temporaryIOFilePath,
+  },
+  custom: {
+    command: async (cwd, config) => {
+      if (!('parserCommand' in config)) {
+        exitWithError(
+          'No `parserCommand` specified in config. A command is required when using the `custom` parser.',
+        )
+      }
+      return config.parserCommand
+    },
   },
   __unit_test__: {
     command: async () => 'node parser/unit_test_parser.js',
@@ -182,7 +193,7 @@ export function handleMessages(messages: z.infer<typeof ParserExecutableMessages
 // In the future we should consider exposing a different API for having the parser return a suggestion directly.
 function determineErrorSuggestionFromStderr(
   stderr: string,
-  parser: FirstPartyParser,
+  parser: CodeConnectParser,
 ): string | null {
   if (parser === 'compose') {
     return getComposeErrorSuggestion(stderr)

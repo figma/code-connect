@@ -114,7 +114,7 @@ Errors encountered calling parser, exiting`)
       } catch (e: any) {
         expect(e.code).toBe(1)
         expect(tidyStdOutput(e.stderr)).toBe(`${getPreamble(testPath)}
-Invalid parser specified: "does-not-exist". Valid parsers are: swift, compose, __unit_test__.`)
+Invalid parser specified: "does-not-exist". Valid parsers are: swift, compose, custom, __unit_test__.`)
       }
     })
 

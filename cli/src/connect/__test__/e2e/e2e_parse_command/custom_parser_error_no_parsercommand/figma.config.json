@@ -1,0 +1,7 @@
+{
+  "codeConnect": {
+    "parser": "custom",
+    "include": ["*.test"],
+    "exclude": ["Excluded.test"]
+  }
+}

@@ -45,16 +45,18 @@ export function getBestMatchingExportWithinFile({
     },
   )
 
-  /**
-   * fuzzy.search searches for string inside another, meaning e.g. "Button" and "ButtonProps" rank equally for "Button".
-   * We counter this by looking for shortest string in matches
-   */
-  const shortestMatch = matches.reduce(function (a, b) {
-    return a.length <= b.length ? a : b
-  })
+  if (matches.length > 0) {
+    /**
+     * fuzzy.search searches for string inside another, meaning e.g. "Button" and "ButtonProps" rank equally for "Button".
+     * We counter this by looking for shortest string in matches
+     */
+    const shortestMatch = matches.reduce(function (a, b) {
+      return a.length <= b.length ? a : b
+    })
 
-  if (shortestMatch) {
-    return exportOptions.find((o) => o.title === shortestMatch)!.value
+    if (shortestMatch) {
+      return exportOptions.find((o) => o.title === shortestMatch)!.value
+    }
   }
 
   // use anything

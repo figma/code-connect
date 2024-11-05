@@ -1,0 +1,8 @@
+{
+  "codeConnect": {
+    "parser": "custom",
+    "parserCommand": "node parser/custom_parser.js",
+    "include": ["*.test"],
+    "exclude": ["Excluded.test"]
+  }
+}

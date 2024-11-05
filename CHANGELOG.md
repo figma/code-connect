@@ -1,4 +1,20 @@
+# Code Connect v1.2.2 (5th November 2024)
+
+## Features
+
+### General
+- Added support to create Custom parsers. Those allow users to add support for languages which aren't natively supported by Code Connect. Check the [documentation](https://github.com/figma/code-connect/blob/main/docs/custom.md) for more details.
+
+## Fixed
+
+### React
+- Only show AI question for React
+- Fix error in autolinking in reduce function
+
 # Code Connect v1.2.1 (23rd October 2024)
+
+### General
+- Added a `--exit-on-unreadable-files` flag to all commands to exit if any Code Connect files cannot be parsed. We recommend using this option for CI/CD.
 
 ## Fixed
 

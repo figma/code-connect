@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -105,7 +105,7 @@
     "prompts": "^2.4.2",
     "strip-ansi": "^6.0.0",
     "ts-morph": "^23.0.0",
-    "typescript": "5.4.2",
+    "typescript": "5.5.4",
     "undici": "^5.28.4",
     "zod": "^3.23.8",
     "zod-validation-error": "^3.2.0"

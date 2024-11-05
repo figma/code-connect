@@ -17,16 +17,18 @@ export const DEFAULT_INCLUDE_GLOBS_BY_PARSER = {
   html: [`**/*.{ts,js}`],
   swift: ['**/*.swift'],
   compose: ['**/*.kt'],
+  // include globs should be included in configs for custom parsers
+  custom: undefined,
   __unit_test__: [''],
 }
 
 // First party parsers which call into parser executables
-export type FirstPartyExecutableParser = 'swift' | 'compose' | '__unit_test__'
+export type CodeConnectExecutableParser = 'swift' | 'compose' | 'custom' | '__unit_test__'
 
 // React is a special case for now as we call it directly from the CLI rather
 // than via an executable for legacy reasons. We will migrate it to the
 // parser executable model.
-export type FirstPartyParser = 'react' | 'html' | FirstPartyExecutableParser
+export type CodeConnectParser = 'react' | 'html' | CodeConnectExecutableParser
 
 export type BaseCodeConnectConfig = {
   /**
@@ -50,7 +52,7 @@ export type BaseCodeConnectConfig = {
   /**
    * The parser name, if using an internal parser.
    */
-  parser: FirstPartyParser
+  parser: CodeConnectParser
   // TODO add parserCommand for third party parsers
 
   /**
@@ -60,7 +62,12 @@ export type BaseCodeConnectConfig = {
 }
 
 export type CodeConnectExecutableParserConfig = BaseCodeConnectConfig & {
-  parser: FirstPartyExecutableParser
+  parser: CodeConnectExecutableParser
+}
+
+export type CodeConnectCustomExecutableParserConfig = BaseCodeConnectConfig & {
+  parser: 'custom'
+  parserCommand: string
 }
 
 /**
@@ -102,6 +109,7 @@ export type CodeConnectHtmlConfig = BaseCodeConnectConfig & {}
 export type CodeConnectConfig =
   | CodeConnectReactConfig
   | CodeConnectExecutableParserConfig
+  | CodeConnectCustomExecutableParserConfig
   | CodeConnectHtmlConfig
   | BaseCodeConnectConfig
 
@@ -149,8 +157,8 @@ function packageJsonContains(packageJson: any, dependency: string) {
 // have a Swift project inside a React project, we'll detect Swift. This enables
 // users to run commands from anywhere inside their project, rather than having
 // to run from the root (the same way npm works).
-function determineParserFromProject(dir: string): FirstPartyParser | undefined {
-  let parser: FirstPartyParser | undefined
+function determineParserFromProject(dir: string): CodeConnectParser | undefined {
+  let parser: CodeConnectParser | undefined
 
   findUp.sync(
     (currentDir) => {
@@ -607,6 +615,7 @@ export async function getProjectInfoFromConfig(
         html: ['node_modules/**'],
         swift: [],
         compose: [],
+        custom: [],
         __unit_test__: [],
       }[config.parser] ?? []
     : []
@@ -615,6 +624,10 @@ export async function getProjectInfoFromConfig(
   const excludeGlobs = config.exclude
     ? [...config.exclude, ...defaultExcludeGlobs]
     : defaultExcludeGlobs
+
+  if (config.parser === 'custom' && (!includeGlobs || includeGlobs.length === 0)) {
+    exitWithError('Include globs must specified in config file for custom parsers')
+  }
 
   if (!includeGlobs) {
     exitWithError('No include globs specified in config file')

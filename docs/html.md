@@ -539,6 +539,6 @@ jobs:
     name: Code Connect
     runs-on: ubuntu-latest
     steps:
-      - run: npx figma connect publish
+      - run: npx figma connect publish --exit-on-unreadable-files
 ```
 

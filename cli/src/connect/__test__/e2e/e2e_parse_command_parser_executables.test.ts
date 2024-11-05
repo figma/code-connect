@@ -90,7 +90,7 @@ Errors encountered calling parser, exiting`,
       expect(e.code).toBe(1)
       expect(tidyStdOutput(e.stderr)).toBe(
         `Config file found, parsing ./e2e_parse_command/invalid_parser using specified include globs
-Invalid parser specified: "does-not-exist". Valid parsers are: swift, compose, __unit_test__.`,
+Invalid parser specified: "does-not-exist". Valid parsers are: swift, compose, custom, __unit_test__.`,
       )
     }
   })

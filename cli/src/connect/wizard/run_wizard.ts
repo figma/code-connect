@@ -798,24 +798,28 @@ export async function runWizard(cmd: BaseCommand) {
     }
   }
 
-  const { useAi: useAiSelection } = await askQuestionOrExit({
-    type: 'select',
-    name: 'useAi',
-    message:
-      'Code Connect offers AI support for accurate prop mapping between Figma and code components. Data is used only for mapping and is not stored or used for training. To learn more, visit https://help.figma.com/hc/en-us/articles/23920389749655-Code-Connect',
-    choices: [
-      {
-        title: 'Do not use AI for prop mapping (default)',
-        value: 'no',
-      },
-      {
-        title: 'Use AI for prop mapping',
-        value: 'yes',
-      },
-    ],
-  })
+  let useAi = false
 
-  const useAi = useAiSelection === 'yes'
+  if (projectInfo.config.parser === 'react') {
+    const { useAi: useAiSelection } = await askQuestionOrExit({
+      type: 'select',
+      name: 'useAi',
+      message:
+        'Code Connect offers AI support for accurate prop mapping between Figma and code components. Data is used only for mapping and is not stored or used for training. To learn more, visit https://help.figma.com/hc/en-us/articles/23920389749655-Code-Connect',
+      choices: [
+        {
+          title: 'Do not use AI for prop mapping (default)',
+          value: 'no',
+        },
+        {
+          title: 'Use AI for prop mapping',
+          value: 'yes',
+        },
+      ],
+    })
+
+    useAi = useAiSelection === 'yes'
+  }
 
   const linkedNodeIdsToFilepathExports = {}
 

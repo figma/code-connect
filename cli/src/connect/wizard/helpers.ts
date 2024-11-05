@@ -7,7 +7,7 @@ import {
   ReactProjectInfo,
   getDefaultConfigPath,
 } from '../project'
-import { logger, success } from '../../common/logging'
+import { exitWithError, logger, success } from '../../common/logging'
 import path from 'path'
 import prompts, { Choice } from 'prompts'
 import { BaseCommand } from '../../commands/connect'
@@ -42,6 +42,9 @@ export function getIncludesGlob({
   if (componentDirectory) {
     // use unix separators for config file globs
     const pathToComponentsDir = path.relative(dir, componentDirectory).replaceAll(path.sep, '/')
+    if (config.parser === 'custom') {
+      return []
+    }
     return DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser].map(
       (defaultIncludeGlob) => `${pathToComponentsDir}/${defaultIncludeGlob}`,
     )

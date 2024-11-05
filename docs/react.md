@@ -530,7 +530,7 @@ figma.connect(Button, "https://...", {
       false: { label: undefined }
     })
   },
-  example: ({ buttonShape }) => <Button size={buttonShape.size} />
+  example: ({ childProps }) => <Button label={childProps.label} />
 }
 ```
 
@@ -788,7 +788,7 @@ jobs:
     name: Code Connect
     runs-on: ubuntu-latest
     steps:
-      - run: npx figma connect publish
+      - run: npx figma connect publish --exit-on-unreadable-files
 ```
 
 ## Co-locating Code Connect files
