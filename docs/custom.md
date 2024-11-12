@@ -13,8 +13,7 @@ Please refer to the general [documentation](https://github.com/figma/code-connec
 
 #### Publish and Parse commands
 
-When using a custom parser, the `publish` and `parse` commands operate on all the files specified in the `includes` field and excluding those in the `excludes` field of the `figma.config.json`. It then runs the `parserCommand` supplied in the config, passing an object of type `ParseRequestPayload` by stdin. The `parserCommand` then parses the files and generates Code Connect documents, including template code using the [Template API](https://github.com/figma/code-connect/tree/main/docs/template_api.md), then outputs a return object of type `ParseResponsePayload` via stdout. If the `publish` command was chosen, then these are published to Figma.
-
+When using a custom parser, the `publish` and `parse` commands operate on all the files specified in the `includes` field and excluding those in the `excludes` field of the `figma.config.json`. It then runs the `parserCommand` supplied in the config, passing an object of type `ParseRequestPayload` by stdin. The `parserCommand` then parses the files and generates Code Connect documents, including template code using the [Templates API](https://github.com/figma/code-connect/tree/main/docs/templates_api.md), then outputs a return object of type `ParseResponsePayload` via stdout. If the `publish` command was chosen, then these are published to Figma.
 ```
 npx figma connect publish --config figma.config.json --token <auth token>
 ```
