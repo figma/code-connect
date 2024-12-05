@@ -491,6 +491,7 @@ async function createCodeConnectFiles({
     embeddingsFetchSpinner.stop()
   }
 
+  let allFilesCreated = true
   for (const [nodeId, filepathExport] of Object.entries(linkedNodeIdsToFilepathExports)) {
     const urlObj = new URL(figmaFileUrl)
     urlObj.search = ''
@@ -542,9 +543,11 @@ async function createCodeConnectFiles({
       result.createdFiles.forEach((file) => {
         logger.info(success(`Created ${file.filePath}`))
       })
+    } else {
+      allFilesCreated = false
     }
-    return !hasErrors
   }
+  return allFilesCreated
 }
 
 export function convertRemoteFileUrlToRelativePath({

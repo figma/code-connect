@@ -1,3 +1,8 @@
+# Code Connect v1.2.4 (5th December 2024)
+
+## Fixed
+- Fix issue with CLI not working on some cases in 1.2.3
+
 # Code Connect v1.2.3
 
 ## Features
