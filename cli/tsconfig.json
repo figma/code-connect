@@ -2,7 +2,6 @@
   "extends": "./tsconfig-base.json",
   "compilerOptions": {
     "jsx": "react",
-    "module": "commonjs",
     "target": "ES2021",
     "lib": [
       "ES2021"

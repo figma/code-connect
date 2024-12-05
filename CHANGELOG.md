@@ -1,3 +1,14 @@
+# Code Connect v1.2.3
+
+## Features
+
+## Fixed
+- In the interactive setup, the automatic file linking now matches components exported from index files
+
+### React
+- Fix issue where React component references in `props` would serialize to strings when accessed with `getProps()`
+- Fix issue with nesting `figma.boolean` and `getProps`
+
 # Code Connect v1.2.2 (5th November 2024)
 
 ## Features

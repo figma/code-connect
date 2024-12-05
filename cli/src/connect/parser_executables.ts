@@ -53,6 +53,7 @@ const FIRST_PARTY_PARSERS: Record<CodeConnectExecutableParser, ParserInfo> = {
           'No `parserCommand` specified in config. A command is required when using the `custom` parser.',
         )
       }
+      logger.info('Using custom parser command: ' + config.parserCommand)
       return config.parserCommand
     },
   },

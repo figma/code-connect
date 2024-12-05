@@ -543,6 +543,7 @@ async function createCodeConnectFiles({
         logger.info(success(`Created ${file.filePath}`))
       })
     }
+    return !hasErrors
   }
 }
 
@@ -761,7 +762,8 @@ export async function runWizard(cmd: BaseCommand) {
 
   const { figmaFileUrl } = await askQuestionOrExit({
     type: 'text',
-    message: 'What is the URL of the Figma file containing your design system library?',
+    message:
+      "What is the URL of the Figma file containing design components you'd like to connect?",
     name: 'figmaFileUrl',
     validate: (value: string) => isValidFigmaUrl(value) || 'Please enter a valid Figma file URL.',
   })
@@ -781,7 +783,7 @@ export async function runWizard(cmd: BaseCommand) {
       type: 'select',
       name: 'createConfigFile',
       message:
-        "It looks like you don't have a Code Connect config file. Would you like to generate one now from your provided answers?",
+        "It looks like you don't have a Code Connect config file (figma.config.json). Would you like to generate one now from your provided answers?",
       choices: [
         {
           title: 'Yes',
@@ -805,7 +807,7 @@ export async function runWizard(cmd: BaseCommand) {
       type: 'select',
       name: 'useAi',
       message:
-        'Code Connect offers AI support for accurate prop mapping between Figma and code components. Data is used only for mapping and is not stored or used for training. To learn more, visit https://help.figma.com/hc/en-us/articles/23920389749655-Code-Connect',
+        'Code Connect offers AI support to map properties between the Figma file and components in your codebase. Data is used only for mapping and is not stored or used for AI training. To learn more, visit https://help.figma.com/hc/en-us/articles/23920389749655-Code-Connect',
       choices: [
         {
           title: 'Do not use AI for prop mapping (default)',
@@ -880,7 +882,7 @@ export async function runWizard(cmd: BaseCommand) {
     {} as Record<string, FigmaRestApi.Component>,
   )
 
-  await createCodeConnectFiles({
+  const success = await createCodeConnectFiles({
     linkedNodeIdsToFilepathExports,
     unconnectedComponentsMap,
     figmaFileUrl,
@@ -890,4 +892,8 @@ export async function runWizard(cmd: BaseCommand) {
     accessToken,
     useAi,
   })
+
+  if (success) {
+    logger.info(`\nUse the 'publish' command to make mappings visible in Figma Dev Mode.`)
+  }
 }

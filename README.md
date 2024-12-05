@@ -9,95 +9,18 @@ Code Connect is easy to set up, easy to maintain, type-safe, and extensible. Out
 > [!NOTE]
 > Code Connect is available on Organization and Enterprise plans and requires a full Design or Dev Mode seat to use.
 
-## CLI installation
+## Documentation
 
-To install Code Connect locally to a React project, you can follow the instructions in the [React README](docs/react.md#installation).
+Use Figma’s Code Connect to make your design system easily accessible to your developers and create a shared source of truth for both the design and code elements.
 
-For other platforms, you first need to have Node.js v16 or newer installed on your computer. You can check if you already have Node.js installed and which version by running `node -v`. If you need to install Node.js, instructions for all platforms can be found [on the Node.js website](https://nodejs.org/en/download/package-manager).
+Our Getting Started guide will walk you through the process of setting up Code Connect, using our interactive setup to automatically map components, and publishing your first components. **[Getting Started with Code Connect →](/quickstart-guide)**
 
-Once you have Node.js installed, you can install Code Connect globally, so it can be run from anywhere on your machine, by running:
+Code Connect comes with support for different frameworks and languages. Our integration guides will walk you through the process of refining your components by mapping props and variants for:
 
-`npm install --global @figma/code-connect`
+- **[React (and React Native) →](/react)**
+- **[HTML (e.g. Web Components, Angular and Vue) →](/html)**
+- **[SwiftUI →](/swiftui)**
+- **[Jetpack Compose →](/compose)**.
 
-We hope to provide a way to install Code Connect without requiring Node.js soon.
 
-## Setup
 
-To learn how to implement Code Connect for your platform, please navigate to the platform-specific API usage and documentation.
-
-- [React (or React Native)](docs/react.md)
-- [HTML (Web Components, Angular, Vue, etc.)](docs/html.md)
-- [SwiftUI](docs/swiftui.md)
-- [Jetpack Compose](docs/compose.md)
-
-## General configuration
-
-Code Connect can be configured with a `figma.config.json` file, which must be located in your project root (e.g. alongside the `package.json` or `.xcodeproj` file).
-
-Every platform supports some common configuration options, in addition to any platform-specific options.
-
-### `include` and `exclude`
-
-`include` and `exclude` are lists of globs for where to parse Code Connect files, and for where to search for your component code when using the [interactive setup](docs/react.md#interactive-setup). `include` and `exclude` paths must be relative to the location of the config file.
-
-```jsonp
-{
-  "codeConnect": {
-    "include": [],
-    "exclude": ["test/**", "docs/**", "build/**"]
-  }
-}
-```
-
-### `parser`
-
-Code Connect will attempt to determine your project type by looking the first ancestor of the working directory which matches one of the following:
-
-- If a `package.json` containing `react` is found, your project is detected as React
-- If a `package.json` is found not containing `react`, your project is detected as HTML
-- If a file matching `Package.swift` or `*.xcodeproj` is found, your project is detected as Swift
-- If a file matching `build.gradle.kts` is found, your project is detected as Jetpack Compose
-
-In case this does not correctly work for your project, you can override the project type by using the `parser` configuration key. Valid values are `react`, `html`, `swift` and `compose`.
-
-```jsonp
-{
-  "codeConnect": {
-    "parser": "react"
-  }
-}
-```
-
-### `label`
-
-`label` allows you to specify the label used in Figma for your Code Connect docs. This defaults to the type of your project (e.g. `React`). You can override this to show a different name in the UI, which can be useful for e.g. showing different versions of the code.
-
-### `documentUrlSubstitutions`
-
-`documentUrlSubstitutions` allows you to specify a set of substitutions which will be run on the `figmaNode` URLs when parsing or publishing documents.
-
-This allows you to use different config files to switch publishing Code Connect between different files, without having to modify every Code Connect file (e.g. if you have a test version of your document you want to publish to). The substitutions are specified as an object, where the key is the string to be replaced, and the value is the string to replace that with.
-
-For example, the config:
-
-```
-{
-  "codeConnect": {
-    "documentUrlSubstitutions": {
-      "https://figma.com/design/1234abcd/File-1": "https://figma.com/design/5678dcba/File-2"
-    }
-  }
-}
-```
-
-would change Figma node URLs like `https://figma.com/design/1234abcd/File-1/?node-id=12:345` to `https://figma.com/design/5678dbca/File-2/?node-id=12:345`.
-
-## Common issues
-
-### Connectivity issues due to proxies or network security software
-
-Some proxies or network security software can prevent Code Connect from communicating with Figma's servers. If you encounter issues, you may need to explicitly allow connections to `https://api.figma.com/`. Please reach out to [Figma support](https://help.figma.com/hc/en-us/requests/new) if you are still unable to use Code Connect.
-
-### 413 errors due to too large uploads
-
-Please rerun with the `--batch-size` parameter. This will upload the Code Connect in batches of documents of batch_size length. We suggest starting with 50 and decreasing until converging on a size that works for your Code Connect.

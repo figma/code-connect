@@ -90,8 +90,9 @@ export function autoLinkComponents({
 
   const matchableFilenameToPathMap = Object.keys(componentOptionsMap).reduce(
     (acc, componentPath) => {
-      const { name } = path.parse(componentPath)
-      const matchableName = name
+      const { name, dir } = path.parse(componentPath)
+      // For index.ts files, match on the directory name
+      const matchableName = name === 'index' ? path.basename(dir) : name
       acc[matchableName] = componentPath
       return acc
     },

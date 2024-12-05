@@ -53,7 +53,6 @@ export type BaseCodeConnectConfig = {
    * The parser name, if using an internal parser.
    */
   parser: CodeConnectParser
-  // TODO add parserCommand for third party parsers
 
   /**
    * Label to use for the uploaded code examples
@@ -610,14 +609,14 @@ export async function getProjectInfoFromConfig(
 
   // always ignore any `node_modules` folders in react projects
   const defaultExcludeGlobs = config.parser
-    ? {
+    ? ({
         react: ['node_modules/**'],
         html: ['node_modules/**'],
         swift: [],
         compose: [],
         custom: [],
         __unit_test__: [],
-      }[config.parser] ?? []
+      }[config.parser] ?? [])
     : []
 
   const includeGlobs = config.include || defaultIncludeGlobs
@@ -687,7 +686,7 @@ export function getTsProgram(projectInfo: ProjectInfo<CodeConnectConfig>): ts.Pr
     // TODO: not sure why Node10 is needed her, but otherwise module resolution for
     // pnpm workspaces won't work
     moduleResolution: ts.ModuleResolutionKind.Node10,
-    paths: 'paths' in projectInfo.config ? projectInfo.config.paths ?? {} : {},
+    paths: 'paths' in projectInfo.config ? (projectInfo.config.paths ?? {}) : {},
     allowJs: true,
   }
 

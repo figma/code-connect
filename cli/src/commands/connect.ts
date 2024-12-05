@@ -87,6 +87,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
   )
     .option('--skip-validation', 'skip validation of Code Connect docs')
     .option('-l --label <label>', 'label to apply to the published files')
+    .option('--include-raw-templates', 'flag to include any raw figma.template.js files')
     .option(
       '-b --batch-size <batch_size>',
       'optional batch size (in number of documents) to use when uploading. Use this if you hit "request too large" errors. See README for more information.',
@@ -105,6 +106,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
       'specify the node to unpublish. This will unpublish for both React and Storybook.',
     )
     .option('-l --label <label>', 'label to unpublish for')
+    .option('--include-raw-templates', 'flag to include any raw figma.template.js files')
     .action(withUpdateCheck(handleUnpublish))
 
   addBaseCommand(
@@ -113,6 +115,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
     'Run Code Connect locally to find any files that have figma connections, then converts them to JSON and outputs to stdout.',
   )
     .option('-l --label <label>', 'label to apply to the parsed files')
+    .option('--include-raw-templates', 'flag to include any raw figma.template.js files')
     .action(withUpdateCheck(handleParse))
 
   addBaseCommand(
@@ -184,8 +187,29 @@ function transformDocFromParser(
   }
 }
 
+export function parseRawFile(filePath: string, label: string | undefined): CodeConnectJSON {
+  const fileContent = fs.readFileSync(filePath, 'utf-8')
+  const [firstLine, ...templateLines] = fileContent.split('\n')
+  const figmaNodeUrl = firstLine.replace(/\/\/\s*url=/, '').trim()
+  const template = templateLines.join('\n')
+
+  return {
+    figmaNode: figmaNodeUrl,
+    template,
+    // nestable by default unless user specifies otherwise
+    templateData: { nestable: true },
+    language: 'raw',
+    label: label || 'Code',
+    source: '',
+    sourceLocation: { line: -1 },
+    metadata: {
+      cliVersion: require('../../package.json').version,
+    },
+  }
+}
+
 export async function getCodeConnectObjects(
-  cmd: BaseCommand & { label?: string },
+  cmd: BaseCommand & { label?: string; includeRawTemplates?: boolean },
   projectInfo: ProjectInfo,
   silent = false,
 ): Promise<CodeConnectJSON[]> {
@@ -249,6 +273,16 @@ export async function getCodeConnectObjects(
         `Error returned from parser: ${fromError(e)}. Try re-running the command with --verbose for more information.`,
       )
     }
+  }
+
+  if (cmd.includeRawTemplates) {
+    const rawTemplateFiles = projectInfo.files.filter((f: string) =>
+      f.endsWith('.figma.template.js'),
+    )
+
+    const rawTemplateDocs = rawTemplateFiles.map((file) => parseRawFile(file, cmd.label))
+
+    codeConnectObjects = codeConnectObjects.concat(rawTemplateDocs)
   }
 
   if (cmd.label || projectInfo.config.label) {

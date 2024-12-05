@@ -1,0 +1,12 @@
+{
+  "codeConnect": {
+    "parser": "react",
+    "importPaths": {},
+    "paths": {},
+    "include": [
+      "*.{tsx, jsx}",
+      "*.figma.template.js"
+    ],
+    "exclude": []
+  }
+}

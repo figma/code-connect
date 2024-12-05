@@ -36,6 +36,7 @@ describe('e2e test for `parse` command custom parsers', () => {
 
     expect(tidyStdOutput(result.stderr)).toBe(
       `Config file found, parsing ./e2e_parse_command/custom_parser using specified include globs
+Using custom parser command: node parser/custom_parser.js
 Running parser: node parser/custom_parser.js
 Debug message from parser!
 Success from parser!`,
@@ -54,6 +55,7 @@ Success from parser!`,
 
     expect(tidyStdOutput(result.stderr)).toBe(
       `Config file found, parsing ./e2e_parse_command/custom_parser_warning using specified include globs
+Using custom parser command: node parser/custom_parser.js
 Warning from parser!`,
     )
 
@@ -72,6 +74,7 @@ Warning from parser!`,
       expect(e.code).toBe(1)
       expect(tidyStdOutput(e.stderr)).toBe(
         `Config file found, parsing ./e2e_parse_command/custom_parser_error using specified include globs
+Using custom parser command: node parser/custom_parser.js
 Error from parser!
 Errors encountered calling parser, exiting`,
       )
@@ -90,6 +93,7 @@ Errors encountered calling parser, exiting`,
       expect(e.code).toBe(1)
       expect(tidyStdOutput(e.stderr)).toBe(
         `Config file found, parsing ./e2e_parse_command/custom_parser_invalid_response using specified include globs
+Using custom parser command: node parser/custom_parser.js
 Error returned from parser: Validation error: Required at "docs[0].figmaNode"; Required at "docs[0].template"; Required at "docs[0].templateData"; Required at "docs[0].language"; Required at "docs[0].label". Try re-running the command with --verbose for more information.`,
       )
     }

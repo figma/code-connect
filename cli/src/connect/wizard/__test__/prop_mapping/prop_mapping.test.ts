@@ -31,6 +31,21 @@ describe('Prop mapping', () => {
         Action: 'action',
       })
     })
+
+    it('creates value mapping from mixed type options', () => {
+      const result = generateValueMapping('false | true | 9 | "indeterminate"', {
+        type: FigmaRestApi.ComponentPropertyType.Variant,
+        defaultValue: 'false',
+        variantOptions: ['false', 'true', '9', 'indeterminate'],
+      })
+
+      expect(result).toEqual({
+        false: false,
+        true: true,
+        '9': 9,
+        indeterminate: 'indeterminate',
+      })
+    })
   })
 
   describe('buildMatchableNamesMap', () => {

@@ -32,15 +32,30 @@ export function generateValueMapping(
   propSignature: string,
   figmaPropDef: FigmaRestApi.ComponentPropertyDefinition,
 ): ValueMapping {
-  const codeEnumOptions = propSignature.split(' | ').map((str) => str.substring(1, str.length - 1)) // remove quote marks
-  const searcher = new Searcher(figmaPropDef.variantOptions)
-  return codeEnumOptions.reduce((valueMapping, codeEnumValue) => {
-    const results = searcher.search(codeEnumValue, { returnMatchData: true })
-    if (results.length && results[0].score > 0.5) {
-      valueMapping[results[0].item] = codeEnumValue
+  const searchableCodeEnumOptions: Record<string, string | boolean | number> = {}
+  propSignature.split(' | ').forEach((str) => {
+    if (str.startsWith('"') && str.endsWith('"')) {
+      const withoutQuotes = str.substring(1, str.length - 1)
+      searchableCodeEnumOptions[withoutQuotes] = withoutQuotes
+    } else if (str === 'true') {
+      searchableCodeEnumOptions[str] = true
+    } else if (str === 'false') {
+      searchableCodeEnumOptions[str] = false
+    } else if (!isNaN(Number(str))) {
+      searchableCodeEnumOptions[str] = Number(str)
     }
-    return valueMapping
-  }, {} as ValueMapping)
+  })
+  const searcher = new Searcher(figmaPropDef.variantOptions)
+  return Object.entries(searchableCodeEnumOptions).reduce(
+    (valueMapping, [codeEnumValue, mappedValue]) => {
+      const results = searcher.search(codeEnumValue, { returnMatchData: true })
+      if (results.length && results[0].score > 0.5) {
+        valueMapping[results[0].item] = mappedValue
+      }
+      return valueMapping
+    },
+    {} as ValueMapping,
+  )
 }
 
 function signatureIsJsxLike(signature: string) {

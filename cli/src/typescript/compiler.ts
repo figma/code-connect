@@ -414,3 +414,8 @@ function stripQuotes(text: string) {
   }
   return text
 }
+
+export function isUndefinedType(node: ts.Node, checker: ts.TypeChecker): boolean {
+  const type = checker.getTypeAtLocation(node)
+  return (type.getFlags() & ts.TypeFlags.Undefined) !== 0
+}
