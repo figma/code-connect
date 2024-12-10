@@ -13,14 +13,11 @@ Code Connect is easy to set up, easy to maintain, type-safe, and extensible. Out
 
 Use Figma’s Code Connect to make your design system easily accessible to your developers and create a shared source of truth for both the design and code elements.
 
-Our Getting Started guide will walk you through the process of setting up Code Connect, using our interactive setup to automatically map components, and publishing your first components. **[Getting Started with Code Connect →](/quickstart-guide)**
+Our Getting Started guide will walk you through the process of setting up Code Connect, using our interactive setup to automatically map components, and publishing your first components. **[Getting Started with Code Connect →](https://www.figma.com/code-connect-docs/quickstart-guide/)**
 
 Code Connect comes with support for different frameworks and languages. Our integration guides will walk you through the process of refining your components by mapping props and variants for:
 
-- **[React (and React Native) →](/react)**
-- **[HTML (e.g. Web Components, Angular and Vue) →](/html)**
-- **[SwiftUI →](/swiftui)**
-- **[Jetpack Compose →](/compose)**.
-
-
-
+- **[React (and React Native) →](https://www.figma.com/code-connect-docs/react)**
+- **[HTML (e.g. Web Components, Angular and Vue) →](https://www.figma.com/code-connect-docs/html)**
+- **[SwiftUI →](https://www.figma.com/code-connect-docs/swiftui)**
+- **[Jetpack Compose →](https://www.figma.com/code-connect-docs/compose)**.
