@@ -50,7 +50,13 @@ enum ComponentPropertyType: String, Decodable {
     case text = "TEXT"
     case variant = "VARIANT"
 
-    var swiftTypeSpecifier: TypeAnnotationSyntax {
+    /**
+     Returns the Swift type for a ComponentPropertyType
+     - Parameter component: An optional component name argument to help determine the variant's Swift type
+     - Parameter property: An property component name argument to help determine the variant's Swift type
+     - Returns: The Swift Type: Bool, Any, String, or the variant's type.
+     */
+    func swiftTypeSpecifier(component: String?, property: String?) -> TypeAnnotationSyntax {
         switch self {
         case .boolean:
             return TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "Bool"))
@@ -59,6 +65,15 @@ enum ComponentPropertyType: String, Decodable {
         case .text:
             return TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "String"))
         case .variant:
+            if let component, let property {
+                let variantName = "\(component.transformToPascalCase())\(property.transformToPascalCase())"
+
+                // Attempt to guess the Swift enum type based on the property and component name
+                // This won't always work, but it gives an indication to the user what is required for
+                // a @FigmaEnum definition.
+                return TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "\(raw: variantName)"))
+            }
+
             return TypeAnnotationSyntax(type: IdentifierTypeSyntax(name: "Any"))
         }
     }
@@ -100,7 +115,20 @@ struct ComponentProperty: Decodable {
     }
 
     func defaultValueExpr() -> ExprSyntaxProtocol? {
-        guard let defaultValue else { return nil }
+        guard let defaultValue else {
+            let trailingTrivia = Trivia(pieces: [
+                .spaces(1),
+                .lineComment("// An enum type and default value is required here")
+            ])
+
+            if type == .variant, let defaultVariantOption = variantOptions?.first?.normalizingPropValue() {
+                return MemberAccessExprSyntax(name: "\(raw: defaultVariantOption)").with(\.trailingTrivia, Trivia(pieces: trailingTrivia))
+            }
+
+            // Return the trailing trivia even if we have no default enum value to choose from
+            return NilLiteralExprSyntax().with(\.trailingTrivia, Trivia(pieces: trailingTrivia))
+        }
+
         switch defaultValue {
         case .a(let a):
             return BooleanLiteralExprSyntax(booleanLiteral: a)

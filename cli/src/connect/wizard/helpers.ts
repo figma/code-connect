@@ -2,10 +2,13 @@ import * as prettier from 'prettier'
 import fs from 'fs'
 import {
   CodeConnectConfig,
+  CodeConnectParser,
   DEFAULT_INCLUDE_GLOBS_BY_PARSER,
+  DEFAULT_LABEL_PER_PARSER,
   ProjectInfo,
   ReactProjectInfo,
   getDefaultConfigPath,
+  getEnvPath,
 } from '../project'
 import { exitWithError, logger, success } from '../../common/logging'
 import path from 'path'
@@ -52,6 +55,19 @@ export function getIncludesGlob({
   return DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]
 }
 
+export async function createEnvFile({ dir, accessToken }: { dir: string; accessToken?: string }) {
+  // Create .env file
+  const filePath = getDefaultConfigPath(dir)
+  fs.writeFileSync(getEnvPath(dir), `FIGMA_ACCESS_TOKEN="${accessToken}"`)
+  logger.info(success(`Created ${filePath}`))
+}
+
+export function addTokenToEnvFile({ dir, accessToken }: { dir: string; accessToken?: string }) {
+  const filePath = getDefaultConfigPath(dir)
+  fs.appendFileSync(getEnvPath(dir), `\nFIGMA_ACCESS_TOKEN="${accessToken}"`)
+  logger.info(success(`Appended access token to ${filePath}`))
+}
+
 export async function createCodeConnectConfig({
   dir,
   componentDirectory,
@@ -61,14 +77,22 @@ export async function createCodeConnectConfig({
   componentDirectory: string | null
   config: CodeConnectConfig
 }) {
+  const label = DEFAULT_LABEL_PER_PARSER[config.parser as CodeConnectParser]
   const includesGlob = getIncludesGlob({ dir, componentDirectory, config })
-  const configJson = `
-{
+
+  const configJson = label
+    ? `{
+  "codeConnect": {
+    "include": ["${includesGlob}"],
+    "label": "${label}"
+  }
+}`
+    : `{
   "codeConnect": {
     "include": ["${includesGlob}"]
   }
-}
-  `
+}`
+
   const formatted = await prettier.format(configJson, {
     parser: 'json',
   })

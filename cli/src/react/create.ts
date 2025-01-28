@@ -5,7 +5,9 @@ import z from 'zod'
 import {
   ComponentPropertyDefinition,
   CreateRequestPayload,
+  CreateRequestPayloadMulti,
   CreateResponsePayload,
+  FigmaConnectionComponent,
   PropMapping,
 } from '../connect/parser_executable_types'
 import path from 'path'
@@ -136,10 +138,7 @@ export function getSetOfAllPropsReferencedInPropMapping(obj: Object) {
   return new Set(mappedProps)
 }
 
-function generatePropsFromMapping(
-  component: CreateRequestPayload['component'],
-  propMapping: PropMapping,
-) {
+function generatePropsFromMapping(component: FigmaConnectionComponent, propMapping: PropMapping) {
   const mappedProps: string[] = []
   const unmappedProps: string[] = []
 
@@ -181,7 +180,7 @@ ${
   }`
 }
 
-export function generateProps(component: CreateRequestPayload['component']) {
+export function generateProps(component: FigmaConnectionComponent) {
   const props: string[] = []
   if (
     !component.componentPropertyDefinitions ||
@@ -272,11 +271,27 @@ function getImportsPath({
 }
 
 export async function createReactCodeConnect(
-  payload: CreateRequestPayload,
+  payload: CreateRequestPayloadMulti,
 ): Promise<z.infer<typeof CreateResponsePayload>> {
-  const { component, destinationFile, destinationDir, sourceFilepath, sourceExport, propMapping } =
+  const { figmaConnections, destinationFile, destinationDir, sourceFilepath, normalizedName } =
     payload
-  const { normalizedName, figmaNodeUrl } = component
+
+  const comments = {
+    MAPPED_PROPS: `
+  * \`props\` includes a mapping from your code props to Figma properties.
+  * You should check this is correct, and update the \`example\` function
+  * to return the code example you'd like to see in Figma`,
+    NO_MAPPED_PROPS: `
+  * None of your props could be automatically mapped to Figma properties.
+  * You should update the \`props\` object to include a mapping from your
+  * code props to Figma properties, and update the \`example\` function to
+  * return the code example you'd like to see in Figma`,
+    DEFAULT: `
+  * \`props\` includes a mapping from Figma properties and variants to
+  * suggested values. You should update this to match the props of your
+  * code component, and update the \`example\` function to return the
+  * code example you'd like to see in Figma`,
+  }
 
   const sourceFilename = sourceFilepath
     ? path.parse(sourceFilepath).name.split('.')[0]
@@ -295,50 +310,75 @@ export async function createReactCodeConnect(
     normalizedName,
   })
 
-  const hasAnyMappedProps = propMapping && Object.keys(propMapping).length > 0
+  let defaultImport = ''
+  const namedImports: Record<string, string> = {}
 
-  const importName =
-    sourceFilepath && sourceExport
-      ? sourceExport === 'default'
-        ? normalizeComponentName(sourceFilename)
-        : sourceExport
-      : normalizedName
+  for (const figmaConnection of figmaConnections) {
+    const { sourceExport, component } = figmaConnection
 
-  let comment = ''
+    const importName =
+      sourceFilepath && sourceExport
+        ? sourceExport === 'default'
+          ? normalizeComponentName(sourceFilename)
+          : sourceExport
+        : normalizedName
 
-  if (propMapping && hasAnyMappedProps) {
-    comment = `
- * \`props\` includes a mapping from your code props to Figma properties.
- * You should check this is correct, and update the \`example\` function
- * to return the code example you'd like to see in Figma`
-  } else if (propMapping && !hasAnyMappedProps) {
-    comment = `
- * None of your props could be automatically mapped to Figma properties.
- * You should update the \`props\` object to include a mapping from your
- * code props to Figma properties, and update the \`example\` function to
- * return the code example you'd like to see in Figma`
-  } else {
-    comment = `
- * \`props\` includes a mapping from Figma properties and variants to
- * suggested values. You should update this to match the props of your
- * code component, and update the \`example\` function to return the
- * code example you'd like to see in Figma`
+    if (sourceExport === 'default') {
+      defaultImport = importName
+    } else {
+      namedImports[component.id] = importName
+    }
   }
 
-  const codeConnect = `
+  if (defaultImport !== '') {
+    defaultImport = Object.values(namedImports).includes(defaultImport)
+      ? `${defaultImport}Default`
+      : defaultImport
+  }
+
+  let codeConnectCode = ''
+  for (const figmaConnection of figmaConnections) {
+    const { propMapping, sourceExport, component, reactTypeSignature } = figmaConnection
+
+    const hasAnyMappedProps = propMapping && Object.keys(propMapping).length > 0
+
+    const commentType =
+      propMapping && hasAnyMappedProps
+        ? 'MAPPED_PROPS'
+        : propMapping && !hasAnyMappedProps
+          ? 'NO_MAPPED_PROPS'
+          : 'DEFAULT'
+    let comment = comments[commentType]
+
+    let componentName = sourceExport === 'default' ? defaultImport : namedImports[component.id]
+
+    const snippet = `figma.connect(${componentName}, "${component.figmaNodeUrl}", {
+      props: ${propMapping ? generatePropsFromMapping(component, propMapping) : generateProps(component)},
+      example: (props) => ${generateExample(componentName, reactTypeSignature, propMapping)},
+    })`
+
+    codeConnectCode += `
+
+  /**
+   * -- This file was auto-generated by Code Connect --${comment}
+   */
+
+  ${snippet}
+  `
+  }
+
+  const comma = Object.keys(namedImports).length > 0 && defaultImport ? ',' : ''
+  const namedImportList =
+    Object.values(namedImports).length > 0 ? `{${Object.values(namedImports).join(',')}}` : ''
+
+  let codeConnect = `
 import React from 'react'
-import ${sourceExport === 'default' ? importName : `{ ${importName} }`} from '${importsPath}'
+import ${defaultImport} ${comma} ${namedImportList} from '${importsPath}'
 import figma from '@figma/code-connect'
 
-/**
- * -- This file was auto-generated by Code Connect --${comment}
- */
-
-figma.connect(${importName}, "${figmaNodeUrl}", {
-  props: ${propMapping ? generatePropsFromMapping(component, propMapping) : generateProps(component)},
-  example: (props) => ${generateExample(importName, payload.reactTypeSignature, propMapping)},
-})
+${codeConnectCode}
 `
+
   let formatted = prettier.format(codeConnect, {
     parser: 'typescript',
     semi: false,

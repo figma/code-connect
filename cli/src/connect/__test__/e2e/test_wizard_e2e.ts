@@ -11,6 +11,7 @@ export function testWizardE2e(testCase: {
   componentsPath: string
   expectedCreatedComponentPath: string
   expectedIncludeGlobs: string[]
+  expectedLabel?: string
 }) {
   describe(`e2e test for the wizard - ${testCase.name}`, () => {
     let result: {
@@ -38,7 +39,8 @@ export function testWizardE2e(testCase: {
         }
 
         const wizardAnswers = [
-          'figd_123', // Access token
+          'figd_123', // Access token,
+          'yes', // Create an .env file to store the access token
           testCase.componentsPath, // Top-level components directory
           'https://www.figma.com/design/abc123/my-design-system', // Design system URL
           'yes', // Confirm create a new config file
@@ -71,17 +73,27 @@ export function testWizardE2e(testCase: {
 
     it('creates config file from given answers', () => {
       const configPath = path.join(testPath, 'figma.config.json')
-      expect(fs.readFileSync(configPath, 'utf8')).toBe(`\
-{
+
+      const expectedConfig = testCase.expectedLabel
+        ? `{
+  "codeConnect": {
+    "include": ${JSON.stringify(testCase.expectedIncludeGlobs)},
+    "label": "${testCase.expectedLabel}"
+  }
+}
+`
+        : `{
   "codeConnect": {
     "include": ${JSON.stringify(testCase.expectedIncludeGlobs)}
   }
 }
-`)
+`
+
+      expect(fs.readFileSync(configPath, 'utf8')).toBe(expectedConfig)
     })
 
     it('reaches linking step', () => {
-      expect(tidyStdOutput(result.stderr)).toContain('Connecting your components')
+      expect(tidyStdOutput(result.stderr)).toContain('Connecting your Figma components')
     })
 
     it('creates Code Connect file at correct location', () => {

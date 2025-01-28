@@ -1,3 +1,30 @@
+# Code Connect v1.3.0 (28th January 2025)
+
+## Features
+- Add support for JSX Figma connection files.
+- Added an option to automatically create or append the access token to the project's .env file
+- Add better handling of many figma components in the wizard (grouping per page)
+- Allow variant restrictions to use boolean-like properties
+
+### General
+- Added support for Bitbucket, Gitlab and Azure DevOps for generated source file URLs
+
+## Fixed
+- Don't show a red-cross when the file-matching prompt is finished in the wizard
+- Add default values for `@FigmaEnum` declarations in SwiftUI
+
+### SwiftUI
+- Fixed a formatting error when running the CLI
+
+### React
+- Fix nested objects and arrays in props not rendering properly in code snippets
+- Fixed a type issue when passing functions as values to `figma.boolean`
+- Add support for multiple exports per file in the wizard
+
+### Storybook
+- Add support for different props per example (fixes https://github.com/figma/code-connect/issues/143)
+- Add support for `links` and `imports` (fixes https://github.com/figma/code-connect/issues/142)
+
 # Code Connect v1.2.4 (5th December 2024)
 
 ## Fixed

@@ -35,7 +35,15 @@ export type FCCValue =
       | typeof _fcc_object
       | typeof _fcc_templateString
       | typeof _fcc_reactComponent
+      | typeof _fcc_array
     >
+
+export function _fcc_array($value: any[]) {
+  return {
+    $value,
+    $type: 'array',
+  } as const
+}
 
 export function _fcc_jsxElement($value: string) {
   return {
@@ -80,10 +88,21 @@ export function _fcc_reactComponent($value: string) {
   } as const
 }
 
+function isReactComponentArray(
+  prop: FCCValue | (CodeSection | InstanceSection | ErrorSection)[],
+): prop is (InstanceSection | CodeSection | ErrorSection)[] {
+  return (
+    Array.isArray(prop) &&
+    prop.every((item) => item.type === 'INSTANCE' || item.type === 'CODE' || item.type === 'ERROR')
+  )
+}
+
 // Render a prop value passed to an object literal based on its type.
 // for example: <Button sx={{ key: value }} />
-function _fcc_renderPropValue(prop: FCCValue | (CodeSection | InstanceSection)[]) {
-  if (Array.isArray(prop)) {
+function _fcc_renderPropValue(
+  prop: FCCValue | (CodeSection | InstanceSection)[],
+): string | number | boolean | (CodeSection | InstanceSection)[] {
+  if (isReactComponentArray(prop)) {
     return prop
   }
 
@@ -114,8 +133,14 @@ function _fcc_renderPropValue(prop: FCCValue | (CodeSection | InstanceSection)[]
     return prop.$value
   }
 
+  if (prop.$type === 'array') {
+    return `[${prop.$value.map((el) => _fcc_renderPropValue(el))}]`
+  }
+
   if (prop.$type === 'object') {
-    return _fcc_stringifyObject(prop.$value)
+    return `{${Object.keys(prop.$value)
+      .map((key) => ` ${key}: ${_fcc_renderPropValue(prop.$value[key])} `)
+      .join(',')}}`
   }
 
   if (prop.$type === 'template-string') {
@@ -134,9 +159,8 @@ function _fcc_renderReactProp(
   // children (either of type INSTANCE for pills, or CODE for inline code). The
   // template string handler in the template API handles extracting the instance
   // objects in a way the UI can handle.
-  const isReactComponentArray = Array.isArray(prop)
 
-  if (isReactComponentArray) {
+  if (isReactComponentArray(prop)) {
     if (prop.length > 1) {
       // If the array has multiple children, render them wrapped in braces and a
       // fragment.
@@ -184,8 +208,8 @@ function _fcc_renderReactProp(
     return ` ${name}={${prop.$value}}`
   }
 
-  if (prop.$type === 'object') {
-    return ` ${name}={${_fcc_stringifyObject(prop.$value)}}`
+  if (prop.$type === 'array' || prop.$type === 'object') {
+    return ` ${name}={${_fcc_renderPropValue(prop)}}`
   }
 
   if (prop.$type === 'template-string') {
@@ -197,7 +221,7 @@ function _fcc_renderReactProp(
 
 // Renders React children correctly, based on their type
 function _fcc_renderReactChildren(prop: FCCValue | (CodeSection | InstanceSection)[]) {
-  if (Array.isArray(prop)) {
+  if (isReactComponentArray(prop)) {
     return prop
   }
 
@@ -224,8 +248,8 @@ function _fcc_renderReactChildren(prop: FCCValue | (CodeSection | InstanceSectio
     return `{${prop.$value}}`
   }
 
-  if (prop.$type === 'object') {
-    return `{${_fcc_stringifyObject(prop.$value)}}`
+  if (prop.$type === 'array' || prop.$type === 'object') {
+    return `{${_fcc_renderPropValue(prop)}}`
   }
 
   if (prop.$type === 'react-component') {
@@ -260,6 +284,8 @@ export function getParsedTemplateHelpersString() {
     _fcc_renderPropValue,
     _fcc_stringifyObject,
     _fcc_reactComponent,
+    _fcc_array,
+    isReactComponentArray,
   ]
     .map((fn) => fn.toString())
     .join('\n')

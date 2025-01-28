@@ -2,6 +2,7 @@ import { ReactProjectInfo, getProjectInfo, getReactProjectInfo } from '../../con
 import { existsSync, readFileSync } from 'fs'
 import { convertStorybookFiles } from '../convert'
 import path from 'path'
+import { getFileInRepositoryRegex } from '../../__test__/utils'
 
 const EXAMPLE_DIR = path.join(__dirname, 'examples')
 
@@ -84,8 +85,9 @@ describe('convertStorybookFiles (JS templates)', () => {
       expect(result).toMatchObject([
         {
           figmaNode: 'https://figma.com/test',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/FunctionComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponentNoProps'),
         },
@@ -97,8 +99,9 @@ describe('convertStorybookFiles (JS templates)', () => {
       expect(result).toMatchObject([
         {
           figmaNode: 'https://figma.com/test',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/ArrowComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/ArrowComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: getExpectedTemplate('ArrowComponent'),
         },
@@ -110,8 +113,9 @@ describe('convertStorybookFiles (JS templates)', () => {
       expect(result).toMatchObject([
         {
           figmaNode: 'https://figma.com/test',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/ArrowComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/ArrowComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: getExpectedTemplate('ArrowComponent'),
         },
@@ -119,12 +123,64 @@ describe('convertStorybookFiles (JS templates)', () => {
     })
   })
 
+  describe('different props in different examples', () => {
+    it('different props in different examples are supported and rendered correctly', async () => {
+      const result = await convertStorybookFile('DifferentPropsPerExample.stories.tsx')
+
+      expect(result).toMatchObject([
+        {
+          figmaNode: 'https://figma.com/differentpropsperexample',
+          template: getExpectedTemplate('DifferentPropsPerExample_default'),
+        },
+        {
+          figmaNode: 'https://figma.com/differentpropsperexample',
+          template: getExpectedTemplate('DifferentPropsPerExample_overriden'),
+        },
+      ])
+    })
+  })
+
+  describe('imports', () => {
+    it('parses correctly the `imports` field', async () => {
+      const result = await convertStorybookFile('WithImports.stories.tsx')
+      expect(result).toMatchObject([
+        {
+          figmaNode: 'https://figma.com/withimports',
+          templateData: { imports: ['import { Default } from "./DefaultFile.tsx"'] },
+        },
+      ])
+    })
+    it('`imports` is empty if the field is not provided', async () => {
+      const result = await convertStorybookFile('FunctionComponent.stories.tsx')
+      expect(result).toMatchObject([
+        { figmaNode: 'https://figma.com/test', templateData: { imports: [] } },
+      ])
+    })
+  })
+
+  describe('links', () => {
+    it('parses correctly the `links` field', async () => {
+      const result = await convertStorybookFile('WithLinks.stories.tsx')
+      expect(result).toMatchObject([
+        {
+          figmaNode: 'https://figma.com/withlinks',
+          links: [{ name: 'Storybook', url: 'https://www.storybook.com' }],
+        },
+      ])
+    })
+    it('`links` is undefined if the field is not provided', async () => {
+      const result = await convertStorybookFile('FunctionComponent.stories.tsx')
+      expect(result).toMatchObject([{ figmaNode: 'https://figma.com/test', links: undefined }])
+    })
+  })
+
   describe('story styles', () => {
     const expectedCodeConnect = [
       {
         figmaNode: 'https://figma.com/test',
-        source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
+        source: expect.stringMatching(
+          getFileInRepositoryRegex('cli/src/storybook/__test__/examples/FunctionComponent.tsx'),
+        ),
         sourceLocation: { line: 8 },
         template: getExpectedTemplate('FunctionComponent'),
       },
@@ -151,8 +207,9 @@ describe('convertStorybookFiles (JS templates)', () => {
       expect(result).toMatchObject([
         {
           figmaNode: 'https://figma.com/test',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/FunctionComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponent'),
         },
@@ -167,8 +224,9 @@ describe('convertStorybookFiles (JS templates)', () => {
       expect(result).toMatchObject([
         {
           figmaNode: 'https://figma.com/test',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/FunctionComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponent'),
         },
@@ -186,8 +244,9 @@ describe('convertStorybookFiles (JS templates)', () => {
     const expectedCodeConnect = [
       {
         figmaNode: 'https://figma.com/test',
-        source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/PropMapping.tsx',
+        source: expect.stringMatching(
+          getFileInRepositoryRegex('cli/src/storybook/__test__/examples/PropMapping.tsx'),
+        ),
         sourceLocation: { line: 9 },
         template: getExpectedTemplate('PropMapping'),
         // name: 'Default',
@@ -233,8 +292,9 @@ describe('convertStorybookFiles (JS templates)', () => {
       expect(result).toMatchObject([
         {
           figmaNode: 'https://figma.com/test',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/ArrowComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/ArrowComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: `const figma = require("figma")\n\nexport default figma.tsx\`<ArrowComponent />\``,
         },
@@ -246,8 +306,9 @@ describe('convertStorybookFiles (JS templates)', () => {
       expect(result).toMatchObject([
         {
           figmaNode: 'https://figma.com/test',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/FunctionComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponentNoProps'),
           // name: 'Default',
@@ -269,8 +330,9 @@ describe('convertStorybookFiles (JS templates)', () => {
         {
           figmaNode: 'https://figma.com/test',
           component: 'FunctionComponent',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/FunctionComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponentNoProps'),
           variant: { 'With icon': false },
@@ -279,8 +341,9 @@ describe('convertStorybookFiles (JS templates)', () => {
         {
           figmaNode: 'https://figma.com/test',
           component: 'FunctionComponent',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/FunctionComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponentWithIcon'),
           variant: { 'With icon': true },
@@ -289,8 +352,9 @@ describe('convertStorybookFiles (JS templates)', () => {
         {
           figmaNode: 'https://figma.com/test',
           component: 'FunctionComponent',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/FunctionComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponentStringName'),
           variant: { DummyOption: 'DummyValue' },
@@ -299,8 +363,9 @@ describe('convertStorybookFiles (JS templates)', () => {
         {
           figmaNode: 'https://figma.com/test',
           component: 'FunctionComponent',
-          source:
-            'https://github.com/figma/code-connect/blob/main/cli/src/storybook/__test__/examples/FunctionComponent.tsx',
+          source: expect.stringMatching(
+            getFileInRepositoryRegex('cli/src/storybook/__test__/examples/FunctionComponent.tsx'),
+          ),
           sourceLocation: { line: 8 },
           template: getExpectedTemplate('FunctionComponentMultipleRestrictions'),
           variant: { 'With icon': true, DummyOption: 'DummyValue' },

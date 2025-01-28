@@ -309,6 +309,41 @@ export function assertIsIdentifier(
   }
 }
 
+function convertValueNodeToJs(
+  valueNode: ts.Expression,
+  sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
+  extraConversionFn?: (node: ts.Expression) => any,
+): any {
+  if (ts.isObjectLiteralExpression(valueNode)) {
+    // A prop mapping to an object literal, which maps each figma value to a code value
+    return convertObjectLiteralToJs(valueNode, sourceFile, checker, extraConversionFn)
+  } else {
+    // A prop mapping to anything else, which will be passed as a literal value
+    if (ts.isStringLiteral(valueNode)) {
+      // Accessing `text` directly prevents the value being wrapped in quotes
+      return valueNode.text
+    } else if (valueNode.kind === ts.SyntaxKind.TrueKeyword) {
+      return true
+    } else if (valueNode.kind === ts.SyntaxKind.FalseKeyword) {
+      return false
+      // undefined is not a keyword in TypeScript, but actually translates to an identifier
+      // (even though confusingly ts.SyntaxKind.UndefinedKeyword exists)
+    } else if (ts.isIdentifier(valueNode) && valueNode.text === 'undefined') {
+      return undefined
+    } else if (valueNode.kind === ts.SyntaxKind.NullKeyword) {
+      return null
+    } else if (valueNode.kind === ts.SyntaxKind.NumericLiteral) {
+      return parseFloat(valueNode.getText())
+    } else if (isTaggedTemplateExpression(valueNode)) {
+      // Return the content of the template string without the backticks
+      return valueNode.template.getText().replace(/^`/, '').replace(/`$/, '')
+    } else {
+      return valueNode.getText()
+    }
+  }
+}
+
 /**
  * Convert an object literal node to a JavaScript object
  *
@@ -364,36 +399,38 @@ export function convertObjectLiteralToJs(
 
     if (extraConversionResult !== undefined) {
       obj[key] = extraConversionResult
-    } else if (ts.isObjectLiteralExpression(valueNode)) {
-      // A prop mapping to an object literal, which maps each figma value to a code value
-      obj[key] = convertObjectLiteralToJs(valueNode, sourceFile, checker, extraConversionFn)
     } else {
-      // A prop mapping to anything else, which will be passed as a literal value
-      if (ts.isStringLiteral(valueNode)) {
-        // Accessing `text` directly prevents the value being wrapped in quotes
-        obj[key] = valueNode.text
-      } else if (valueNode.kind === ts.SyntaxKind.TrueKeyword) {
-        obj[key] = true
-      } else if (valueNode.kind === ts.SyntaxKind.FalseKeyword) {
-        obj[key] = false
-        // undefined is not a keyword in TypeScript, but actually translates to an identifier
-        // (even though confusingly ts.SyntaxKind.UndefinedKeyword exists)
-      } else if (ts.isIdentifier(valueNode) && valueNode.text === 'undefined') {
-        obj[key] = undefined
-      } else if (valueNode.kind === ts.SyntaxKind.NullKeyword) {
-        obj[key] = null
-      } else if (valueNode.kind === ts.SyntaxKind.NumericLiteral) {
-        obj[key] = parseFloat(valueNode.getText())
-      } else if (isTaggedTemplateExpression(valueNode)) {
-        // Return the content of the template string without the backticks
-        obj[key] = valueNode.template.getText().replace(/^`/, '').replace(/`$/, '')
-      } else {
-        obj[key] = valueNode.getText()
-      }
+      obj[key] = convertValueNodeToJs(valueNode, sourceFile, checker, extraConversionFn)
     }
   }
 
   return obj
+}
+
+/**
+ * Convert an Array literal node to a JavaScript array
+ *
+ * @param arrayLiteral The array literal node to convert
+ * @param sourceFile The source file containing the array literal
+ * @param extraConversionFn Optional function to convert a node to a value. This
+ * runs before the default conversion. If this returns undefined, the default
+ * conversion will be used. (This does mean there's no way to return undefined)
+ * @returns The JavaScript object version of the object literal
+ */
+export function convertArrayLiteralToJs(
+  arrayLiteral: ts.ArrayLiteralExpression,
+  sourceFile: ts.SourceFile,
+  checker: ts.TypeChecker,
+  extraConversionFn?: (node: ts.Expression) => any,
+) {
+  return arrayLiteral.elements.map((element) => {
+    const extraConversionResult = extraConversionFn && extraConversionFn(element)
+    if (extraConversionResult !== undefined) {
+      return extraConversionResult
+    } else {
+      return convertValueNodeToJs(element, sourceFile, checker, extraConversionFn)
+    }
+  })
 }
 
 export function getTagName(element: ts.JsxElement | ts.JsxSelfClosingElement) {

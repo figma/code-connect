@@ -3,6 +3,7 @@ import { InternalError, ParserContext, ParserError } from './parser_common'
 import {
   assertIsArrayLiteralExpression,
   assertIsStringLiteral,
+  convertArrayLiteralToJs,
   isUndefinedType,
   stripQuotesFromNode,
 } from '../typescript/compiler'
@@ -11,6 +12,7 @@ import { assertIsObjectLiteralExpression } from '../typescript/compiler'
 import { FigmaConnectAPI } from './api'
 import {
   FCCValue,
+  _fcc_array,
   _fcc_function,
   _fcc_identifier,
   _fcc_jsxElement,
@@ -470,6 +472,8 @@ export function valueToString(value: ValueMappingKind, childLayer?: string) {
       return `_fcc_templateString('${v}')`
     case 'jsx-element':
       return `_fcc_jsxElement('${v}')`
+    case 'array':
+      return `_fcc_array(${v})`
     default:
       throw new InternalError(`Unknown helper type: ${value}`)
   }
@@ -571,6 +575,8 @@ function expressionToFccEnumValue(
   valueNode: ts.Expression,
   parserContext: ParserContext,
 ): FCCValue {
+  const { sourceFile, checker } = parserContext
+
   if (ts.isParenthesizedExpression(valueNode)) {
     return expressionToFccEnumValue(valueNode.expression, parserContext)
   }
@@ -586,6 +592,17 @@ function expressionToFccEnumValue(
   if (ts.isObjectLiteralExpression(valueNode)) {
     // should recursively convert to FCC
     return _fcc_object(parsePropsObject(valueNode, parserContext))
+  }
+
+  if (ts.isArrayLiteralExpression(valueNode)) {
+    return _fcc_array(
+      convertArrayLiteralToJs(valueNode, sourceFile, checker, (valueNode) => {
+        if (ts.isCallExpression(valueNode)) {
+          return parseIntrinsic(valueNode, parserContext)
+        }
+        return expressionToFccEnumValue(valueNode, parserContext)
+      }),
+    )
   }
 
   if (ts.isTemplateLiteral(valueNode)) {

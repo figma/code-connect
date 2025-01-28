@@ -126,6 +126,32 @@ export type ComponentPropertyDefinition = {
   variantOptions?: string[]
 }
 
+export interface FigmaConnectionComponent {
+  // The URL of the Figma component. This field is not in the REST API but
+  // is added for convenience.
+  figmaNodeUrl: string
+  // The ID of the Figma component
+  id: string
+  // The name of the Figma component
+  name: string
+  // The type of the Figma component
+  type: 'COMPONENT' | 'COMPONENT_SET'
+  // Map of the Figma component's properties, keyed by property name
+  componentPropertyDefinitions: Record<string, ComponentPropertyDefinition>
+}
+export interface FigmaConnection {
+  // The export to use from sourceFilepath
+  sourceExport?: string
+  // A mapping of how Figma props should map to code properties
+  propMapping?: PropMapping
+  // The type signature for the component (React only)
+  reactTypeSignature?: ComponentTypeSignature
+  // Information about the Figma component. This matches the REST API (except the
+  // figmaNodeUrl and normalizedName fields), which should make it easier to
+  // implement and maintain as we can just pass it through
+  component: FigmaConnectionComponent
+}
+
 export type CreateRequestPayload = {
   mode: 'CREATE'
   // Absolute destination directory for the created file. The parser is free to
@@ -163,6 +189,30 @@ export type CreateRequestPayload = {
     // Map of the Figma component's properties, keyed by property name
     componentPropertyDefinitions: Record<string, ComponentPropertyDefinition>
   }
+  // The configuration object for this parser.
+  // Each parser's configuration is separate and can take any shape, though we
+  // will recommend using the same naming for common concepts like "importPaths".
+  config: Record<string, any>
+}
+
+export type CreateRequestPayloadMulti = {
+  mode: 'CREATE'
+  // Absolute destination directory for the created file. The parser is free to
+  // write to a different directory if appropriate (e.g. it analyses your codebase
+  // to identify where this component should go), but usually it should respect this.
+  destinationDir: string
+  // Optional destination file name. If omitted, the parser can determine the
+  // file name itself.
+  destinationFile?: string
+  // The filepath of the code to be connected. If present, this is used instead of
+  // component.normalizedName
+  sourceFilepath?: string
+  // The name of the Figma component, nomalized for use in code.
+  // This field is not in the REST API but is added for convenience.
+  normalizedName: string
+  // The list of design-matchings this file holds
+  // there can be multiple exports per file, each matching to a different design
+  figmaConnections: FigmaConnection[]
   // The configuration object for this parser.
   // Each parser's configuration is separate and can take any shape, though we
   // will recommend using the same naming for common concepts like "importPaths".

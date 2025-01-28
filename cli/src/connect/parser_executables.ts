@@ -146,6 +146,11 @@ export async function callParser(
         }
         if (parser.temporaryIOFilePath) {
           fs.unlinkSync(parser.temporaryIOFilePath)
+          // Delete parent directory if empty after removing temp file
+          const parentDir = path.dirname(parser.temporaryIOFilePath)
+          if (fs.readdirSync(parentDir).length === 0) {
+            fs.rmdirSync(parentDir)
+          }
         }
       })
 

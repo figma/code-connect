@@ -6,4 +6,5 @@ testWizardE2e({
   componentsPath: './e2e_parse_command/react_wizard/components',
   expectedCreatedComponentPath: 'components/PrimaryButton.figma.tsx',
   expectedIncludeGlobs: ['components/**/*.{tsx,jsx}'],
+  expectedLabel: 'React',
 })

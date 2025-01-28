@@ -44,7 +44,7 @@ enum CodeConnectCreationError: LocalizedError {
 
 extension String {
     // Changes component names to a single PascalCase word stripping out starting numbers
-    func normalizeComponentName() -> String {
+    func transformToPascalCase() -> String {
         self.replacingOccurrences(of: "[^a-zA-Z0-9]", with: " ", options: .regularExpression)
             .split(separator: " ")
             .map { word in
@@ -150,7 +150,7 @@ public struct CodeConnectCreator {
                             for option in options {
                                 DictionaryElementSyntax(
                                     key: StringLiteralExprSyntax(content: option),
-                                    value: ExprSyntax(stringLiteral: "\(option.normalizingPropValue())")
+                                    value: MemberAccessExprSyntax(name: "\(raw: option.normalizingPropValue())")
                                 )
                             }
                         }
@@ -161,7 +161,7 @@ public struct CodeConnectCreator {
     }
 
     static func convertComponentToCodeConnectFile(_ component: Component, url: String) throws -> SourceFileSyntax {
-        let componentName = component.name.normalizeComponentName()
+        let componentName = component.name.transformToPascalCase()
 
         // Struct definition with the CodeConnect struct
         let structDecl = try StructDeclSyntax(
@@ -193,7 +193,7 @@ public struct CodeConnectCreator {
                         // Add the default value if it exists
                         PatternBindingSyntax(
                             pattern: PatternSyntax("\(raw: name.normalizingPropValue())"),
-                            typeAnnotation: property.type.swiftTypeSpecifier,
+                            typeAnnotation: property.type.swiftTypeSpecifier(component: component.name, property: name),
                             initializer: property.defaultValueExpr() != nil ? InitializerClauseSyntax(value: property.defaultValueExpr()!) : nil
                         )
                     }
@@ -206,7 +206,7 @@ public struct CodeConnectCreator {
                                 .blockComment("Use @FigmaString, @FigmaEnum, @FigmaBoolean and @FigmaInstance property wrappers to connect Figma properties to code"),
                                 .newlines(2)
                             ]
-                        ) : Trivia()
+                        ) : Trivia(pieces: [.newlines(2)])
                     let trailingTrivia: Trivia = i == properties.count - 1
                         ? Trivia(
                             pieces: [
@@ -214,10 +214,10 @@ public struct CodeConnectCreator {
                                 .lineComment("*/"),
                                 .newlines(2)
                             ]
-                        ) : Trivia(pieces: [.newlines(2)])
+                        ) : Trivia()
                     varDecl
-                        .with(\.leadingTrivia, Trivia(pieces: leadingTrivia))
-                        .with(\.trailingTrivia, trailingTrivia)
+                        .with(\.leadingTrivia, Trivia(pieces: leadingTrivia + varDecl.leadingTrivia))
+                        .with(\.trailingTrivia, Trivia(pieces: varDecl.trailingTrivia.pieces + trailingTrivia))
                 }
 
                 // Create example code definition
@@ -231,6 +231,10 @@ public struct CodeConnectCreator {
         }
         // Create the source file
         return try SourceFileSyntax {
+            // Import SwiftUI to resolve View type
+            try ImportDeclSyntax("import SwiftUI")
+
+            // Import Figma to resolve Figma property wrappers
             try ImportDeclSyntax("import Figma").with(\.trailingTrivia, .newlines(2))
             structDecl
         }

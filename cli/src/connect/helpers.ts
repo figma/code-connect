@@ -50,22 +50,32 @@ export function findComponentsInDocument(
   nodeIds?: string[],
 ): FigmaRestApi.Component[] {
   const components: FigmaRestApi.Component[] = []
-  const stack = [document]
+  const pages: FigmaRestApi.Node[] = document.children
 
-  while (stack.length > 0) {
-    const node = stack.pop()!
-    if (nodeIds && nodeIds.includes(node.id)) {
-      if (!isComponent(node)) {
-        throw new Error('Specified node is not a component or a component set')
+  for (const page of pages) {
+    if (page.type !== 'CANVAS') {
+      continue
+    }
+    const pageId = page.id
+    const pageName = page.name
+
+    const stack: FigmaRestApi.Node[] = page.children
+
+    while (stack.length > 0) {
+      const node = stack.pop()!
+      if (nodeIds && nodeIds.includes(node.id)) {
+        if (!isComponent(node)) {
+          throw new Error('Specified node is not a component or a component set')
+        }
+        components.push({ ...node, pageId, pageName })
       }
-      components.push(node)
-    }
-    if (!nodeIds && isComponent(node)) {
-      components.push(node)
-    }
-    // don't traverse into component sets
-    if (Array.isArray(node.children) && !isComponent(node)) {
-      stack.push(...node.children)
+      if (!nodeIds && isComponent(node)) {
+        components.push({ ...node, pageId, pageName })
+      }
+      // don't traverse into component sets
+      if (Array.isArray(node.children) && !isComponent(node)) {
+        stack.push(...node.children)
+      }
     }
   }
 

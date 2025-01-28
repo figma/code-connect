@@ -4,6 +4,7 @@ import { CodeConnectReactConfig } from '../../connect/project'
 import { readFileSync } from 'fs'
 import { parseCodeConnect, ParserError } from '../../connect/parser_common'
 import { findAndResolveImports, parseReactDoc, replacePropPlaceholders } from '../parser'
+import { getFileInRepositoryRegex } from '../../__test__/utils'
 
 async function testParse(
   file: string,
@@ -51,8 +52,9 @@ describe('Parser (JS templates)', () => {
     expect(result).toMatchObject([
       {
         figmaNode: 'ui/button',
-        source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/components/TestComponents.tsx',
+        source: expect.stringMatching(
+          getFileInRepositoryRegex('cli/src/react/__test__/components/TestComponents.tsx'),
+        ),
         sourceLocation: { line: 12 },
         template: getExpectedTemplate('Button'),
         templateData: {
@@ -68,8 +70,9 @@ describe('Parser (JS templates)', () => {
     expect(result).toMatchObject([
       {
         figmaNode: 'ui/button',
-        source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/TestTopLevelComponent.tsx',
+        source: expect.stringMatching(
+          getFileInRepositoryRegex('cli/src/react/__test__/TestTopLevelComponent.tsx'),
+        ),
         sourceLocation: { line: 12 },
         template: getExpectedTemplate('Button'),
         templateData: {
@@ -297,8 +300,9 @@ describe('Parser (JS templates)', () => {
         label: 'React',
         language: 'typescript',
         component: 'Button',
-        source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/components/TestComponents.tsx',
+        source: expect.stringMatching(
+          getFileInRepositoryRegex('cli/src/react/__test__/components/TestComponents.tsx'),
+        ),
         sourceLocation: { line: 12 },
         template: getExpectedTemplate(indented ? 'PropMappings_indented' : 'PropMappings'),
         templateData: {
@@ -380,8 +384,9 @@ describe('Parser (JS templates)', () => {
         label: 'React',
         language: 'typescript',
         component: 'Button',
-        source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/components/TestComponents.tsx',
+        source: expect.stringMatching(
+          getFileInRepositoryRegex('cli/src/react/__test__/components/TestComponents.tsx'),
+        ),
         sourceLocation: { line: 12 },
         template: getExpectedTemplate('EnumLikeBooleanFalseProp'),
         templateData: {
@@ -562,8 +567,9 @@ describe('Parser (JS templates)', () => {
     expect(withAlias).toMatchObject([
       {
         component: 'Button',
-        source:
-          'https://github.com/figma/code-connect/blob/main/cli/src/react/__test__/components/TestComponents.tsx',
+        source: expect.stringMatching(
+          getFileInRepositoryRegex('cli/src/react/__test__/components/TestComponents.tsx'),
+        ),
       },
     ])
   })

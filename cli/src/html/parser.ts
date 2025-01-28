@@ -20,6 +20,7 @@ import {
   parseImports,
   ParseOptions,
 } from '../connect/parser_common'
+import { CodeConnectParser, DEFAULT_LABEL_PER_PARSER } from '../connect/project'
 import { format } from 'prettier'
 
 function getHtmlTaggedTemplateNode(node: ts.Node): ts.TaggedTemplateExpression | undefined {
@@ -573,7 +574,7 @@ export async function parseHtmlDoc(
 
   return {
     figmaNode,
-    label: 'Web Components',
+    label: DEFAULT_LABEL_PER_PARSER.html!,
     language: 'html',
     component: metadata?.component,
     source: '',

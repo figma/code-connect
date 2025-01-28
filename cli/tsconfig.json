@@ -8,6 +8,7 @@
     ],
     "outDir": "dist",
     "rootDir": "src",
+    "types": ["jest"],
 
     // TODO: fix violations and remove
     "noUnusedLocals": false,

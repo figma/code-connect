@@ -39,13 +39,18 @@ export namespace FigmaRestApi {
 
   export interface Node {
     // we don't care about other node types
-    type: 'COMPONENT' | 'COMPONENT_SET' | 'OTHER'
+    type: 'COMPONENT' | 'COMPONENT_SET' | 'OTHER' | 'CANVAS'
     name: string
     id: string
     children: Node[]
   }
 
-  export interface Component extends Node {
+  export interface NodeWithPageInfo extends Node {
+    pageId: string
+    pageName: string
+  }
+
+  export interface Component extends NodeWithPageInfo {
     type: 'COMPONENT' | 'COMPONENT_SET'
     componentPropertyDefinitions: Record<string, ComponentPropertyDefinition>
   }

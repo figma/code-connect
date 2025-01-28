@@ -49,7 +49,7 @@
     // is slow and the wrong behavior for monorepos. For example, it makes it very easy to
     // load conflicting global types. Setting the default to `[]` instead forces explicit
     // declaration of the desired global `@types` packages.
-    // TODO: "types": [],
+    "types": [],
 
     // Save time during compilation at the expense of type-system accuracy.
     "skipLibCheck": true,

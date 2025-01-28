@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.2.4",
+  "version": "1.3.0",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -29,7 +29,8 @@
     "figma": "bin/figma"
   },
   "files": [
-    "dist/**/*"
+    "dist/**/*",
+    "patches/**/*"
   ],
   "engines": {
     "node": ">=18"
@@ -40,7 +41,7 @@
     "build:web": "pnpm build",
     "build:webpack": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" webpack --mode production",
     "test": "npm run test:no-coverage -- --coverage",
-    "test:no-coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules npx jest",
+    "test:no-coverage": "cross-env NODE_OPTIONS=\"--experimental-vm-modules --no-deprecation\" npx jest",
     "test:fast": "npm run test -- --testPathIgnorePatterns=template_rendering.test.ts --testPathIgnorePatterns=e2e_parse_command_swift.test.ts --testPathIgnorePatterns=e2e_wizard_swift.test.ts",
     "test:ci": "npm run test:non-mac -- --runInBand",
     "test:wizard": "npm run test -- --runInBand --testPathPattern=e2e_wizard_react.test.ts --testPathPattern=e2e_wizard_swift.test.ts",
@@ -58,7 +59,8 @@
     "bundle:cli:win": "npm run bundle:cli -- -o bundle-cli/figma-win --target node18-win-x64",
     "publish:npm": "npm install && npm run build && npm run bundle:npm-readme:prepare && npm publish --access public; npm run bundle:npm-readme:restore",
     "typecheck": "tsc --noEmit -p tsconfig-typecheck.json",
-    "benchmarking:run": "npx tsx ./src/connect/wizard/__test__/prop_mapping/prop_mapping_benchmarking.ts"
+    "benchmarking:run": "npx tsx ./src/connect/wizard/__test__/prop_mapping/prop_mapping_benchmarking.ts",
+    "postinstall": "patch-package"
   },
   "devDependencies": {
     
@@ -66,7 +68,7 @@
     "@types/jest": "^29.5.13",
     "@types/jsdom": "^21.1.7",
     "@types/lodash": "^4.17.0",
-    "@types/node": "^20.14.0",
+    "@types/node": "^22.10.0",
     "@types/prettier": "2.7.3",
     "@types/prompts": "^2.4.9",
     "@types/react": "18.0.26",
@@ -86,7 +88,7 @@
     "@babel/parser": "7.26.0",
     "@babel/types": "7.26.0",
     
-    "@storybook/csf-tools": "^7.6.7",
+    "@storybook/csf-tools": "^8.4.7",
     "boxen": "5.1.1",
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
@@ -101,6 +103,7 @@
     "minimatch": "^9.0.3",
     "ora": "^5.4.1",
     "parse5": "^7.1.2",
+    "patch-package": "^8.0.0",
     "prettier": "^2.8.8",
     "prompts": "^2.4.2",
     "strip-ansi": "^6.0.0",

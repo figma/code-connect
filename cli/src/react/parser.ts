@@ -1,5 +1,10 @@
 import ts from 'typescript'
-import { getRemoteFileUrl, mapImportPath } from '../connect/project'
+import {
+  CodeConnectParser,
+  DEFAULT_LABEL_PER_PARSER,
+  getRemoteFileUrl,
+  mapImportPath,
+} from '../connect/project'
 import { logger } from '../common/logging'
 import {
   bfsFindNode,
@@ -962,7 +967,7 @@ export async function parseReactDoc(
 
   return {
     figmaNode,
-    label: 'React',
+    label: DEFAULT_LABEL_PER_PARSER.react!,
     language: 'typescript',
     component: metadata?.component,
     source: metadata?.source ? getRemoteFileUrl(metadata.source, repoUrl) : '',

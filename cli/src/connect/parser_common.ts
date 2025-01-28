@@ -259,9 +259,21 @@ export function getReferencedPropsForTemplate({
 /**
  * Checks if a file contains Code Connect by looking for the `figma.connect()` function call
  */
-export function isFigmaConnectFile(program: ts.Program, file: string, extension: string) {
-  // We don't support Code Connect in JSX and this throws an error if we let it proceed
-  if (!file.endsWith(`.${extension}`)) {
+export function isFigmaConnectFile(
+  program: ts.Program,
+  file: string,
+  extension: string | string[],
+) {
+  const allowedExtensions = Array.isArray(extension) ? extension : [extension]
+  const fileExtension = file.split('.').pop()
+
+  // If the file has no extension, we can't determine if it's a Code Connect file
+  if (!fileExtension) {
+    return false
+  }
+
+  // If the file extension is not in the list of supported extensions, it's not a Code Connect file
+  if (!allowedExtensions.includes(fileExtension)) {
     return false
   }
 

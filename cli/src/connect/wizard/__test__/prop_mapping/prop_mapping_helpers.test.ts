@@ -68,6 +68,8 @@ describe('Prop mapping helpers', () => {
             type: 'COMPONENT',
             name: 'My component',
             id: '123:123',
+            pageId: '0:1',
+            pageName: 'Page 1',
             children: [],
             componentPropertyDefinitions: {
               'Has Icon': {
@@ -130,6 +132,8 @@ describe('Prop mapping helpers', () => {
             type: 'COMPONENT',
             name: 'My component',
             id: '123:123',
+            pageId: '0:1',
+            pageName: 'Page 1',
             children: [],
             componentPropertyDefinitions: {
               'Has Icon': {

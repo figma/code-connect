@@ -11,7 +11,11 @@ import { callParser, handleMessages } from './parser_executables'
 import { CodeConnectExecutableParserConfig, ProjectInfo } from './project'
 import { createReactCodeConnect } from '../react/create'
 import { z } from 'zod'
-import { CreateRequestPayload, CreateResponsePayload } from './parser_executable_types'
+import {
+  CreateRequestPayload,
+  CreateRequestPayloadMulti,
+  CreateResponsePayload,
+} from './parser_executable_types'
 import { fromError } from 'zod-validation-error'
 import { createHtmlCodeConnect } from '../html/create'
 import { isFetchError, request } from '../common/fetch'
@@ -77,19 +81,13 @@ export async function createCodeConnectFromUrl({
       }
       const normalizedName = normalizeComponentName(component.name)
 
-      const payload: CreateRequestPayload = {
-        mode: 'CREATE',
-        destinationDir: outDir ?? process.env.INIT_CWD ?? process.cwd(),
-        destinationFile: outFile,
-        component: {
-          figmaNodeUrl,
-          id: component.id,
-          name: component.name,
-          normalizedName,
-          type: component.type,
-          componentPropertyDefinitions: component.componentPropertyDefinitions,
-        },
-        config: projectInfo.config,
+      const componentPayload = {
+        figmaNodeUrl,
+        id: component.id,
+        name: component.name,
+        normalizedName,
+        type: component.type,
+        componentPropertyDefinitions: component.componentPropertyDefinitions,
       }
 
       logger.info('Generating Code Connect files...')
@@ -97,11 +95,34 @@ export async function createCodeConnectFromUrl({
       let result: z.infer<typeof CreateResponsePayload>
 
       if (projectInfo.config.parser === 'react') {
+        const payload: CreateRequestPayloadMulti = {
+          mode: 'CREATE',
+          destinationDir: outDir ?? process.env.INIT_CWD ?? process.cwd(),
+          destinationFile: outFile,
+          normalizedName,
+          figmaConnections: [{ component: componentPayload }],
+          config: projectInfo.config,
+        }
         result = await createReactCodeConnect(payload)
       } else if (projectInfo.config.parser === 'html') {
+        const payload: CreateRequestPayloadMulti = {
+          mode: 'CREATE',
+          destinationDir: outDir ?? process.env.INIT_CWD ?? process.cwd(),
+          destinationFile: outFile,
+          normalizedName,
+          figmaConnections: [{ component: componentPayload }],
+          config: projectInfo.config,
+        }
         result = await createHtmlCodeConnect(payload)
       } else {
         try {
+          const payload: CreateRequestPayload = {
+            mode: 'CREATE',
+            destinationDir: outDir ?? process.env.INIT_CWD ?? process.cwd(),
+            destinationFile: outFile,
+            component: componentPayload,
+            config: projectInfo.config,
+          }
           const stdout = await callParser(
             // We use `as` because the React parser makes the types difficult
             // TODO remove once React is an executable parser

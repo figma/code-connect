@@ -224,7 +224,7 @@ struct CodeConnectTemplateWriter {
     }
 
     private func rewriteCodeBlockWithTemplate() -> String {
-        let formatted = (try? SwiftFormat.format(code.trimmedDescriptionRemovingReturnStatement())) ?? code.trimmedDescriptionRemovingReturnStatement()
+        let formatted = (try? SwiftFormat.format(code.trimmedDescriptionRemovingReturnStatement()))?.output ?? code.trimmedDescriptionRemovingReturnStatement()
         let tree = Parser.parse(source: formatted)
         let rewriter = MappedPropertyRewriter(
             propMaps: templateData.props

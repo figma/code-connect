@@ -5,6 +5,8 @@ import { FigmaConnectMeta, ConnectedComponent } from '../connect/api'
 // prettier-ignore
 type MapType<T> =
   T extends ConnectedComponent ? JSX.Element :
+  // catch functions and return them as is, as they'll otherwise be converted to objects
+  T extends Function ? T :
   // Apply recursively to objects and arrays
   T extends object ? { [K in keyof T]: MapType<T[K]> } :
   T extends Array<infer U> ? MapType<U>[] :

@@ -298,7 +298,7 @@ export async function getCodeConnectObjects(
 type GetCodeConnectObjectsArgs = {
   parseFn: ParseFn
   resolveImportsFn?: ResolveImportsFn
-  fileExtension: string
+  fileExtension: string | string[]
   projectInfo: ProjectInfo<CodeConnectConfig>
   cmd: BaseCommand
   silent?: boolean
@@ -381,7 +381,7 @@ async function getReactCodeConnectObjects(
   const codeConnectObjects = await getCodeConnectObjectsFromParseFn({
     parseFn: parseReactDoc,
     resolveImportsFn: findAndResolveImports,
-    fileExtension: 'tsx',
+    fileExtension: ['tsx', 'jsx'],
     projectInfo,
     cmd,
     silent,

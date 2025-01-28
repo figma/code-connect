@@ -23,6 +23,10 @@ export type StoryParameters<T> = {
      * will show a default code example.
      */
     examples?: (FigmaConnectMeta<T, T>['example'] | string | ExampleObject<T>)[]
+    /**
+     * A list of import statements that will render in the Code Snippet in Figma.
+     */
+    imports?: string[]
   } & Pick<FigmaConnectMeta, 'props' | 'links'>
 }
 

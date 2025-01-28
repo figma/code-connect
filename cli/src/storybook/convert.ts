@@ -20,10 +20,16 @@ import {
 import { logger } from '../common/logging'
 import { CodeConnectJSON } from '../connect/figma_connect'
 import ts from 'typescript'
-import { FigmaConnectMeta } from '../connect/api'
+import { FigmaConnectLink, FigmaConnectMeta } from '../connect/api'
 import { minimatch } from 'minimatch'
 import { parsePropsObject } from '../connect/intrinsics'
-import { InternalError, ParserContext, ParserError } from '../connect/parser_common'
+import {
+  InternalError,
+  parseImports,
+  parseLinks,
+  ParserContext,
+  ParserError,
+} from '../connect/parser_common'
 
 interface ConvertStorybookFilesArgs {
   /**
@@ -126,7 +132,8 @@ async function convertStorybookFile({
       return
     }
 
-    const { figmaStoryMetadata, componentDeclaration, propMappings, examples } = parseResult
+    const { figmaStoryMetadata, componentDeclaration, propMappings, examples, imports, links } =
+      parseResult
 
     const componentMetadata = await parseComponentMetadata(componentDeclaration, parserContext)
 
@@ -140,8 +147,9 @@ async function convertStorybookFile({
       template: '',
       templateData: {
         props: propMappings,
-        imports: [],
+        imports,
       },
+      links,
       component: componentMetadata.component,
       label: 'Storybook',
       language: 'typescript',
@@ -209,7 +217,9 @@ async function convertStorybookFile({
         )
       }
 
-      let render = parseJSXRenderFunction(statementToParse, parserContext, propMappings)
+      const exampleProps = example?.props ?? propMappings
+
+      let render = parseJSXRenderFunction(statementToParse, parserContext, exampleProps)
 
       if (!render) {
         continue
@@ -354,6 +364,52 @@ function parseStoryMetadata(storyFileMetaNode: ts.Node, parserContext: ParserCon
     required: false,
   })
 
+  const importsNode = parsePropertyOfType({
+    objectLiteralNode: designNode,
+    propertyName: 'imports',
+    predicate: ts.isArrayLiteralExpression,
+    parserContext,
+    required: false,
+    errorMessage: `The 'imports' property must be an array literal. Example usage:
+\`design: {
+      type: 'figma',
+      url: 'https://www.figma.com/file/123?node-id=1-1',
+      examples: [Button],
+      imports: [
+        'import { Button } from "./Button"'
+      ],
+      ...
+})\``,
+  })
+
+  const linksNode = parsePropertyOfType({
+    objectLiteralNode: designNode,
+    propertyName: 'links',
+    predicate: ts.isArrayLiteralExpression,
+    parserContext,
+    required: false,
+    errorMessage: `The 'links' property must be an array literal. Example usage:
+\`design: {
+      type: 'figma',
+      url: 'https://www.figma.com/file/123?node-id=1-1',
+      examples: [Button],
+      links: [
+        { name: 'Storybook', url: 'https://storybook.com' }
+      ],
+      ...
+})\``,
+  })
+
+  let links: FigmaConnectLink[] | undefined
+  if (linksNode) {
+    links = parseLinks(linksNode, parserContext)
+  }
+
+  let imports: string[] = []
+  if (importsNode) {
+    imports = parseImports(importsNode, parserContext)
+  }
+
   let propMappings: {} | undefined
   let mappedProps: MappedProps
 
@@ -365,6 +421,7 @@ function parseStoryMetadata(storyFileMetaNode: ts.Node, parserContext: ParserCon
   type Example = {
     example: string
     variant?: FigmaConnectMeta['variant']
+    props?: Record<string, any>
   }
   let examples: Example[] | undefined
 
@@ -384,9 +441,23 @@ function parseStoryMetadata(storyFileMetaNode: ts.Node, parserContext: ParserCon
         )
       }
 
-      return convertObjectLiteralToJs(exampleNode, sourceFile, checker) as Example
+      return convertObjectLiteralToJs(exampleNode, sourceFile, checker, (node) => {
+        if ((node.parent as ts.TypeParameterDeclaration)?.name?.escapedText === 'props') {
+          if (ts.isObjectLiteralExpression(node)) {
+            return parsePropsObject(node, parserContext)
+          }
+        }
+      }) as Example
     })
   }
 
-  return { figmaStoryMetadata, componentDeclaration, propMappings, mappedProps, examples }
+  return {
+    figmaStoryMetadata,
+    componentDeclaration,
+    propMappings,
+    mappedProps,
+    examples,
+    imports,
+    links,
+  }
 }

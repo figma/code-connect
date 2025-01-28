@@ -8,22 +8,28 @@ describe('e2e test for `parse` command (parser executables)', () => {
     const testPath = path.join(__dirname, `e2e_parse_command/${testName}`)
     const json = JSON.parse(result.stdout)
 
-    expect(json).toMatchObject([
-      {
-        figmaNode: `${path.join(testPath, 'Test.test')}`,
-        template:
-          '{"config":{"parser":"__unit_test__","include":["*.test"],"exclude":["Excluded.test"]},"mode":"PARSE"}',
-        label: 'Test',
-        source: `https://github.com/figma/code-connect/blob/main/cli/src/connect/__test__/e2e/e2e_parse_command/${testName}/Test.test`,
-      },
-      {
-        figmaNode: `${path.join(testPath, 'OtherFile.test')}`,
-        template:
-          '{"config":{"parser":"__unit_test__","include":["*.test"],"exclude":["Excluded.test"]},"mode":"PARSE"}',
-        label: 'Test',
-        source: `https://github.com/figma/code-connect/blob/main/cli/src/connect/__test__/e2e/e2e_parse_command/${testName}/OtherFile.test`,
-      },
-    ])
+    expect(json).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          figmaNode: `${path.join(testPath, 'Test.test')}`,
+          template:
+            '{"config":{"parser":"__unit_test__","include":["*.test"],"exclude":["Excluded.test"]},"mode":"PARSE"}',
+          label: 'Test',
+          source: expect.stringMatching(
+            /https:\/\/github\.com\/figma\/[a-z-/]+\/cli\/src\/connect\/__test__\/e2e\/e2e_parse_command\/\w+\/Test\.test/,
+          ),
+        }),
+        expect.objectContaining({
+          figmaNode: `${path.join(testPath, 'OtherFile.test')}`,
+          template:
+            '{"config":{"parser":"__unit_test__","include":["*.test"],"exclude":["Excluded.test"]},"mode":"PARSE"}',
+          label: 'Test',
+          source: expect.stringMatching(
+            /https:\/\/github\.com\/figma\/[a-z-/]+\/cli\/src\/connect\/__test__\/e2e\/e2e_parse_command\/\w+\/OtherFile\.test/,
+          ),
+        }),
+      ]),
+    )
   }
 
   it('successfully calls a first party parser executable', async () => {

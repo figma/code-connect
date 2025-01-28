@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { CreateRequestPayload, CreateResponsePayload } from '../connect/parser_executable_types'
+import {
+  CreateResponsePayload,
+  CreateRequestPayloadMulti,
+} from '../connect/parser_executable_types'
 import path from 'path'
 import fs from 'fs'
 import { generateProps } from '../react/create'
@@ -8,10 +11,12 @@ import { kebabCase } from 'lodash'
 import { getOutFileName } from '../connect/create_common'
 
 export async function createHtmlCodeConnect(
-  payload: CreateRequestPayload,
+  payload: CreateRequestPayloadMulti,
 ): Promise<z.infer<typeof CreateResponsePayload>> {
-  const { component, destinationFile, destinationDir, sourceFilepath } = payload
-  const { normalizedName, figmaNodeUrl } = component
+  const { figmaConnections, normalizedName, destinationFile, destinationDir, sourceFilepath } =
+    payload
+  const component = figmaConnections[0].component
+  const { figmaNodeUrl } = component
 
   const webComponentName = kebabCase(normalizedName)
 

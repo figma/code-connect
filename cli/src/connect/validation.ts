@@ -153,6 +153,29 @@ function propMatches(
   return figmaPropName === codeConnectPropName
 }
 
+
+
+
+export const STATE_BOOLEAN_VALUE_PAIRS = [
+  ['yes', 'no'],
+  ['true', 'false'],
+  ['on', 'off'],
+]
+
+function isVariantBoolean(variantPossibleValues: string[]) {
+  if (variantPossibleValues.length === 2) {
+    const lowerCaseOptions = variantPossibleValues.map((p) => p.toLowerCase())
+    for (const pair of STATE_BOOLEAN_VALUE_PAIRS) {
+      const i = lowerCaseOptions.indexOf(pair[0]!)
+      const j = lowerCaseOptions.indexOf(pair[1]!)
+      if (i !== -1 && j !== -1) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 function validateVariantRestrictions(doc: CodeConnectJSON, document: any): boolean {
   if (doc.variant) {
     let variantRestrictionsValid = true
@@ -177,10 +200,15 @@ function validateVariantRestrictions(doc: CodeConnectJSON, document: any): boole
 
       // Only check `variantOptions` for Variants, and not for props, since props
       // don't have a set of possible values we can check against
-      if (
-        variantOrProp.type === 'VARIANT' &&
-        !variantOrProp.variantOptions?.includes(variantRestrictionValue)
-      ) {
+      const isValidBooleanVariant =
+        typeof variantRestrictionValue === 'boolean' &&
+        Array.isArray(variantOrProp.variantOptions) &&
+        isVariantBoolean(variantOrProp.variantOptions)
+
+      const isValidVariantValue =
+        variantOrProp.variantOptions?.includes(variantRestrictionValue) || isValidBooleanVariant
+
+      if (variantOrProp.type === 'VARIANT' && !isValidVariantValue) {
         logger.error(
           `Validation failed for ${doc.component} (${doc.figmaNode}): The Figma Variant "${match}" does not have an option for ${variantRestrictionValue}`,
         )
@@ -196,7 +224,7 @@ function validateVariantRestrictions(doc: CodeConnectJSON, document: any): boole
   return true
 }
 
-function validateDoc(doc: CodeConnectJSON, figmaNode: any, nodeId: string): boolean {
+export function validateDoc(doc: CodeConnectJSON, figmaNode: any, nodeId: string): boolean {
   if (!figmaNode || !figmaNode.document) {
     logger.error(
       `Validation failed for ${doc.component} (${doc.figmaNode}): node not found in file`,

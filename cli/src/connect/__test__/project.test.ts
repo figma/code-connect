@@ -86,5 +86,29 @@ describe('Project helper functions', () => {
         'https://github.com/myorg/myrepo/blob/master/path/file.ts',
       )
     })
+
+    it('handles gitlab repo urls', () => {
+      expect(getRemoteFileUrl('/path/file.ts', 'git@gitlab.com:myorg/myrepo.git')).toBe(
+        'https://gitlab.com/myorg/myrepo/-/blob/master/path/file.ts',
+      )
+    })
+
+    it('handles Bitbucket repo urls', () => {
+      expect(getRemoteFileUrl('/path/file.ts', 'git@bitbucket.org:myorg/myrepo.git')).toBe(
+        'https://bitbucket.org/myorg/myrepo/src/master/path/file.ts',
+      )
+    })
+
+    it('handles Azure repo urls', () => {
+      expect(
+        getRemoteFileUrl('/path/file.ts', 'git@ssh.dev.azure.com:v3/myorg/myrepo/myrepo'),
+      ).toBe('https://dev.azure.com/myorg/myrepo/_git/myrepo?path=/path/file.ts&branch=master')
+    })
+
+    it('handles Azure repo urls with https', () => {
+      expect(
+        getRemoteFileUrl('/path/file.ts', 'https://myorg@dev.azure.com/myorg/myrepo/_git/myrepo'),
+      ).toBe('https://dev.azure.com/myorg/myrepo/_git/myrepo?path=/path/file.ts&branch=master')
+    })
   })
 })

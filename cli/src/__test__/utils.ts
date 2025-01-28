@@ -21,3 +21,13 @@ export function tidyStdOutput(input: string): string {
       .join('\n')
   )
 }
+
+/**
+ * Utility function to create a regex that matches a file in the repository.
+ * This is necessary because the repository URLs (repository name, default branch) get changed
+ * when publishing to different repositories
+ */
+
+export function getFileInRepositoryRegex(filepath: string): RegExp {
+  return new RegExp(`https://github.com/figma/code-connect/blob/[a-zA-Z/-]+${filepath}`)
+}

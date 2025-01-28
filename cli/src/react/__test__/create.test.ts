@@ -22,39 +22,59 @@ describe('createReactCodeConnect', () => {
       destinationFile: 'test.figma.tsx',
       config: { parser: 'react' },
       mode: 'CREATE',
-      component: {
-        id: '1:1',
-        figmaNodeUrl: 'fake-url',
-        name: 'Test',
-        normalizedName: 'Test',
-        type: 'COMPONENT_SET',
-        componentPropertyDefinitions: {
-          BooleanVariant: {
-            type: 'VARIANT',
-            defaultValue: 'true',
-            variantOptions: ['true', 'false'],
-          },
-          BooleanVariant2: {
-            type: 'VARIANT',
-            defaultValue: 'True',
-            variantOptions: ['True', 'False'],
-          },
-          BooleanVariant3: { type: 'VARIANT', defaultValue: 'yes', variantOptions: ['yes', 'no'] },
-          BooleanVariant4: { type: 'VARIANT', defaultValue: 'Yes', variantOptions: ['Yes', 'No'] },
-          BooleanVariant5: { type: 'VARIANT', defaultValue: 'on', variantOptions: ['on', 'off'] },
-          BooleanVariant6: { type: 'VARIANT', defaultValue: 'On', variantOptions: ['On', 'Off'] },
-          Variant: {
-            type: 'VARIANT',
-            defaultValue: 'Yes',
-            variantOptions: ['Yes', 'No', 'Intermediate'],
-          },
-          Variant2: {
-            type: 'VARIANT',
-            defaultValue: 'Yes',
-            variantOptions: ['True', 'SomethingElse'],
+      normalizedName: 'Test',
+      figmaConnections: [
+        {
+          component: {
+            id: '1:1',
+            figmaNodeUrl: 'fake-url',
+            name: 'Test',
+            type: 'COMPONENT_SET',
+            componentPropertyDefinitions: {
+              BooleanVariant: {
+                type: 'VARIANT',
+                defaultValue: 'true',
+                variantOptions: ['true', 'false'],
+              },
+              BooleanVariant2: {
+                type: 'VARIANT',
+                defaultValue: 'True',
+                variantOptions: ['True', 'False'],
+              },
+              BooleanVariant3: {
+                type: 'VARIANT',
+                defaultValue: 'yes',
+                variantOptions: ['yes', 'no'],
+              },
+              BooleanVariant4: {
+                type: 'VARIANT',
+                defaultValue: 'Yes',
+                variantOptions: ['Yes', 'No'],
+              },
+              BooleanVariant5: {
+                type: 'VARIANT',
+                defaultValue: 'on',
+                variantOptions: ['on', 'off'],
+              },
+              BooleanVariant6: {
+                type: 'VARIANT',
+                defaultValue: 'On',
+                variantOptions: ['On', 'Off'],
+              },
+              Variant: {
+                type: 'VARIANT',
+                defaultValue: 'Yes',
+                variantOptions: ['Yes', 'No', 'Intermediate'],
+              },
+              Variant2: {
+                type: 'VARIANT',
+                defaultValue: 'Yes',
+                variantOptions: ['True', 'SomethingElse'],
+              },
+            },
           },
         },
-      },
+      ],
     })
 
     const expected = await prettier.format(
@@ -109,23 +129,27 @@ figma.connect(Test, "fake-url", {
       destinationFile: 'test.figma.tsx',
       config: { parser: 'react' },
       mode: 'CREATE',
-      propMapping: {},
-      reactTypeSignature: {
-        someBool: 'false | true',
-      },
-      component: {
-        id: '1:1',
-        figmaNodeUrl: 'fake-url',
-        name: 'Test',
-        normalizedName: 'Test',
-        type: 'COMPONENT_SET',
-        componentPropertyDefinitions: {
-          Label: {
-            type: 'TEXT',
-            defaultValue: 'Some label',
+      normalizedName: 'Test',
+      figmaConnections: [
+        {
+          propMapping: {},
+          reactTypeSignature: {
+            someBool: 'false | true',
+          },
+          component: {
+            id: '1:1',
+            figmaNodeUrl: 'fake-url',
+            name: 'Test',
+            type: 'COMPONENT_SET',
+            componentPropertyDefinitions: {
+              Label: {
+                type: 'TEXT',
+                defaultValue: 'Some label',
+              },
+            },
           },
         },
-      },
+      ],
     })
 
     const expected = await prettier.format(
@@ -168,70 +192,74 @@ figma.connect(Test, "fake-url", {
       destinationFile: 'test.figma.tsx',
       config: { parser: 'react' },
       mode: 'CREATE',
-      propMapping: {
-        actualPropNameForhasIcon: {
-          kind: IntrinsicKind.Boolean,
-          args: {
-            figmaPropName: 'Has icon',
-          },
-        },
-        actualPropNameForTitle: {
-          kind: IntrinsicKind.Boolean,
-          args: {
-            figmaPropName: 'Should show title',
-            valueMapping: {
-              true: {
-                kind: IntrinsicKind.String,
-                args: {
-                  figmaPropName: 'Label',
+      normalizedName: 'Test',
+      figmaConnections: [
+        {
+          propMapping: {
+            actualPropNameForhasIcon: {
+              kind: IntrinsicKind.Boolean,
+              args: {
+                figmaPropName: 'Has icon',
+              },
+            },
+            actualPropNameForTitle: {
+              kind: IntrinsicKind.Boolean,
+              args: {
+                figmaPropName: 'Should show title',
+                valueMapping: {
+                  true: {
+                    kind: IntrinsicKind.String,
+                    args: {
+                      figmaPropName: 'Label',
+                    },
+                  },
+                  false: undefined,
                 },
               },
-              false: undefined,
+            },
+          },
+          reactTypeSignature: {
+            actualPropNameForhasIcon: 'false | true',
+            actualPropNameForTitle: '?string',
+            notMappedProp: 'number',
+          },
+          component: {
+            id: '1:1',
+            figmaNodeUrl: 'fake-url',
+            name: 'Test',
+            type: 'COMPONENT_SET',
+            componentPropertyDefinitions: {
+              BooleanVariant: {
+                type: 'VARIANT',
+                defaultValue: 'true',
+                variantOptions: ['true', 'false'],
+              },
+              'Should show title': {
+                type: 'VARIANT',
+                defaultValue: 'true',
+                variantOptions: ['true', 'false'],
+              },
+              'Figma-only variant': {
+                type: 'VARIANT',
+                defaultValue: 'this',
+                variantOptions: ['this', 'that'],
+              },
+              Label: {
+                type: 'TEXT',
+                defaultValue: 'Some label',
+              },
+              'Some other text': {
+                type: 'TEXT',
+                defaultValue: '',
+              },
+              'Has icon': {
+                type: 'BOOLEAN',
+                defaultValue: false,
+              },
             },
           },
         },
-      },
-      reactTypeSignature: {
-        actualPropNameForhasIcon: 'false | true',
-        actualPropNameForTitle: '?string',
-        notMappedProp: 'number',
-      },
-      component: {
-        id: '1:1',
-        figmaNodeUrl: 'fake-url',
-        name: 'Test',
-        normalizedName: 'Test',
-        type: 'COMPONENT_SET',
-        componentPropertyDefinitions: {
-          BooleanVariant: {
-            type: 'VARIANT',
-            defaultValue: 'true',
-            variantOptions: ['true', 'false'],
-          },
-          'Should show title': {
-            type: 'VARIANT',
-            defaultValue: 'true',
-            variantOptions: ['true', 'false'],
-          },
-          'Figma-only variant': {
-            type: 'VARIANT',
-            defaultValue: 'this',
-            variantOptions: ['this', 'that'],
-          },
-          Label: {
-            type: 'TEXT',
-            defaultValue: 'Some label',
-          },
-          'Some other text': {
-            type: 'TEXT',
-            defaultValue: '',
-          },
-          'Has icon': {
-            type: 'BOOLEAN',
-            defaultValue: false,
-          },
-        },
-      },
+      ],
     })
 
     const expected = await prettier.format(
@@ -286,18 +314,22 @@ figma.connect(Test, "fake-url", {
       destinationFile: 'test.figma.tsx',
       config: { parser: 'react' },
       mode: 'CREATE',
-      reactTypeSignature: {
-        nonOptionalProp: 'false | true',
-        optionProp: '?string',
-      },
-      component: {
-        id: '1:1',
-        figmaNodeUrl: 'fake-url',
-        name: 'Test',
-        normalizedName: 'Test',
-        type: 'COMPONENT_SET',
-        componentPropertyDefinitions: {},
-      },
+      normalizedName: 'Test',
+      figmaConnections: [
+        {
+          reactTypeSignature: {
+            nonOptionalProp: 'false | true',
+            optionProp: '?string',
+          },
+          component: {
+            id: '1:1',
+            figmaNodeUrl: 'fake-url',
+            name: 'Test',
+            type: 'COMPONENT_SET',
+            componentPropertyDefinitions: {},
+          },
+        },
+      ],
     })
 
     const expected = await prettier.format(
@@ -336,32 +368,36 @@ figma.connect(Test, "fake-url", {
       destinationFile: 'test.figma.tsx',
       config: { parser: 'react' },
       mode: 'CREATE',
-      propMapping: {
-        actualPropNameForhasIcon: {
-          kind: IntrinsicKind.Boolean,
-          args: {
-            figmaPropName: 'Has icon',
+      normalizedName: 'Test',
+      figmaConnections: [
+        {
+          propMapping: {
+            actualPropNameForhasIcon: {
+              kind: IntrinsicKind.Boolean,
+              args: {
+                figmaPropName: 'Has icon',
+              },
+            },
+            children: {
+              kind: IntrinsicKind.Children,
+              args: {
+                layers: ['Icon'],
+              },
+            },
+          },
+          reactTypeSignature: {
+            actualPropNameForhasIcon: 'false | true',
+            children: 'React.ReactNode',
+          },
+          component: {
+            id: '1:1',
+            figmaNodeUrl: 'fake-url',
+            name: 'Test',
+            type: 'COMPONENT_SET',
+            componentPropertyDefinitions: {},
           },
         },
-        children: {
-          kind: IntrinsicKind.Children,
-          args: {
-            layers: ['Icon'],
-          },
-        },
-      },
-      reactTypeSignature: {
-        actualPropNameForhasIcon: 'false | true',
-        children: 'React.ReactNode',
-      },
-      component: {
-        id: '1:1',
-        figmaNodeUrl: 'fake-url',
-        name: 'Test',
-        normalizedName: 'Test',
-        type: 'COMPONENT_SET',
-        componentPropertyDefinitions: {},
-      },
+      ],
     })
 
     const expected = await prettier.format(
@@ -404,17 +440,21 @@ figma.connect(Test, "fake-url", {
     await createReactCodeConnect({
       destinationDir: path.join('src', 'components', 'figma'),
       sourceFilepath: path.join('src', 'components', 'buttons', 'PrimaryButton.tsx'),
-      sourceExport: 'default',
       config: { parser: 'react' },
       mode: 'CREATE',
-      component: {
-        id: '1:1',
-        figmaNodeUrl: 'fake-url',
-        name: 'Main Button',
-        normalizedName: 'MainButton',
-        type: 'COMPONENT_SET',
-        componentPropertyDefinitions: {},
-      },
+      normalizedName: 'MainButton',
+      figmaConnections: [
+        {
+          sourceExport: 'default',
+          component: {
+            id: '1:1',
+            figmaNodeUrl: 'fake-url',
+            name: 'Main Button',
+            type: 'COMPONENT_SET',
+            componentPropertyDefinitions: {},
+          },
+        },
+      ],
     })
 
     const expected = await prettier.format(

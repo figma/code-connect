@@ -9,4 +9,5 @@ testWizardE2e({
   componentsPath: './e2e_parse_command/swift_wizard/swift_wizard',
   expectedCreatedComponentPath: 'swift_wizard/Primary Button.figma.swift',
   expectedIncludeGlobs: ['swift_wizard/**/*.swift'],
+  expectedLabel: undefined,
 })

@@ -1,0 +1,9 @@
+const figma = require('figma')
+
+const disabled = figma.currentLayer.__properties__.boolean('Disabled')
+const __props = {}
+if (disabled && disabled.type !== 'ERROR') {
+  __props["disabled"] = disabled
+}
+
+export default { ...figma.tsx`<FunctionComponent${_fcc_renderReactProp('disabled', disabled)}>DefaultProps</FunctionComponent>`, metadata: { __props } }

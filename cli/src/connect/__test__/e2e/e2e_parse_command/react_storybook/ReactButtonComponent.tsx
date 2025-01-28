@@ -11,6 +11,6 @@ interface ButtonProps {
  * @param disabled disable the button
  * @returns JSX element
  */
-export const ReactApiComponent = ({ children, disabled = false }: ButtonProps) => {
+export const ReactButtonComponent = ({ children, disabled = false }: ButtonProps) => {
   return <button disabled={disabled}>{children}</button>
 }
