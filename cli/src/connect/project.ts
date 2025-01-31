@@ -202,6 +202,12 @@ function determineParserFromProject(dir: string): CodeConnectParser | undefined 
           )
           parser = 'compose'
           return findUp.stop
+        } else if (globSync([`${currentDir}/build.gradle`]).length > 0) {
+          showParserMessage(
+            `Using "compose" parser as a file matching build.gradle was found in ${currentDir}`,
+          )
+          parser = 'compose'
+          return findUp.stop
         }
       }
     },
