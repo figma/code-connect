@@ -72,10 +72,12 @@ export async function createCodeConnectConfig({
   dir,
   componentDirectory,
   config,
+  figmaUrl,
 }: {
   dir: string
   componentDirectory: string | null
   config: CodeConnectConfig
+  figmaUrl: string
 }) {
   const label = DEFAULT_LABEL_PER_PARSER[config.parser as CodeConnectParser]
   const includesGlob = getIncludesGlob({ dir, componentDirectory, config })
@@ -84,12 +86,14 @@ export async function createCodeConnectConfig({
     ? `{
   "codeConnect": {
     "include": ["${includesGlob}"],
-    "label": "${label}"
-  }
+    "label": "${label}",
+    "interactiveSetupFigmaFileUrl": "${figmaUrl}",
+}
 }`
     : `{
   "codeConnect": {
-    "include": ["${includesGlob}"]
+    "include": ["${includesGlob}"],
+    "interactiveSetupFigmaFileUrl": "${figmaUrl}",
   }
 }`
 

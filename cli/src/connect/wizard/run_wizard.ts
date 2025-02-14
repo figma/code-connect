@@ -135,6 +135,8 @@ async function fetchTopLevelComponentsFromFile({
         logger.error(`Failed to fetch components from Figma: ${err.message}`)
       }
       logger.debug(JSON.stringify(err.data))
+    } else {
+      logger.error(err)
     }
     exitWithFeedbackMessage(1)
   }
@@ -348,12 +350,13 @@ const escapeHandler = () => {
       escPressed = true
     }
   }
+  process.stdin.on('keypress', keypressListener)
   return {
     escPressed: () => escPressed,
-    start: () => {
-      process.stdin.on('keypress', keypressListener)
+    reset: () => {
+      escPressed = false
     },
-    stop: () => {
+    destroy: () => {
       process.stdin.removeListener('keypress', keypressListener)
     },
   }
@@ -368,10 +371,9 @@ async function runManualLinking({
 }: ManualLinkingArgs) {
   const filesToComponentOptionsMap = getComponentOptionsMap(filepathExports)
   const dir = getDir(cmd)
+  const escHandler = escapeHandler()
   while (true) {
     // Don't show exit confirmation as we're relying on esc behavior
-    const escHandler = escapeHandler()
-    escHandler.start()
     const { nodeId } = await prompts(
       {
         type: 'select',
@@ -387,22 +389,13 @@ async function runManualLinking({
         ),
         warn: 'This component already has a local Code Connect file.',
         hint: ' ',
-        ...({ submitOnEscapeKey: true } as any),
       },
       {
-        onSubmit: (question, answer) => {
-          if (!escHandler.escPressed()) {
-            clearQuestion(question, answer)
-          }
-        },
+        onSubmit: clearQuestion,
       },
     )
-    if (escHandler.escPressed()) {
-      return
-    }
-
     if (!nodeId) {
-      return
+      break
     }
     const pathChoices = getUnconnectedComponentChoices(Object.keys(filesToComponentOptionsMap), dir)
     const prevSelectedKey = linkedNodeIdsToFilepathExports[nodeId]
@@ -414,6 +407,7 @@ async function runManualLinking({
           exportName: null,
         }
 
+    escHandler.reset()
     const { pathToComponent } = await prompts(
       {
         type: 'autocomplete',
@@ -446,6 +440,7 @@ async function runManualLinking({
           // Not TS, default to filepath
           linkedNodeIdsToFilepathExports[nodeId] = pathToComponent
         } else {
+          escHandler.reset()
           const { filepathExport } = await prompts(
             {
               type: 'autocomplete',
@@ -462,7 +457,6 @@ async function runManualLinking({
                 prevSelectedComponent && prevSelectedFilepath === pathToComponent
                   ? fileExports.findIndex(({ title }) => title === prevSelectedComponent)
                   : 0,
-              ...({ submitOnEscapeKey: true } as any),
             },
             {
               onSubmit: clearQuestion,
@@ -475,8 +469,8 @@ async function runManualLinking({
         }
       }
     }
-    escHandler.stop()
   }
+  escHandler.destroy()
 }
 
 async function runManualLinkingWithConfirmation(manualLinkingArgs: ManualLinkingArgs) {
@@ -1001,13 +995,21 @@ export async function runWizard(cmd: BaseCommand) {
       cmd,
     })
 
-  const { figmaFileUrl } = await askQuestionOrExit({
-    type: 'text',
-    message:
-      "What is the URL of the Figma file containing design components you'd like to connect?",
-    name: 'figmaFileUrl',
-    validate: (value: string) => isValidFigmaUrl(value) || 'Please enter a valid Figma file URL.',
-  })
+  let figmaFileUrl: any
+  if (config.interactiveSetupFigmaFileUrl) {
+    logger.info(`Using Figma file URL from config: ${config.interactiveSetupFigmaFileUrl}\n`)
+    figmaFileUrl = config.interactiveSetupFigmaFileUrl
+  } else {
+    let { figmaFileUrl: answer } = await askQuestionOrExit({
+      type: 'text',
+      message:
+        "What is the URL of the Figma file containing design components you'd like to connect?",
+      name: 'figmaFileUrl',
+      validate: (value: string) => isValidFigmaUrl(value) || 'Please enter a valid Figma file URL.',
+    })
+
+    figmaFileUrl = answer
+  }
 
   let componentsFromFile = await fetchTopLevelComponentsFromFile({
     accessToken,
@@ -1037,7 +1039,7 @@ export async function runWizard(cmd: BaseCommand) {
       ],
     })
     if (createConfigFile === 'yes') {
-      await createCodeConnectConfig({ dir, componentDirectory, config })
+      await createCodeConnectConfig({ dir, componentDirectory, config, figmaUrl: figmaFileUrl })
     }
   }
 

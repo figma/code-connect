@@ -64,6 +64,11 @@ export type BaseCodeConnectConfig = {
    * Label to use for the uploaded code examples
    */
   label?: string
+
+  /**
+   * The URL of the Figma file to use during the interactive setup wizard for connecting code components to Figma components.
+   */
+  interactiveSetupFigmaFileUrl?: string
 }
 
 export type CodeConnectExecutableParserConfig = BaseCodeConnectConfig & {
@@ -199,6 +204,12 @@ function determineParserFromProject(dir: string): CodeConnectParser | undefined 
         } else if (globSync([`${currentDir}/build.gradle.kts`]).length > 0) {
           showParserMessage(
             `Using "compose" parser as a file matching build.gradle.kts was found in ${currentDir}`,
+          )
+          parser = 'compose'
+          return findUp.stop
+        } else if (globSync([`${currentDir}/build.gradle`]).length > 0) {
+          showParserMessage(
+            `Using "compose" parser as a file matching build.gradle was found in ${currentDir}`,
           )
           parser = 'compose'
           return findUp.stop

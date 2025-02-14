@@ -8,14 +8,14 @@ let package = Package(
     name: "Figma",
     platforms: [
         .iOS(.v15),
-        .macOS(.v13)
+        .macOS(.v13),
     ],
     products: [
         .library(name: "Figma", targets: ["Figma"]),
-        .executable(name: "figma-swift", targets: ["CodeConnectCLI"])
+        .executable(name: "figma-swift", targets: ["CodeConnectCLI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-syntax", "510.0.3"..."600.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-syntax", "510.0.3"..."600.0.1"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.55.3"),
     ],
@@ -28,7 +28,7 @@ let package = Package(
             name: "CodeConnectCLI",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                .target(name: "CodeConnectParser")
+                .target(name: "CodeConnectParser"),
             ],
             path: "swiftui/cli"
         ),
@@ -39,7 +39,7 @@ let package = Package(
                 .product(name: "SwiftParser", package: "swift-syntax"),
                 .product(name: "SwiftFormat", package: "SwiftFormat"),
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-                .target(name: "Figma")
+                .target(name: "Figma"),
             ],
             path: "swiftui/lib"
         ),
@@ -48,12 +48,12 @@ let package = Package(
             dependencies: [
                 .product(name: "SwiftSyntax", package: "swift-syntax"),
                 .target(name: "CodeConnectParser"),
-                .target(name: "Figma")
+                .target(name: "Figma"),
             ],
             path: "swiftui/Tests/CodeConnectParserTest",
             resources: [
-                .copy("Samples.figma.test"),
+                .copy("Samples.figma.test")
             ]
-        )
+        ),
     ]
 )

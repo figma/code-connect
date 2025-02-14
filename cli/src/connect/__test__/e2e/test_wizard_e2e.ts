@@ -78,7 +78,8 @@ export function testWizardE2e(testCase: {
         ? `{
   "codeConnect": {
     "include": ${JSON.stringify(testCase.expectedIncludeGlobs)},
-    "label": "${testCase.expectedLabel}"
+    "label": "${testCase.expectedLabel}",
+    "interactiveSetupFigmaFileUrl": "https://www.figma.com/design/abc123/my-design-system"
   }
 }
 `

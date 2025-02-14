@@ -87,7 +87,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
   )
     .option('--skip-validation', 'skip validation of Code Connect docs')
     .option('-l --label <label>', 'label to apply to the published files')
-    .option('--include-raw-templates', 'flag to include any raw figma.template.js files')
+    .option('--include-template-files', 'flag to include any figma.template.js files')
     .option(
       '-b --batch-size <batch_size>',
       'optional batch size (in number of documents) to use when uploading. Use this if you hit "request too large" errors. See README for more information.',
@@ -106,7 +106,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
       'specify the node to unpublish. This will unpublish for both React and Storybook.',
     )
     .option('-l --label <label>', 'label to unpublish for')
-    .option('--include-raw-templates', 'flag to include any raw figma.template.js files')
+    .option('--include-template-files', 'flag to include any figma.template.js files')
     .action(withUpdateCheck(handleUnpublish))
 
   addBaseCommand(
@@ -115,7 +115,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
     'Run Code Connect locally to find any files that have figma connections, then converts them to JSON and outputs to stdout.',
   )
     .option('-l --label <label>', 'label to apply to the parsed files')
-    .option('--include-raw-templates', 'flag to include any raw figma.template.js files')
+    .option('--include-template-files', 'flag to include any figma.template.js files')
     .action(withUpdateCheck(handleParse))
 
   addBaseCommand(
@@ -209,7 +209,7 @@ export function parseRawFile(filePath: string, label: string | undefined): CodeC
 }
 
 export async function getCodeConnectObjects(
-  cmd: BaseCommand & { label?: string; includeRawTemplates?: boolean },
+  cmd: BaseCommand & { label?: string; includeTemplateFiles?: boolean },
   projectInfo: ProjectInfo,
   silent = false,
 ): Promise<CodeConnectJSON[]> {
@@ -275,7 +275,7 @@ export async function getCodeConnectObjects(
     }
   }
 
-  if (cmd.includeRawTemplates) {
+  if (cmd.includeTemplateFiles) {
     const rawTemplateFiles = projectInfo.files.filter((f: string) =>
       f.endsWith('.figma.template.js'),
     )

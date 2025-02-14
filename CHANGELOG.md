@@ -1,3 +1,18 @@
+# Code Connect v1.3.1 (TBD)
+
+## Fixed
+
+- Allow .gradle files to be detected as Android/Compose projects. Thanks to @sebastienrouif for the [PR](https://github.com/figma/code-connect/pull/237)
+- Remove prompts patching (fixes https://github.com/figma/code-connect/issues/241)
+
+## Features
+
+- Added `interactiveSetupFigmaFileUrl` to the interactive setup, allowing you to specify the Figma file to use for connecting components in your `figma.config.json` file.
+- Rename `--include-raw-templates` flag to `--include-template-files`. Further details of this feature can be found in the [documentation](https://www.figma.com/code-connect-docs/no-parser/).
+
+### SwiftUI
+- Updated `swift-syntax` to point to the new URL. Thanks to @pontusJPaf for the [PR](https://github.com/figma/code-connect/pull/239).
+
 # Code Connect v1.3.0 (28th January 2025)
 
 ## Features

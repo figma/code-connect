@@ -10,7 +10,7 @@ describe('e2e test for `parse` command (raw)', () => {
     const testPath = path.join(__dirname, 'e2e_parse_command/raw')
 
     const result = await promisify(exec)(
-      `npx tsx ../../../cli connect parse --skip-update-check --dir ${testPath} --include-raw-templates`,
+      `npx tsx ../../../cli connect parse --skip-update-check --dir ${testPath} --include-template-files`,
       {
         cwd: __dirname,
       },
