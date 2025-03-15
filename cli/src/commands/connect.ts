@@ -21,6 +21,7 @@ import { runWizard } from '../connect/wizard/run_wizard'
 import { callParser, handleMessages } from '../connect/parser_executables'
 import { fromError } from 'zod-validation-error'
 import { ParseRequestPayload, ParseResponsePayload } from '../connect/parser_executable_types'
+import { parse } from 'yaml'
 import z from 'zod'
 import { withUpdateCheck } from '../common/updates'
 import { exitWithFeedbackMessage } from '../connect/helpers'
@@ -187,15 +188,38 @@ function transformDocFromParser(
   }
 }
 
+const getRawFileData = (fileContent: string) => {
+  const [firstLine, ...templateLines] = fileContent.split('\n')
+  const delimeterStart = '/*---'
+  const delimeterEnd = '---*/'
+  if (firstLine !== delimeterStart) {
+    return {
+      template: templateLines.join('\n'),
+      figmaNode: firstLine.replace(/\/\/\s*url=/, '').trim(),
+    }
+  }
+  const nextDelimeterIndex = templateLines.findIndex((line) => line === delimeterEnd)
+  if (nextDelimeterIndex === -1) {
+    return {
+      template: '',
+      figmaNode: '',
+    }  // invalid data
+  }
+  const data = templateLines.slice(0, nextDelimeterIndex).join('\n')
+  const { url: figmaNode, component, variant, links } = parse(data);
+  return {
+    component,
+    variant,
+    links,
+    figmaNode,
+    template: templateLines.slice(nextDelimeterIndex + 1).join('\n'),
+  };
+};
+
 export function parseRawFile(filePath: string, label: string | undefined): CodeConnectJSON {
   const fileContent = fs.readFileSync(filePath, 'utf-8')
-  const [firstLine, ...templateLines] = fileContent.split('\n')
-  const figmaNodeUrl = firstLine.replace(/\/\/\s*url=/, '').trim()
-  const template = templateLines.join('\n')
-
   return {
-    figmaNode: figmaNodeUrl,
-    template,
+    ...getRawFileData(fileContent),
     // nestable by default unless user specifies otherwise
     templateData: { nestable: true },
     language: 'raw',
