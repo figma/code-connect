@@ -18,7 +18,7 @@ import { getClient } from '../connect/index_common'
 import { ReactMeta } from './types'
 
 const _client: FigmaConnectClient = getClient()
-const _figma: FigmaConnectAPI<ConnectedComponent, JSX.Element> & {
+const _figma: FigmaConnectAPI<ConnectedComponent, React.ReactElement> & {
   /**
    * Defines a code snippet that displays in Figma when a component is selected. This function has two signatures:
    * - When called with a component reference as the first argument, it will infer metadata such as the import statement

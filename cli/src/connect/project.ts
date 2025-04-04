@@ -523,8 +523,8 @@ export function getRemoteFileUrl(filePath: string, repoURL?: string) {
       return `https://${url}?path=${relativeFilePath}&branch=${defaultBranch}`
     }
   } else {
-    logger.error('Unsupported remote URL', url)
-    return ''
+    logger.debug('Unknown remote URL - assuming GitHub Enterprise', url)
+    return `${url}/blob/${defaultBranch}${relativeFilePath}`
   }
 }
 

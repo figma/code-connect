@@ -1,4 +1,4 @@
-import ts, { isTemplateExpression, SyntaxKind } from 'typescript'
+import ts, { isReturnStatement, isTemplateExpression, SyntaxKind } from 'typescript'
 import {
   stripQuotesFromNode,
   parsePropertyOfType,
@@ -218,6 +218,39 @@ export function parseExampleTemplate(
     throw new ParserError(`Expected a body for the render function`, { sourceFile, node: exp })
   }
 
+  // If the body is a string literal, we generate a `figma.value` statement instead, which just
+  // renders the string as-is in code examples
+  if (ts.isStringLiteral(exp.body)) {
+    const printer = ts.createPrinter()
+    if (!exp.body) {
+      throw new ParserError('Expected a function body', {
+        sourceFile: parserContext.sourceFile,
+        node: exp,
+      })
+    }
+    let exampleCode = printer.printNode(ts.EmitHint.Unspecified, exp.body, sourceFile)
+
+    let templateCode = getParsedTemplateHelpersString() + '\n\n'
+
+    templateCode += `const figma = require('figma')\n\n`
+
+    templateCode += getReferencedPropsForTemplate({
+      propMappings,
+      exp,
+      sourceFile,
+    })
+
+    exampleCode = exampleCode.replace(/`/g, '\\`')
+
+    // Body is a string literal, so there aren't any placeholders
+    templateCode += `export default figma.value(${exampleCode})\n`
+
+    return {
+      code: templateCode,
+      nestable: true,
+    }
+  }
+
   const templateNode = getHtmlTaggedTemplateNode(exp.body)
 
   if (!templateNode) {
@@ -389,7 +422,6 @@ export function parseExampleTemplate(
 
   templateCode += getReferencedPropsForTemplate({
     propMappings,
-    referencedProps,
     exp,
     sourceFile,
   })

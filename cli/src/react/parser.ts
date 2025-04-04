@@ -557,7 +557,6 @@ export function parseJSXRenderFunction(
   // for each referenced prop, so these are accessible to the template code.
   templateCode += getReferencedPropsForTemplate({
     propMappings,
-    referencedProps,
     exp,
     sourceFile,
   })
@@ -663,7 +662,7 @@ export function replacePropPlaceholders(exampleCode: string) {
   // calls to _fcc_renderReactChildren, which renders them correctly (see
   // parser_template_helpers.ts)
   exampleCode = exampleCode.replace(
-    /\{__PROP__\("([A-Za-z_\.]+)"\)\}/g,
+    /\{__PROP__\("([A-Za-z0-9_\.]+)"\)\}/g,
     (_match, figmaPropName) => {
       return `\${_fcc_renderReactChildren(${figmaPropName})}`
     },
@@ -673,7 +672,7 @@ export function replacePropPlaceholders(exampleCode: string) {
   // - { prop: __PROP__("propName") }
   // - useState(__PROP__("propName"))
   // These never need special treatment based on their type.
-  return exampleCode.replace(/__PROP__\("([A-Za-z_\.]+)"\)/g, (_match, figmaPropName) => {
+  return exampleCode.replace(/__PROP__\("([A-Za-z0-9_\.]+)"\)/g, (_match, figmaPropName) => {
     return `\${_fcc_renderPropValue(${figmaPropName})}`
   })
 }

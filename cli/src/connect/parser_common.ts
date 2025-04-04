@@ -222,8 +222,6 @@ export function getReferencedPropsForTemplate({
 }: {
   /** The prop mappings object */
   propMappings: PropMappings | undefined
-  /** The set of referenced props */
-  referencedProps?: Set<string>
   /** The top level node, used for error reporting */
   exp: ts.Node
   /** The source file */

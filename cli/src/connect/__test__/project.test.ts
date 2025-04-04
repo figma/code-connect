@@ -110,5 +110,11 @@ describe('Project helper functions', () => {
         getRemoteFileUrl('/path/file.ts', 'https://myorg@dev.azure.com/myorg/myrepo/_git/myrepo'),
       ).toBe('https://dev.azure.com/myorg/myrepo/_git/myrepo?path=/path/file.ts&branch=master')
     })
+
+    it('assumes GitHub-like structure for unknown urls', () => {
+      expect(
+        getRemoteFileUrl('/path/file.ts', 'https://my-custom-domain.com/myorg/myrepo.git'),
+      ).toBe('https://my-custom-domain.com/myorg/myrepo/blob/master/path/file.ts')
+    })
   })
 })

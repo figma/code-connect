@@ -4,7 +4,7 @@ export type EnumValue =
   | number
   | symbol
   | undefined
-  | JSX.Element
+  | React.ReactElement
   | Function
   | Object
 
@@ -38,7 +38,7 @@ export interface ConnectedComponent {
    *  example: ({ icon }) => <Button icon={icon}/>,
    * }
    */
-  render<T = unknown>(renderFunction: (props: T) => JSX.Element): JSX.Element
+  render<T = unknown>(renderFunction: (props: T) => React.ReactElement): React.ReactElement
 }
 
 // This contains the base API interface for figma.connect calls across React and

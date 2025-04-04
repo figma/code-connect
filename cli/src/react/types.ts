@@ -4,7 +4,7 @@ import { FigmaConnectMeta, ConnectedComponent } from '../connect/api'
 // to their underlying primitive type, so they can be used in examples.
 // prettier-ignore
 type MapType<T> =
-  T extends ConnectedComponent ? JSX.Element :
+  T extends ConnectedComponent ? React.ReactElement :
   // catch functions and return them as is, as they'll otherwise be converted to objects
   T extends Function ? T :
   // Apply recursively to objects and arrays
@@ -15,7 +15,7 @@ type MapType<T> =
 export type ReactMeta<P> = FigmaConnectMeta<
   P,
   MapType<P>,
-  React.Component | JSX.Element | string | ((props: any) => JSX.Element)
+  React.Component | React.ReactElement | string | ((props: any) => React.ReactElement)
 > & {
   /**
    * A list of import statements that will render in the Code Snippet in Figma.

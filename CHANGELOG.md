@@ -1,4 +1,20 @@
-# Code Connect v1.3.1 (TBD)
+# Code Connect v1.3.3 (TBD)
+
+# Code Connect v1.3.2
+
+## Fixed
+
+### General
+- Added support for GitHub Enterprise source links (fixes https://github.com/figma/code-connect/issues/259)
+
+### React
+- Fixed incompatibility issue with React 19 (fixes https://github.com/figma/code-connect/issues/265)
+- Fixed issue with numeric characters in property names
+
+### HTML
+- Allow examples to return strings to support icon IDs (fixes https://github.com/figma/code-connect/issues/252)
+
+# Code Connect v1.3.1
 
 ## Fixed
 
