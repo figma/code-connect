@@ -107,7 +107,7 @@
     "strip-ansi": "^6.0.0",
     "ts-morph": "^23.0.0",
     "typescript": "5.5.4",
-    "undici": "^5.28.4",
+    "undici": "^5.29.0",
     "zod": "3.23.8",
     "zod-validation-error": "^3.2.0"
   }
