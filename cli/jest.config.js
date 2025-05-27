@@ -5,7 +5,7 @@ module.exports = {
   testPathIgnorePatterns: ['/dist/'],
 
   // Some of these tests can be long running, e.g. e2e ones, so set the timeout higher globally
-  testTimeout: 15000,
+  testTimeout: 20000,
 
   modulePathIgnorePatterns: [
     // Ignore changes to figma.config.json and figma.config.json.backup otherwise

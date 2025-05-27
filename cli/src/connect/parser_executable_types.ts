@@ -12,6 +12,7 @@ export type ParseRequestPayload = {
   // Each parser's configuration is separate and can take any shape, though we
   // will recommend using the same naming for common concepts like "importPaths".
   config: Record<string, any>
+  verbose?: boolean
 }
 
 const FigmaConnectLink = z.object({
@@ -193,6 +194,7 @@ export type CreateRequestPayload = {
   // Each parser's configuration is separate and can take any shape, though we
   // will recommend using the same naming for common concepts like "importPaths".
   config: Record<string, any>
+  verbose?: boolean
 }
 
 export type CreateRequestPayloadMulti = {

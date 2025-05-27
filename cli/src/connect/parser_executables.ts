@@ -38,10 +38,11 @@ const FIRST_PARTY_PARSERS: Record<CodeConnectExecutableParser, ParserInfo> = {
     command: async (cwd, config, mode) => {
       const gradlewPath = await getGradleWrapperPath(cwd, (config as any).gradleWrapperPath)
       const gradleExecutableInvocation = getGradleWrapperExecutablePath(gradlewPath)
+      const verboseFlags = (config as any).verbose ? ' --stacktrace' : ''
       if (mode === 'CREATE') {
-        return `${gradleExecutableInvocation} -p ${gradlewPath} createCodeConnect -PfilePath=${temporaryIOFilePath} -q`
+        return `${gradleExecutableInvocation} -p ${gradlewPath} createCodeConnect -PfilePath=${temporaryIOFilePath}${verboseFlags}`
       } else {
-        return `${gradleExecutableInvocation} -p ${gradlewPath} parseCodeConnect -PfilePath=${temporaryIOFilePath} -q`
+        return `${gradleExecutableInvocation} -p ${gradlewPath} parseCodeConnect -PfilePath=${temporaryIOFilePath}${verboseFlags}`
       }
     },
     temporaryIOFilePath: temporaryIOFilePath,
@@ -82,7 +83,11 @@ export async function callParser(
   return new Promise<object>(async (resolve, reject) => {
     try {
       const parser = getParser(config)
-      const command = await parser.command(cwd, config, payload.mode)
+      const configWithVerbose = {
+        ...config,
+        verbose: (payload as any).verbose,
+      }
+      const command = await parser.command(cwd, configWithVerbose, payload.mode)
       if (parser.temporaryIOFilePath) {
         fs.mkdirSync(path.dirname(parser.temporaryIOFilePath), { recursive: true })
         fs.writeFileSync(temporaryIOFilePath, JSON.stringify(payload))
@@ -162,9 +167,16 @@ export async function callParser(
         child.stdin.end()
       }
     } catch (e) {
-      exitWithError(
-        `Error calling parser: ${e}. Try re-running the command with --verbose for more information.`,
-      )
+      if ((payload as any).verbose) {
+        console.trace(e)
+
+        // Don't say to enable verbose if the user has already enabled it.
+        exitWithError(`Error calling parser: ${e}.`)
+      } else {
+        exitWithError(
+          `Error calling parser: ${e}. Try re-running the command with --verbose for more information.`,
+        )
+      }
     }
   })
 }

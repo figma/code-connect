@@ -19,12 +19,15 @@ import {
 import { fromError } from 'zod-validation-error'
 import { createHtmlCodeConnect } from '../html/create'
 import { isFetchError, request } from '../common/fetch'
+import { BaseCommand } from '../commands/connect'
+
 interface GenerateDocsArgs {
   accessToken: string
   figmaNodeUrl: string
   outFile: string
   outDir: string
   projectInfo: ProjectInfo
+  cmd: BaseCommand
 }
 
 export function normalizeComponentName(name: string) {
@@ -43,6 +46,7 @@ export async function createCodeConnectFromUrl({
   outFile,
   outDir,
   projectInfo,
+  cmd,
 }: GenerateDocsArgs) {
   try {
     const fileKey = parseFileKey(figmaNodeUrl)
@@ -122,6 +126,7 @@ export async function createCodeConnectFromUrl({
             destinationFile: outFile,
             component: componentPayload,
             config: projectInfo.config,
+            verbose: cmd.verbose,
           }
           const stdout = await callParser(
             // We use `as` because the React parser makes the types difficult

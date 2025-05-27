@@ -78,7 +78,12 @@ Received: ${JSON.stringify({
             },
           },
         },
-        config: { parser: '__unit_test__', include: ['*.test'], exclude: ['Excluded.test'] },
+        config: {
+          parser: '__unit_test__',
+          include: ['*.test'],
+          exclude: ['Excluded.test'],
+        },
+        verbose: true,
       })}
 Success from parser!
 Code Connect files generated successfully:

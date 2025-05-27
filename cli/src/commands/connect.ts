@@ -242,6 +242,7 @@ export async function getCodeConnectObjects(
       mode: 'PARSE',
       paths: projectInfo.files,
       config: projectInfo.config,
+      verbose: cmd.verbose,
     }
 
     try {
@@ -268,10 +269,16 @@ export async function getCodeConnectObjects(
         },
       }))
     } catch (e) {
-      // zod-validation-error formats the error message into a readable format
-      exitWithError(
-        `Error returned from parser: ${fromError(e)}. Try re-running the command with --verbose for more information.`,
-      )
+      if (cmd.verbose) {
+        console.trace(e)
+
+        // Don't say to enable verbose if the user has already enabled it.
+        exitWithError(`Error calling parser: ${e}.`)
+      } else {
+        exitWithError(
+          `Error returned from parser: ${fromError(e)}. Try re-running the command with --verbose for more information.`,
+        )
+      }
     }
   }
 
@@ -543,5 +550,6 @@ async function handleCreate(nodeUrl: string, cmd: BaseCommand) {
     outFile: cmd.outFile,
     outDir: cmd.outDir,
     projectInfo,
+    cmd,
   })
 }

@@ -1,6 +1,18 @@
-# Code Connect v1.3.3 (TBD)
+# Code Connect v1.3.4 (TBD)
 
-# Code Connect v1.3.2
+# Code Connect v1.3.3 (22nd May 2025)
+
+## Features
+
+### Compose
+- Enhanced `--verbose` command to output detailed stacktrace.
+
+## Fixed
+
+### General
+- Bumped Undici version to address security issue
+
+# Code Connect v1.3.2 (4th April 2025)
 
 ## Fixed
 
@@ -14,7 +26,7 @@
 ### HTML
 - Allow examples to return strings to support icon IDs (fixes https://github.com/figma/code-connect/issues/252)
 
-# Code Connect v1.3.1
+# Code Connect v1.3.1 (14th February 2025)
 
 ## Fixed
 

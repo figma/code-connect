@@ -1,7 +1,7 @@
 import { ReactNode } from 'react'
 import React from 'react'
 
-interface Props {
+export interface Props {
   disabled: boolean
   children: ReactNode
 }
