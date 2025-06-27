@@ -173,7 +173,17 @@ export function visitPropReferencingNode({
   ) {
     // nested notation e.g `props.nested.prop`
     if (ts.isPropertyAccessExpression(node.expression)) {
-      const name = `${node.expression.name.getText()}.${node.name.getText()}`
+      let current: ts.Node = node
+      const parts: string[] = []
+
+      // Build the property name by traversing up the chain
+      while (ts.isPropertyAccessExpression(current)) {
+        parts.unshift(current.name.getText())
+        current = current.expression
+      }
+
+      // Join the parts together to form the full property name
+      const name = parts.join('.')
       return createPropPlaceholder({ name, node })
     }
     const name = node.name.getText()

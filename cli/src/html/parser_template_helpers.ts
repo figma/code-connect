@@ -6,6 +6,13 @@
 
 declare const figma: { html: (template: TemplateStringsArray, ...args: any[]) => string }
 
+export type FCCValue =
+  | string
+  | number
+  | boolean
+  | undefined
+  | ReturnType<typeof _fcc_identifier | typeof _fcc_object | typeof _fcc_templateString>
+
 export function _fcc_templateString($value: string) {
   return {
     $value,
@@ -18,6 +25,13 @@ export function _fcc_object($value: Record<string, any>) {
     $value,
     $type: 'object',
     ...$value,
+  } as const
+}
+
+export function _fcc_identifier($value: string) {
+  return {
+    $value,
+    $type: 'identifier',
   } as const
 }
 
@@ -54,7 +68,7 @@ function _fcc_renderHtmlValue(value: any): string {
  * @param name The name of the attribute
  * @param value The value of the attribute
  */
-function _fcc_renderHtmlAttribute(name: string, value: any) {
+function _fcc_renderHtmlAttribute(name: string, value: FCCValue) {
   // figma.boolean returns undefined instead of false in some cases
   if (typeof value === 'undefined') {
     return ''
@@ -66,6 +80,8 @@ function _fcc_renderHtmlAttribute(name: string, value: any) {
     }
   } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint') {
     return `${name}="${value.toString().replaceAll('\n', '\\n').replaceAll('"', '\\"')}"`
+  } else if (value.$type === 'identifier') {
+    return `${name}="${value.$value}"`
   } else {
     // TODO make this show a proper error in the UI
     return `${name}="Code Connect Error: Unsupported type '${typeof value}' for attribute"`
@@ -73,7 +89,13 @@ function _fcc_renderHtmlAttribute(name: string, value: any) {
 }
 
 export function getParsedTemplateHelpersString() {
-  return [_fcc_templateString, _fcc_object, _fcc_renderHtmlValue, _fcc_renderHtmlAttribute]
+  return [
+    _fcc_templateString,
+    _fcc_object,
+    _fcc_renderHtmlValue,
+    _fcc_renderHtmlAttribute,
+    _fcc_identifier,
+  ]
     .map((fn) => fn.toString())
     .join('\n')
 }

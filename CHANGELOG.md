@@ -1,4 +1,10 @@
-# Code Connect v1.3.4 (TBD)
+# Code Connect v1.3.4 (26th June 2025)
+
+### Fixed
+
+# React
+
+- Support getProps inside nestedProps
 
 # Code Connect v1.3.3 (22nd May 2025)
 

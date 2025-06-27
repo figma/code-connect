@@ -1,7 +1,6 @@
 import path from 'path'
-import fs from 'fs'
-import findUp from 'find-up'
 import { Project, ScriptTarget, SourceFile, Symbol, ts } from 'ts-morph'
+import { findTsConfigPath } from '../../common/tsconfig'
 
 const DEFAULT_COMPONENT = 'DefaultComponent'
 const REACT_INTERFACE_NAMES = ['HTMLAttributes', 'Attributes', 'AriaAttributes', 'DOMAttributes']
@@ -160,22 +159,4 @@ function getPropString(tsMorphProject: Project, prop: Symbol, sourceFile: Source
   return compilerProp.flags & ts.SymbolFlags.Optional
     ? `?${propTypeString.replace(/undefined \| /g, '')}`
     : propTypeString
-}
-
-function findTsConfigPath(dir: string): string | undefined {
-  let tsConfigPath: string | undefined = undefined
-
-  findUp.sync(
-    (currentDir) => {
-      const pathToTry = path.join(currentDir, 'tsconfig.json')
-
-      if (fs.existsSync(pathToTry)) {
-        tsConfigPath = pathToTry
-        return findUp.stop
-      }
-    },
-    { cwd: dir },
-  )
-
-  return tsConfigPath
 }
