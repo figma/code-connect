@@ -2,6 +2,7 @@ import { spawnSync } from 'child_process'
 import { exitWithError, logger } from '../common/logging'
 import { getFileIfExists } from './get_file_if_exists'
 import path from 'path'
+import { readdirSync, existsSync } from 'fs'
 
 // Find the location of the Code Connect Swift package on disk, so that we can
 // call `swift run figma-swift` from the correct location. This requires parsing
@@ -15,6 +16,7 @@ export async function getSwiftParserDir(
   cwd: string,
   xcodeprojPath?: string,
   swiftPackagePath?: string,
+  sourcePackagesPath?: string,
 ) {
   let figmaPackageDir: string | undefined
   let xcodeprojFile: string | undefined
@@ -75,16 +77,81 @@ export async function getSwiftParserDir(
       // If the version is 'local', the package is installed from a local checkout,
       // and the path on disk is the source output by xcodebuild.
       figmaPackageDir = figmaPackageSource
+    } else if (sourcePackagesPath) {
+      logger.info(`Using custom DerivedData path: ${sourcePackagesPath}`)
+
+      // If a custom path is supplied, use it.
+      figmaPackageDir = `${sourcePackagesPath}/checkouts/code-connect`
     } else {
-      // Otherwise, the package will be installed to
+      // Otherwise the SourcePackages will typically be located in Xcode's DerivedData directory,
+      // at ~/Users/{username}/Library/Developer/Xcode/DerivedData/{project}-{xxx}/SourcePackages, or in the Project's root
+      // at {project}/DerivedData/{project}/SourcePackages (depending on how the user's project is configured).
+      let hasFoundSourcePackagesDir = false
+
+      // 1. First look in the USER_LIBRARY_DIR (e.g. /Users/{username}/Library)
+      const userLibraryDirectoryMatch = buildSettings.match(/\s+USER_LIBRARY_DIR = (.*)/)
+      const userLibraryDirectory = userLibraryDirectoryMatch
+        ? userLibraryDirectoryMatch[1]
+        : undefined
+
+      logger.info('Finding Code Connect Swift package')
+
+      // Find the project's name using the build settings
+      const projectNameMatch = buildSettings.match(/\s+PROJECT_NAME = (.*)/)
+      const projectName = projectNameMatch ? projectNameMatch[1] : undefined
+
+      // We can't proceed without the project name (however, this should always exist)
+      if (!projectName) {
+        exitWithError('PROJECT_NAME not found in xcodebuild output')
+      }
+
+      // 1. From the folders in the user library directory use a regex to determine the folder name of the project defined by "ProjectName-" and a 28 character hash
+      // e.g. project-fbybcbnivxfbfeefownexgukzwxd
+      if (userLibraryDirectory) {
+        // Default to Xcode's default Dervied Data location (e.g. ~/Users/{username}/Library/Developer/Xcode/DerivedData/project-fbybcbnivxfbfeefownexgukzwxd/SourcePackages)
+        const root = `${userLibraryDirectory}/Developer/Xcode/DerivedData`
+
+        const projectFolderRegex = new RegExp(`${projectName}-[a-zA-Z0-9]{28}`)
+        const derivedDataFolders = readdirSync(root)
+        const projectFolder = derivedDataFolders.find((folder: string) =>
+          projectFolderRegex.test(folder),
+        )
+
+        // If the project folder is found, use it to find the Code Connect package
+        if (projectFolder) {
+          figmaPackageDir = `${root}/${projectFolder}/SourcePackages/checkouts/code-connect`
+          hasFoundSourcePackagesDir = true
+        } else {
+          logger.warn('Package not found in user library directory')
+        }
+      }
+
+      // 2. If SourcePackages couldn't be found in ~/Users/{username}/Library/Developer/Xcode/DerivedData/{project}-{xxx}/SourcePackages, attempt
+      // to find it in the project root {project}/DerivedData/{project}/SourcePackages
+      if (!hasFoundSourcePackagesDir) {
+        const rootDir = buildSettings.match(/\s+LOCROOT = (.*)/)
+
+        if (rootDir) {
+          figmaPackageDir = `${rootDir[1]}/DerivedData/${projectName}/SourcePackages/checkouts/code-connect`
+          hasFoundSourcePackagesDir = true
+        } else {
+          logger.warn('Package not found in project root')
+        }
+      }
+
+      // 3. Otherwise, the package may be installed to
       // <DerviedData>/SourcePackages/checkouts/code-connect. We find the
       // DerivedData location from the BUILD_DIR (which points to
       // <DerivedData>/Build/Products).
-      const buildDir = buildSettings.match(/\s+BUILD_DIR = (.*)/)
-      if (!buildDir) {
-        exitWithError('BUILD_DIR not found in xcodebuild output')
+      if (!hasFoundSourcePackagesDir) {
+        const buildDir = buildSettings.match(/\s+BUILD_DIR = (.*)/)
+
+        if (buildDir) {
+          figmaPackageDir = `${buildDir[1]}/../../SourcePackages/checkouts/code-connect`
+        } else {
+          logger.warn('Package not found in build directory')
+        }
       }
-      figmaPackageDir = `${buildDir[1]}/../../SourcePackages/checkouts/code-connect`
     }
   } else if (packageSwiftFile) {
     const swiftPackageDir = swiftPackagePath ? path.dirname(swiftPackagePath) : undefined
@@ -126,6 +193,27 @@ export async function getSwiftParserDir(
 
   if (!figmaPackageDir) {
     exitWithError('Figma package could not be found')
+  }
+
+  // Check if the figmaPackageDir exists, otherwise we can't proceed,
+  // as we require the code-connect package to continue
+  if (!existsSync(figmaPackageDir)) {
+    exitWithError(`Figma package directory not found at ${figmaPackageDir}`)
+  }
+
+  // We need to ensure that the directory is writable, so we can run the swift run command
+  // otherwise an "invalid access" error will be thrown by swift.
+  try {
+    const packageFile = path.join(figmaPackageDir, 'Package.resolved')
+
+    const accessCheck = spawnSync('test', ['-w', packageFile])
+    if (accessCheck.status !== 0) {
+      // Directory is not writable, attempt to make it writable
+      spawnSync('chmod', ['-R', '755', packageFile])
+    }
+    logger.info(`Directory enabled for swift run command`)
+  } catch (e) {
+    logger.warn(`Unable to verify or modify directory permissions: ${e}`)
   }
 
   logger.info(

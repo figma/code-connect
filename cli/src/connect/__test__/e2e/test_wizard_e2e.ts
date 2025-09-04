@@ -32,7 +32,9 @@ export function testWizardE2e(testCase: {
           // First, we need to ensure the Swift project has been built as we are
           // using a local version. We don't need to build the actual project itself
           // for this to work.
-          stdout.write('Building Swift project, this may take a while the first time...\n')
+          stdout.write(
+            `Building Swift project at ${path.join(__dirname, '..', '..', '..', '..')}, this may take a while the first time...\n`,
+          )
           execSync('swift build -c release', {
             cwd: path.join(__dirname, '..', '..', '..', '..'),
           })
@@ -85,7 +87,8 @@ export function testWizardE2e(testCase: {
 `
         : `{
   "codeConnect": {
-    "include": ${JSON.stringify(testCase.expectedIncludeGlobs)}
+    "include": ${JSON.stringify(testCase.expectedIncludeGlobs)},
+    "interactiveSetupFigmaFileUrl": "https://www.figma.com/design/abc123/my-design-system"
   }
 }
 `

@@ -9,7 +9,7 @@
   "compilerOptions": {
     // Modules
     "module": "node16",
-    "moduleResolution": "node16",
+    "moduleResolution": "node16", // Note: there is no `node20` moduleResolution.
 
     // Interoperability
     "esModuleInterop": true,
@@ -21,7 +21,7 @@
 
     // Support single-file transpilation processes (esbuild, swc, etc.)
     "isolatedModules": true,
-    // TODO: "isolatedDeclarations": true,
+    "isolatedDeclarations": true,
     // TODO: "verbatimModuleSyntax": true,
 
     // Enable source maps, declaration files, and declaration maps. These are often necessary/useful,
@@ -37,13 +37,13 @@
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "allowUnreachableCode": false,
-    // TODO:
-    // "noImplicitAny": true,
-    // "noImplicitThis": true,
-    // "noImplicitReturns": true,
-    // "noUncheckedIndexedAccess": true,
-    // "useUnknownInCatchVariables": true,
-    // "allowUnusedLabels": false,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "useUnknownInCatchVariables": true,
+    "allowUnusedLabels": false,
 
     // By default, all `@types` packages in all ancestor node_modules trees are visible. This
     // is slow and the wrong behavior for monorepos. For example, it makes it very easy to

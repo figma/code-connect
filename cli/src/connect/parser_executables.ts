@@ -31,7 +31,7 @@ type ParserInfo = {
 const FIRST_PARTY_PARSERS: Record<CodeConnectExecutableParser, ParserInfo> = {
   swift: {
     command: async (cwd, config) => {
-      return `swift run --package-path ${await getSwiftParserDir(cwd, (config as any).xcodeprojPath, (config as any).swiftPackagePath)} figma-swift`
+      return `swift run --package-path ${await getSwiftParserDir(cwd, (config as any).xcodeprojPath, (config as any).swiftPackagePath, (config as any).sourcePackagesPath)} figma-swift`
     },
   },
   compose: {
@@ -87,10 +87,19 @@ export async function callParser(
         ...config,
         verbose: (payload as any).verbose,
       }
+
       const command = await parser.command(cwd, configWithVerbose, payload.mode)
       if (parser.temporaryIOFilePath) {
         fs.mkdirSync(path.dirname(parser.temporaryIOFilePath), { recursive: true })
         fs.writeFileSync(temporaryIOFilePath, JSON.stringify(payload))
+
+        // Write to tmp directory before calling parser if verbose is enabled
+        if ((payload as any).verbose) {
+          const tmpDir = path.join(cwd, 'tmp')
+          fs.mkdirSync(tmpDir, { recursive: true })
+          const tmpFilePath = path.join(tmpDir, 'figma-code-connect-parser-input.json.tmp')
+          fs.writeFileSync(tmpFilePath, JSON.stringify(payload, null, 2))
+        }
       }
       logger.debug(`Running parser: ${command}`)
       const commandSplit = command.split(' ')
@@ -150,11 +159,14 @@ export async function callParser(
           )
         }
         if (parser.temporaryIOFilePath) {
-          fs.unlinkSync(parser.temporaryIOFilePath)
-          // Delete parent directory if empty after removing temp file
-          const parentDir = path.dirname(parser.temporaryIOFilePath)
-          if (fs.readdirSync(parentDir).length === 0) {
-            fs.rmdirSync(parentDir)
+          // Retain temp file and directory when verbose mode is enabled
+          if (!(payload as any).verbose) {
+            fs.unlinkSync(parser.temporaryIOFilePath)
+            // Delete parent directory if empty after removing temp file
+            const parentDir = path.dirname(parser.temporaryIOFilePath)
+            if (fs.readdirSync(parentDir).length === 0) {
+              fs.rmdirSync(parentDir)
+            }
           }
         }
       })

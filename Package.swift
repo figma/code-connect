@@ -15,7 +15,7 @@ let package = Package(
         .executable(name: "figma-swift", targets: ["CodeConnectCLI"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax", "510.0.3"..."600.0.1"),
+        .package(url: "https://github.com/swiftlang/swift-syntax", "510.0.3"..."601.0.1"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.55.3"),
     ],

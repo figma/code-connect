@@ -696,7 +696,7 @@ export async function getProjectInfoFromConfig(
     ? ({
         react: ['node_modules/**'],
         html: ['node_modules/**'],
-        swift: [],
+        swift: ['**/__test__/**'],
         compose: [],
         custom: [],
         __unit_test__: [],

@@ -164,15 +164,18 @@ async function getEmbeddingsMatchResults({
 }) {
   const uniqueMatchableNames = getUniqueMatchableNames(propMappingData)
 
-  const res = mockResponseName
-    ? await getMockEmbeddingsResponse(uniqueMatchableNames, mockResponseName)
-    : await fetchEmbeddings({ uniqueMatchableNames, accessToken, figmaUrl })
-
   const matchableNamesEmbeddings: MatchableNameEmbeddings = {}
 
-  res?.meta.embeddings.forEach((embedding: number[], index: number) => {
-    matchableNamesEmbeddings[uniqueMatchableNames[index]] = embedding
-  })
+  if (uniqueMatchableNames.length > 0) {
+    const res = mockResponseName
+      ? await getMockEmbeddingsResponse(uniqueMatchableNames, mockResponseName)
+      : await fetchEmbeddings({ uniqueMatchableNames, accessToken, figmaUrl })
+
+    res?.meta.embeddings.forEach((embedding: number[], index: number) => {
+      matchableNamesEmbeddings[uniqueMatchableNames[index]] = embedding
+    })
+  }
+
   return buildAllEmbeddingsMatchResults(propMappingData, matchableNamesEmbeddings)
 }
 

@@ -1,4 +1,8 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // TODO: fix violations and remove
+    "isolatedDeclarations": false
+  },
   "exclude": ["node_modules", "dist", "src/components", "scripts"]
 }

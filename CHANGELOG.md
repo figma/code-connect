@@ -1,8 +1,23 @@
+# Code Connect v1.3.5 (4th September 2025)
+
+## Fixed
+
+### General
+
+- Fixed "Failed to fetch embeddings" error if empty payload in interactive setup
+- Retain the temporary file and directory when `--verbose` is enabled for improved debugging. 
+
+### SwiftUI
+
+- Fixed SourcePackages directory not found.
+- Added optional sourcePackagesPath parameter for when the default derived data folder is not used. 
+- Updated `swift-syntax` to support 601.0.1. 
+
 # Code Connect v1.3.4 (26th June 2025)
 
-### Fixed
+## Fixed
 
-# React
+### React
 
 - Support getProps inside nestedProps
 
