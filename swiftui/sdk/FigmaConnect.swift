@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// The protocol that defines what a Code Connect file needs to implement
+@MainActor
 public protocol FigmaConnect: View {
     associatedtype Component: View = AnyView
 

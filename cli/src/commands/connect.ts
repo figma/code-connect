@@ -103,7 +103,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
   )
     .option(
       '--node <link_to_node>',
-      'specify the node to unpublish. This will unpublish for both React and Storybook.',
+      'specify the node to unpublish. This will unpublish for the specified label.',
     )
     .option('-l --label <label>', 'label to unpublish for')
     .option('--include-template-files', 'flag to include any figma.template.js files')
@@ -475,10 +475,10 @@ async function handleUnpublish(cmd: BaseCommand & { node: string; label: string 
   let nodesToDeleteRelevantInfo
 
   if (cmd.node) {
-    nodesToDeleteRelevantInfo = [
-      { figmaNode: cmd.node, label: 'React' },
-      { figmaNode: cmd.node, label: 'Storybook' },
-    ]
+    if (!cmd.label) {
+      exitWithError('Label is required when specifying a node')
+    }
+    nodesToDeleteRelevantInfo = [{ figmaNode: cmd.node, label: cmd.label }]
   } else {
     const projectInfo = await getProjectInfo(dir, cmd.config)
 

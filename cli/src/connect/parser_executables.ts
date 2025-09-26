@@ -17,7 +17,8 @@ import {
 } from '../parser_scripts/get_gradlew_path'
 import { getComposeErrorSuggestion } from '../parser_scripts/compose_errors'
 
-const temporaryIOFilePath = 'tmp/figma-code-connect-parser-io.json.tmp'
+const temporaryInputFilePath = 'tmp/figma-code-connect-parser-io.json.tmp'
+const temporaryOutputDirectoryPath = 'tmp/parser-output'
 
 type ParserInfo = {
   command: (
@@ -25,13 +26,19 @@ type ParserInfo = {
     config: CodeConnectExecutableParserConfig | CodeConnectCustomExecutableParserConfig,
     mode: ParserRequestPayload['mode'],
   ) => Promise<string>
-  temporaryIOFilePath?: string
+  temporaryInputFilePath?: string
+  temporaryOutputDirectoryPath?: string
 }
 
 const FIRST_PARTY_PARSERS: Record<CodeConnectExecutableParser, ParserInfo> = {
   swift: {
     command: async (cwd, config) => {
-      return `swift run --package-path ${await getSwiftParserDir(cwd, (config as any).xcodeprojPath, (config as any).swiftPackagePath, (config as any).sourcePackagesPath)} figma-swift`
+      return `swift run --package-path ${await getSwiftParserDir(
+        cwd,
+        (config as any).xcodeprojPath,
+        (config as any).swiftPackagePath,
+        (config as any).sourcePackagesPath,
+      )} figma-swift`
     },
   },
   compose: {
@@ -40,12 +47,13 @@ const FIRST_PARTY_PARSERS: Record<CodeConnectExecutableParser, ParserInfo> = {
       const gradleExecutableInvocation = getGradleWrapperExecutablePath(gradlewPath)
       const verboseFlags = (config as any).verbose ? ' --stacktrace' : ''
       if (mode === 'CREATE') {
-        return `${gradleExecutableInvocation} -p ${gradlewPath} createCodeConnect -PfilePath=${temporaryIOFilePath}${verboseFlags}`
+        return `${gradleExecutableInvocation} -p ${gradlewPath} createCodeConnect -PfilePath=${temporaryInputFilePath}${verboseFlags} -PoutputDir=${temporaryOutputDirectoryPath}`
       } else {
-        return `${gradleExecutableInvocation} -p ${gradlewPath} parseCodeConnect -PfilePath=${temporaryIOFilePath}${verboseFlags}`
+        return `${gradleExecutableInvocation} -p ${gradlewPath} parseCodeConnect -PfilePath=${temporaryInputFilePath}${verboseFlags} -PoutputDir=${temporaryOutputDirectoryPath}`
       }
     },
-    temporaryIOFilePath: temporaryIOFilePath,
+    temporaryInputFilePath: temporaryInputFilePath,
+    temporaryOutputDirectoryPath: temporaryOutputDirectoryPath,
   },
   custom: {
     command: async (cwd, config) => {
@@ -68,7 +76,9 @@ function getParser(config: CodeConnectExecutableParserConfig): ParserInfo | neve
 
   if (!parser) {
     exitWithError(
-      `Invalid parser specified: "${config.parser}". Valid parsers are: ${Object.keys(FIRST_PARTY_PARSERS).join(', ')}.`,
+      `Invalid parser specified: "${config.parser}". Valid parsers are: ${Object.keys(
+        FIRST_PARTY_PARSERS,
+      ).join(', ')}.`,
     )
   }
 
@@ -89,18 +99,18 @@ export async function callParser(
       }
 
       const command = await parser.command(cwd, configWithVerbose, payload.mode)
-      if (parser.temporaryIOFilePath) {
-        fs.mkdirSync(path.dirname(parser.temporaryIOFilePath), { recursive: true })
-        fs.writeFileSync(temporaryIOFilePath, JSON.stringify(payload))
 
-        // Write to tmp directory before calling parser if verbose is enabled
-        if ((payload as any).verbose) {
-          const tmpDir = path.join(cwd, 'tmp')
-          fs.mkdirSync(tmpDir, { recursive: true })
-          const tmpFilePath = path.join(tmpDir, 'figma-code-connect-parser-input.json.tmp')
-          fs.writeFileSync(tmpFilePath, JSON.stringify(payload, null, 2))
-        }
+      // Create temporary input file if it exists
+      if (parser.temporaryInputFilePath) {
+        fs.mkdirSync(path.dirname(parser.temporaryInputFilePath), { recursive: true })
+        fs.writeFileSync(parser.temporaryInputFilePath, JSON.stringify(payload))
       }
+
+      // Create temporary output directory if it exists
+      if (parser.temporaryOutputDirectoryPath) {
+        fs.mkdirSync(parser.temporaryOutputDirectoryPath, { recursive: true })
+      }
+
       logger.debug(`Running parser: ${command}`)
       const commandSplit = command.split(' ')
 
@@ -150,20 +160,70 @@ export async function callParser(
             reject(new Error(`Parser exited with code ${code}`))
           }
         } else {
-          resolve(
-            JSON.parse(
-              parser.temporaryIOFilePath
-                ? fs.readFileSync(parser.temporaryIOFilePath, 'utf8')
-                : stdout,
-            ),
-          )
+          // List the files in the temporary output directory if it exists and log them
+          if (parser.temporaryOutputDirectoryPath) {
+            try {
+              const outputDir = parser.temporaryOutputDirectoryPath
+              if (fs.existsSync(outputDir)) {
+                const files = fs.readdirSync(outputDir)
+                logger.debug(
+                  `Files in temporary output directory (${outputDir}): ${files.length > 0 ? files.join(', ') : '[empty]'}`,
+                )
+
+                // Combine all JSON files in the output directory into a single JSON object.
+                // Each file is expected to be a JSON file with a "docs" array and a "messages" array.
+                // The combined output will have a single "docs" array and a single "messages" array.
+
+                // Filter for .json files only
+                const jsonFiles = files.filter((f) => f.endsWith('.json'))
+                let allMessages: any[] = []
+                const uniqueDocsMap = new Map<string, any>()
+
+                for (const file of jsonFiles) {
+                  const filePath = path.join(outputDir, file)
+                  try {
+                    const content = fs.readFileSync(filePath, 'utf8')
+                    const parsed = JSON.parse(content)
+                    if (Array.isArray(parsed.docs)) {
+                      // Add docs to map, keeping only the first occurrence of each figmaNode
+                      for (const doc of parsed.docs) {
+                        if (doc.figmaNode && !uniqueDocsMap.has(doc.figmaNode)) {
+                          uniqueDocsMap.set(doc.figmaNode, doc)
+                        }
+                      }
+                    }
+                    if (Array.isArray(parsed.messages)) {
+                      allMessages = allMessages.concat(parsed.messages)
+                    }
+                  } catch (err) {
+                    logger.warn(`Failed to parse output file ${file}: ${err}`)
+                  }
+                }
+
+                const allDocs = Array.from(uniqueDocsMap.values())
+
+                resolve({
+                  docs: allDocs,
+                  messages: allMessages,
+                })
+              } else {
+                logger.debug(`Temporary output directory (${outputDir}) does not exist.`)
+              }
+            } catch (err) {
+              logger.warn(`Failed to list files in temporary output directory: ${err}`)
+            }
+          } else {
+            // Assume the output is in the stdout
+            resolve(JSON.parse(stdout))
+          }
         }
-        if (parser.temporaryIOFilePath) {
+
+        if (parser.temporaryInputFilePath) {
           // Retain temp file and directory when verbose mode is enabled
           if (!(payload as any).verbose) {
-            fs.unlinkSync(parser.temporaryIOFilePath)
+            fs.unlinkSync(parser.temporaryInputFilePath)
             // Delete parent directory if empty after removing temp file
-            const parentDir = path.dirname(parser.temporaryIOFilePath)
+            const parentDir = path.dirname(parser.temporaryInputFilePath)
             if (fs.readdirSync(parentDir).length === 0) {
               fs.rmdirSync(parentDir)
             }
@@ -174,7 +234,7 @@ export async function callParser(
       child.on('error', (e) => {
         reject(e)
       })
-      if (!parser.temporaryIOFilePath) {
+      if (!parser.temporaryInputFilePath) {
         child.stdin.write(JSON.stringify(payload))
         child.stdin.end()
       }

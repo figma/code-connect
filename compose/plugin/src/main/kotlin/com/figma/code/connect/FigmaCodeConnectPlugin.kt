@@ -66,6 +66,7 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
         project.tasks.register("parseCodeConnect") { task ->
             task.doLast {
                 val filePath = project.findProperty("filePath") as? String
+                val outputDirectory = project.findProperty("outputDir") as? String
 
                 if (!filePath.isNullOrBlank()) {
                     val json =
@@ -131,7 +132,9 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
                     }
 
                     val outputStr = json.encodeToString(CodeConnectPluginParserOutput(documents, messages)).trimIndent()
-                    File(filePath).writeText(outputStr)
+
+                    // Write output to output directory with filename ${moduleName}-output.json
+                    File(outputDirectory, "${project.name}-output.json").writeText(outputStr)
                 } else {
                     throw IllegalArgumentException("filePath property is required")
                 }
@@ -151,6 +154,7 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
         project.tasks.register("createCodeConnect") { task ->
             task.doLast {
                 val filePath = project.findProperty("filePath") as? String
+                val outputDirectory = project.findProperty("outputDir") as? String
 
                 if (!filePath.isNullOrBlank()) {
                     val json =
@@ -166,7 +170,9 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
 
                     val output = CodeConnectCreator.create(codeConnectParserCreateInput)
                     val outputStr = json.encodeToString(output)
-                    File(filePath).writeText(outputStr)
+
+                    // Write output to output directory with filename ${moduleName}-output.json
+                    File(outputDirectory, "${project.name}-output.json").writeText(outputStr)
                 }
             }
             task.notCompatibleWithConfigurationCache(

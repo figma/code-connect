@@ -6,6 +6,6 @@ export type HtmlTemplateString = {
 }
 
 export function html(strings: TemplateStringsArray, ...values: any[]): HtmlTemplateString {
-  void strings, values // intentionally unused
+  ;(void strings, values) // intentionally unused
   return { __tag: 'HtmlTemplateString' }
 }

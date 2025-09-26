@@ -8,7 +8,7 @@
   "display": "Default",
   "compilerOptions": {
     // Modules
-    "module": "node16",
+    "module": "node20",
     "moduleResolution": "node16", // Note: there is no `node20` moduleResolution.
 
     // Interoperability

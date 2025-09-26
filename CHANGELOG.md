@@ -1,3 +1,20 @@
+# Code Connect v1.3.6 (26th September 2025)
+
+## Fixed
+
+### General
+
+- Updated `npx connect unpublish --node` to require a `--label` param so it can unpublish any label type.
+
+### Compose
+
+- Fixed parsing issue with multi-module projects.
+
+### SwiftUI
+
+- Updated `swift-syntax` to support 602.0.0. Thanks to @luispadron for the [PR](https://github.com/figma/code-connect/pull/274)
+- Fixed protocol inheritance for Swift 6.2. Thanks to @rmenezes for the [PR](https://github.com/figma/code-connect/pull/317)
+
 # Code Connect v1.3.5 (4th September 2025)
 
 ## Fixed
@@ -5,13 +22,13 @@
 ### General
 
 - Fixed "Failed to fetch embeddings" error if empty payload in interactive setup
-- Retain the temporary file and directory when `--verbose` is enabled for improved debugging. 
+- Retain the temporary file and directory when `--verbose` is enabled for improved debugging.
 
 ### SwiftUI
 
 - Fixed SourcePackages directory not found.
-- Added optional sourcePackagesPath parameter for when the default derived data folder is not used. 
-- Updated `swift-syntax` to support 601.0.1. 
+- Added optional sourcePackagesPath parameter for when the default derived data folder is not used.
+- Updated `swift-syntax` to support 601.0.1.
 
 # Code Connect v1.3.4 (26th June 2025)
 

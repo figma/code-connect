@@ -19,7 +19,7 @@ class FigmaCodeConnectPluginFunctionalTest {
     private val buildFile by lazy { projectDir.resolve("build.gradle") }
     private val settingsFile by lazy { projectDir.resolve("settings.gradle") }
 
-    private val ioFile by lazy { projectDir.resolve("IOFile.json") }
+    private val inputFile by lazy { projectDir.resolve("input.json") }
 
     private fun testParsing(addImports: Boolean) {
         // Set up the test build
@@ -52,18 +52,24 @@ class FigmaCodeConnectPluginFunctionalTest {
                 "mode": "PARSE",
                 "paths": [
                 "${kotlinComponent.absolutePath}"
-                ]
+                ],
                 "autoAddImports" : $addImports
             }
             """.trimIndent()
 
-        ioFile.writeText(inputJson)
+        inputFile.writeText(inputJson)
 
-        runner.withArguments("parseCodeConnect", "-PfilePath=${ioFile.absolutePath}", "-q")
+        runner.withArguments("parseCodeConnect", "-PfilePath=${inputFile.absolutePath}", "-PoutputDir=${projectDir.absolutePath}", "-q")
         runner.build()
-        // Verify the result
+
+        // Find the output file (it will be named based on the project name)
+        val outputFiles = projectDir.listFiles { file -> file.name.endsWith("-output.json") }
+        assertTrue("No output files found in ${projectDir.absolutePath}", outputFiles != null && outputFiles.isNotEmpty())
+        
+        val testOutputFile = outputFiles!!.first()
+
         assertTrue(
-            ioFile.readText().removeWhiteSpaces().contains(
+            testOutputFile.readText().removeWhiteSpaces().contains(
                 CodeConnectExpectedOutputs.expectedParserResult(filePath = kotlinComponent.absolutePath, addImports).removeWhiteSpaces(),
             ),
         )
@@ -131,9 +137,9 @@ class FigmaCodeConnectPluginFunctionalTest {
             }
             """.trimIndent()
 
-        ioFile.writeText(inputJson)
+        inputFile.writeText(inputJson)
 
-        runner.withArguments("createCodeConnect", "-PfilePath=${ioFile.absolutePath}")
+        runner.withArguments("createCodeConnect", "-PfilePath=${inputFile.absolutePath}", "-PoutputDir=${projectDir.absolutePath}")
         runner.build()
 
         val expected =
