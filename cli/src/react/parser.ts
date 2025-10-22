@@ -939,7 +939,7 @@ export async function parseReactDoc(
         if (config) {
           const mappedPath = mapImportPath(imp.file, config)
           if (mappedPath) {
-            return imp.statement.replace(/['"]([\.\/a-zA-Z0-9_-]*)['"]/, `'${mappedPath}'`)
+            return imp.statement.replace(/['"]([@\.\/a-zA-Z0-9_-]*)['"]/, `'${mappedPath}'`)
           }
         }
         return imp.statement

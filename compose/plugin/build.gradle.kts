@@ -26,6 +26,12 @@ plugins {
     id("com.gradle.plugin-publish") version "1.2.1"
 }
 
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+
 repositories {
     mavenCentral()
 }

@@ -96,8 +96,42 @@ data class FigmaEnumArgs(
 
 fun <T> valueMappingToFunctionParamJs(valueMapping: Map<T, Any>): String {
     return valueMapping.entries.joinToString(",\n") { (key, value) ->
-        "$key: '$value'"
+        "$key: '${escapeJavaScriptString(value.toString())}'"
     }
+}
+
+/**
+ * Escapes a string for use in a JavaScript single-quoted string literal.
+ * This provides comprehensive escaping for all special characters, control characters,
+ * and Unicode line terminators that could cause issues in JavaScript.
+ *
+ * Security: This prevents XSS attacks by escaping characters that could break out of
+ * string literals or inject malicious code.
+ */
+fun escapeJavaScriptString(str: String): String {
+    return str
+        // CRITICAL: Backslash must be escaped first to avoid double-escaping
+        .replace("\\", "\\\\")
+        
+        // Quote characters - prevent breaking out of string literals
+        .replace("'", "\\'")
+        .replace("\"", "\\\"")
+        .replace("`", "\\`")
+        
+        // Standard escape sequences - for proper display/formatting
+        .replace("\n", "\\n")   // Newline (LF)
+        .replace("\r", "\\r")   // Carriage return (CR)
+        .replace("\t", "\\t")   // Tab
+        .replace("\b", "\\b")   // Backspace
+        .replace("\u000C", "\\f") // Form feed
+        
+        // Unicode line terminators - can break JavaScript in some contexts
+        // These are treated as line terminators by JavaScript but not by JSON
+        .replace("\u2028", "\\u2028") // Line separator
+        .replace("\u2029", "\\u2029") // Paragraph separator
+        
+        // Null byte - can cause issues in C-based JavaScript engines
+        .replace("\u0000", "\\u0000")
 }
 
 @Serializable

@@ -22,12 +22,48 @@ class JSTemplateCreator {
             """
             }?.joinToString("\n") ?: ""
 
+        val templateCode = replaceVariableReferences(code, templateData)
+
         return """
             const figma = require('figma')
             ${JSTemplateHelpers.renderComposeChildrenFunctionDefinition}
             $propertyDefinitions
-            export default figma.kotlin`${replaceVariableReferences(code, templateData)}`
+            export default figma.kotlin`$templateCode`
             """.trimIndent()
+    }
+
+    /**
+     * Escapes a string for safe embedding in a JavaScript template literal.
+     * This provides comprehensive escaping for all characters that could break template literals
+     * or inject malicious code.
+     *
+     * Template literals require special handling because they:
+     * 1. Treat backticks as delimiters
+     * 2. Process ${...} as template expressions
+     * 3. Process escape sequences like \n, \t, etc.
+     *
+     * Security: This prevents XSS attacks and syntax errors by escaping characters that
+     * could break out of the template literal or inject code.
+     */
+    internal fun escapeForTemplateLiteral(str: String): String {
+        return str
+            // CRITICAL: Backslash must be escaped first to avoid double-escaping
+            .replace("\\", "\\\\")
+            
+            // Template literal special characters
+            .replace("`", "\\`")     // Backtick - template literal delimiter
+            .replace("$", "\\$")     // Dollar sign - prevents ${...} template expressions
+            
+            // Control characters that could cause issues
+            .replace("\b", "\\b")        // Backspace
+            .replace("\u000C", "\\f")    // Form feed
+            
+            // Unicode line terminators - treated as line breaks by JavaScript
+            .replace("\u2028", "\\u2028") // Line separator
+            .replace("\u2029", "\\u2029") // Paragraph separator
+            
+            // Null byte - can cause issues in C-based JavaScript engines
+            .replace("\u0000", "\\u0000")
     }
 
     // Replaces property mapped variables to a template string that can be used in the low level JavaScript template
@@ -80,12 +116,33 @@ class JSTemplateCreator {
         )
 
         var code = bodyExpression.text
-        // Replace text ranges with placeholders starting with the last text ranges
-        replacements.keys.sortedByDescending { it.startOffset }.forEach { range ->
-            val placeholder = replacements[range] ?: return code
-            code = code.substring(0, range.startOffset) +
-                placeholder + code.substring(range.endOffset)
+        
+        // Sort replacements by position (descending) so we can modify from the end
+        // This preserves earlier offsets
+        val sortedReplacements = replacements.entries.sortedByDescending { it.key.startOffset }
+        
+        // Process replacements from end to start, escaping non-replaced portions
+        var processedCode = StringBuilder()
+        var currentPos = code.length
+        
+        for ((range, placeholder) in sortedReplacements) {
+            // Escape the portion after this replacement (working backwards)
+            val afterReplacement = code.substring(range.endOffset, currentPos)
+            val escapedAfter = escapeForTemplateLiteral(afterReplacement)
+            processedCode.insert(0, escapedAfter)
+            
+            // Add the placeholder (unescaped - this is our intentional ${...})
+            processedCode.insert(0, placeholder)
+            
+            currentPos = range.startOffset
         }
+        
+        // Escape the remaining portion before the first replacement
+        val beforeFirst = code.substring(0, currentPos)
+        val escapedBefore = escapeForTemplateLiteral(beforeFirst)
+        processedCode.insert(0, escapedBefore)
+        
+        code = processedCode.toString()
         code = code.removePrefix("{").removeSuffix("}").trimIndent()
         // In order to replace instance properties, we need to know the amount of preceding
         // whitespace before the expression. To do this, we do a second pass to find the

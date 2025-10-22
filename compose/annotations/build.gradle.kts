@@ -8,6 +8,11 @@ plugins {
     id("org.jetbrains.dokka") version "1.9.20"
 }
 
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
 
 mavenPublishing {
     configure(

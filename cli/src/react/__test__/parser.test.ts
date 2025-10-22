@@ -574,6 +574,30 @@ describe('Parser (JS templates)', () => {
     ])
   })
 
+  it('Handles path aliases with importPaths transformation', async () => {
+    // This test covers the bug where path aliases with special characters like @ were not
+    // being transformed because the regex didn't match them
+    const result = await testParse('PathAliasImport.figma.tsx', [], {
+      paths: {
+        '@components/*': [path.join(__dirname, 'components', '*')],
+      },
+      importPaths: {
+        'components/*': '@acme/package/*',
+      },
+    })
+    expect(result).toMatchObject([
+      {
+        component: 'Button',
+        source: expect.stringMatching(
+          getFileInRepositoryRegex('cli/src/react/__test__/components/TestComponents.tsx'),
+        ),
+        templateData: {
+          imports: ["import { Button } from '@acme/package/TestComponents'"],
+        },
+      },
+    ])
+  })
+
   it('Can parse a varible reference for figmaNode', async () => {
     const result = await testParse('VariableRefFigmaNode.figma.tsx')
 

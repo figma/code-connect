@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.3.6",
+  "version": "1.3.7",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -42,6 +42,8 @@
     "test": "npm run test:no-coverage -- --coverage",
     "test:no-coverage": "cross-env NODE_OPTIONS=\"--experimental-vm-modules --no-deprecation --max-old-space-size=10240\" npx jest --logHeapUsage --workerIdleMemoryLimit=1.5G",
     "test:fast": "npm run test -- --testPathIgnorePatterns=template_rendering.test.ts --testPathIgnorePatterns=e2e_parse_command_swift.test.ts --testPathIgnorePatterns=e2e_wizard_swift.test.ts",
+    "test:compose": "cd ../compose && ./gradlew test",
+    "test:all": "npm run test && npm run test:compose",
     "test:ci": "npm run test:non-mac -- --runInBand",
     "test:wizard": "npm run test -- --runInBand --testPathPattern=e2e_wizard_react.test.ts --testPathPattern=e2e_wizard_swift.test.ts",
     "test:swift": "npm run test -- --runInBand --testPathPattern=e2e_parse_command_swift.test.ts --testPathPattern=e2e_wizard_swift.test.ts --testPathPattern=e2e_parse_command_swift_xcodeproj.test.ts",
@@ -106,8 +108,8 @@
     "prettier": "^2.8.8",
     "prompts": "^2.4.2",
     "strip-ansi": "^6.0.0",
-    "ts-morph": "^26.0.0",
-    "typescript": "5.9.2",
+    "ts-morph": "^27.0.0",
+    "typescript": "5.9.3",
     "undici": "^5.29.0",
     "zod": "3.25.58",
     "zod-validation-error": "^3.2.0"
