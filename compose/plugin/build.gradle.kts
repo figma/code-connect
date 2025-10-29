@@ -20,7 +20,7 @@ plugins {
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
 
     // Json serialization plugin.
-    kotlin("plugin.serialization") version "2.0.0"
+    kotlin("plugin.serialization") version "2.2.21"
 
     // Publishing plugin
     id("com.gradle.plugin-publish") version "1.2.1"

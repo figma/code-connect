@@ -185,10 +185,17 @@ export async function callParser(
                     const content = fs.readFileSync(filePath, 'utf8')
                     const parsed = JSON.parse(content)
                     if (Array.isArray(parsed.docs)) {
-                      // Add docs to map, keeping only the first occurrence of each figmaNode
+                      // Deduplicate docs based on figmaNode + template
+                      // The template contains the actual code example and is unique per component.
+                      // This allows multiple different code components to map to the same Figma node,
+                      // while preventing the same component from being duplicated in multi-module projects.
                       for (const doc of parsed.docs) {
-                        if (doc.figmaNode && !uniqueDocsMap.has(doc.figmaNode)) {
-                          uniqueDocsMap.set(doc.figmaNode, doc)
+                        const dedupeKey = JSON.stringify({
+                          figmaNode: doc.figmaNode,
+                          template: doc.template,
+                        })
+                        if (!uniqueDocsMap.has(dedupeKey)) {
+                          uniqueDocsMap.set(dedupeKey, doc)
                         }
                       }
                     }
