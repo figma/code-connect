@@ -13,7 +13,7 @@ Code Connect is easy to set up, easy to maintain, type-safe, and extensible. Out
 
 Use Figma’s Code Connect to make your design system easily accessible to your developers and create a shared source of truth for both the design and code elements.
 
-Our Getting Started guide will walk you through the process of setting up Code Connect, using our interactive setup to automatically map components, and publishing your first components. **[Getting Started with Code Connect →](https://www.figma.com/code-connect-docs/quickstart-guide/)**
+Our Getting Started guide will walk you through the process of setting up Code Connect, using our interactive setup to automatically map components, and publishing your first components. **[Code Connect Documentation →](https://developers.figma.com/docs/code-connect/)**
 
 Code Connect comes with support for different frameworks and languages. Our integration guides will walk you through the process of refining your components by mapping props and variants for:
 

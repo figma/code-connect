@@ -1,11 +1,25 @@
+# Code Connect v1.3.9 (TBD)
+
+## Fixed
+
+### General
+
+- Improve response of publish command to display succeeded and failed nodes
+
+### Compose / Swift
+
+- Fixed parsing failure in `create` command
+
 # Code Connect v1.3.8 (29th October 2025)
 
 ## Fixed
 
+- Display both failed and succeeded components details when publishing.
+
 ### Compose
 
 - Fixed an issue where if there were multiple modules/files connecting to the same FigmaNode the parser only recognize the first module/file found.
-- Update `libs.versions.toml` Kotlin version to `2.2.21`. 
+- Update `libs.versions.toml` Kotlin version to `2.2.21`.
 
 # Code Connect v1.3.7 (22nd October 2025)
 

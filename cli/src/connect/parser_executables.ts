@@ -6,7 +6,12 @@ import {
   CodeConnectExecutableParser,
   CodeConnectParser,
 } from './project'
-import { ParserExecutableMessages, ParserRequestPayload } from './parser_executable_types'
+import {
+  ParserExecutableMessages,
+  ParserRequestPayload,
+  ParseResponsePayload,
+  CreateResponsePayload,
+} from './parser_executable_types'
 import { spawn } from 'cross-spawn'
 import { getSwiftParserDir } from '../parser_scripts/get_swift_parser_dir'
 import fs from 'fs'
@@ -171,13 +176,18 @@ export async function callParser(
                 )
 
                 // Combine all JSON files in the output directory into a single JSON object.
-                // Each file is expected to be a JSON file with a "docs" array and a "messages" array.
-                // The combined output will have a single "docs" array and a single "messages" array.
+                // For PARSE responses: Each file has a "docs" array and a "messages" array.
+                // For CREATE responses: Each file has a "createdFiles" array and a "messages" array.
+                // The combined output will have a single array of the appropriate type and a single "messages" array.
 
                 // Filter for .json files only
                 const jsonFiles = files.filter((f) => f.endsWith('.json'))
-                let allMessages: any[] = []
-                const uniqueDocsMap = new Map<string, any>()
+                let allMessages: z.infer<typeof ParserExecutableMessages> = []
+                const uniqueDocsMap = new Map<
+                  string,
+                  z.infer<typeof ParseResponsePayload>['docs'][number]
+                >()
+                let allCreatedFiles: z.infer<typeof CreateResponsePayload>['createdFiles'] = []
 
                 for (const file of jsonFiles) {
                   const filePath = path.join(outputDir, file)
@@ -199,6 +209,9 @@ export async function callParser(
                         }
                       }
                     }
+                    if (Array.isArray(parsed.createdFiles)) {
+                      allCreatedFiles = allCreatedFiles.concat(parsed.createdFiles)
+                    }
                     if (Array.isArray(parsed.messages)) {
                       allMessages = allMessages.concat(parsed.messages)
                     }
@@ -209,10 +222,18 @@ export async function callParser(
 
                 const allDocs = Array.from(uniqueDocsMap.values())
 
-                resolve({
-                  docs: allDocs,
-                  messages: allMessages,
-                })
+                // Return the appropriate response based on the mode
+                if (payload.mode === 'CREATE') {
+                  resolve({
+                    createdFiles: allCreatedFiles,
+                    messages: allMessages,
+                  })
+                } else {
+                  resolve({
+                    docs: allDocs,
+                    messages: allMessages,
+                  })
+                }
               } else {
                 logger.debug(`Temporary output directory (${outputDir}) does not exist.`)
               }

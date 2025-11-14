@@ -12,8 +12,70 @@ interface Args {
   verbose: boolean
 }
 
-function codeConnectStr(doc: CodeConnectJSON) {
+interface UploadResponse {
+  status: number
+  error: boolean
+  meta: {
+    success: boolean
+    published_count: number
+    failed_count: number
+    published_nodes: Array<{ figmaNode: string; label: string }>
+    failed_nodes: Array<{ figmaNode: string; label: string; reason: string }>
+  }
+}
+
+/**
+ * Returns a string representation of the code connect JSON
+ * @param doc - The code connect JSON
+ * @returns A string representation of the code connect JSON
+ */
+function codeConnectStr(doc: CodeConnectJSON): string {
   return `${highlight(doc.component ?? '')}${doc.variant ? `(${Object.entries(doc.variant).map(([key, value]) => `${key}=${value}`)})` : ''} ${underline(doc.figmaNode)}`
+}
+
+/**
+ * Extracts the fileKey and nodeId from the Figma node URL and returns a key in the format of fileKey-nodeId
+ * @param figmaNode - The Figma node URL
+ * @returns The key in the format of fileKey-nodeId
+ */
+function getKeyFromFigmaNode(figmaNode: string): string {
+  const url = new URL(figmaNode)
+
+  // Extract fileKey from path (after /file/ or /design/)
+  const pathMatch = url.pathname.match(/\/(file|design)\/([A-Za-z0-9]+)/)
+  const fileKey = pathMatch ? pathMatch[2] : ''
+
+  // Extract nodeId from query parameter and convert format (1-24 -> 1:24)
+  const nodeIdParam = url.searchParams.get('node-id') || ''
+  const nodeId = nodeIdParam.replace(/-/g, ':')
+
+  return `${fileKey}-${nodeId}`
+}
+
+/**
+ * Creates a map from fileKey-nodeId to original docs for easy lookup
+ */
+export function createDocsMap(
+  docs: CodeConnectJSON[],
+  verbose: boolean,
+): Map<string, CodeConnectJSON[]> {
+  const docsMap = new Map<string, CodeConnectJSON[]>()
+
+  for (const doc of docs) {
+    const parsedData = parseFigmaNode(verbose, doc)
+    if (!parsedData) {
+      continue
+    }
+
+    const mapKey = `${parsedData.fileKey}-${parsedData.nodeId}`
+    if (!docsMap.has(mapKey)) {
+      docsMap.set(mapKey, [])
+    }
+
+    docsMap.get(mapKey)?.push(doc)
+  }
+
+  return docsMap
 }
 
 export async function upload({ accessToken, docs, batchSize, verbose }: Args) {
@@ -21,6 +83,12 @@ export async function upload({ accessToken, docs, batchSize, verbose }: Args) {
 
   try {
     logger.info(`Uploading to Figma...`)
+
+    // Create a map from fileKey-nodeId to original docs for detailed output
+    const docsMap = createDocsMap(docs, verbose)
+
+    let allUploadedNodes = new Set<string>()
+    let allFailedNodes = new Map<string, string>() // key -> failure reason
 
     if (batchSize) {
       if (typeof batchSize !== 'number') {
@@ -82,9 +150,23 @@ export async function upload({ accessToken, docs, batchSize, verbose }: Args) {
 
         logger.debug(`Uploading ${size.toFixed(2)}mb to Figma`)
 
-        await request.post(apiUrl, batch, {
+        const response = await request.post<UploadResponse>(apiUrl, batch, {
           headers: getHeaders(accessToken),
         })
+
+        const data = response.data
+
+        if (data.meta?.published_nodes) {
+          data.meta.published_nodes.forEach((node) =>
+            allUploadedNodes.add(getKeyFromFigmaNode(node.figmaNode)),
+          )
+        }
+        if (data.meta?.failed_nodes) {
+          data.meta.failed_nodes.forEach((node) =>
+            allFailedNodes.set(getKeyFromFigmaNode(node.figmaNode), node.reason),
+          )
+        }
+
         currentBatch++
       }
       process.stderr.write(`\n`)
@@ -102,27 +184,61 @@ export async function upload({ accessToken, docs, batchSize, verbose }: Args) {
 
       logger.debug(`Uploading ${size.toFixed(2)}mb to Figma`)
 
-      await request.post(apiUrl, docs, {
+      const response = await request.post<UploadResponse>(apiUrl, docs, {
         headers: getHeaders(accessToken),
       })
+
+      const data = response.data
+
+      if (data.meta?.published_nodes) {
+        data.meta.published_nodes.forEach((node) =>
+          allUploadedNodes.add(getKeyFromFigmaNode(node.figmaNode)),
+        )
+      }
+      if (data.meta?.failed_nodes) {
+        data.meta.failed_nodes.forEach((node) =>
+          allFailedNodes.set(getKeyFromFigmaNode(node.figmaNode), node.reason),
+        )
+      }
     }
 
-    const docsByLabel = docs.reduce(
-      (acc, doc) => {
-        if (acc[doc.label]) {
-          acc[doc.label].push(doc)
-        } else {
-          acc[doc.label] = [doc]
-        }
-        return acc
-      },
-      {} as Record<string, CodeConnectJSON[]>,
-    )
+    // Separate successful and failed uploads
+    const successfulDocsByLabel: Record<string, CodeConnectJSON[]> = {}
+    const failedDocsByLabel: Record<string, Array<{ doc: CodeConnectJSON; reason: string }>> = {}
 
-    for (const [label, docs] of Object.entries(docsByLabel)) {
+    for (const [mapKey, nodeDocs] of docsMap.entries()) {
+      for (const doc of nodeDocs) {
+        const label = doc.label
+        const docKey = getKeyFromFigmaNode(doc.figmaNode)
+        const isUploaded = allUploadedNodes.has(docKey)
+        const failureReason = allFailedNodes.get(docKey)
+
+        if (isUploaded) {
+          if (!successfulDocsByLabel[label]) {
+            successfulDocsByLabel[label] = []
+          }
+          successfulDocsByLabel[label].push(doc)
+        } else if (failureReason) {
+          if (!failedDocsByLabel[label]) {
+            failedDocsByLabel[label] = []
+          }
+          failedDocsByLabel[label].push({ doc, reason: failureReason })
+        }
+      }
+    }
+
+    for (const [label, docs] of Object.entries(successfulDocsByLabel)) {
       logger.info(
         `Successfully uploaded to Figma, for ${label}:\n${docs.map((doc) => `-> ${codeConnectStr(doc)}`).join('\n')}`,
       )
+    }
+
+    if (Object.keys(failedDocsByLabel).length > 0) {
+      for (const [label, failedItems] of Object.entries(failedDocsByLabel)) {
+        logger.error(
+          `Failed to upload to Figma, for ${label}:\n${failedItems.map((item) => `-> ${codeConnectStr(item.doc)} (${item.reason})`).join('\n')}`,
+        )
+      }
     }
   } catch (err) {
     if (isFetchError(err)) {
