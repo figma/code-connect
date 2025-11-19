@@ -212,7 +212,7 @@
 "@ai-sdk/azure" = "1.2.5"
 "@ai-sdk/cerebras" = "0.2.16"
 "@ai-sdk/fireworks" = "0.2.16"
-"@ai-sdk/google" = "1.1.25"
+"@ai-sdk/google" = "1.2.22"
 "@ai-sdk/google-vertex" = "2.2.27"
 "@ai-sdk/openai" = "1.2.5"
 "@ai-sdk/provider" = "1.1.3"
