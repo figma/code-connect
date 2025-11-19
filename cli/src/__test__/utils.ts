@@ -15,6 +15,8 @@ export function tidyStdOutput(input: string): string {
       .replace(/^\n+/, '')
       // remove any trailing newlines
       .replace(/\n+$/, '')
+      // remove npm warnings that can appear in CI/different environments
+      .replace(/^npm warn[^\n]*\n*/gm, '')
       .split('\n')
       // trim trailing space only
       .map((line: string) => line.replace(/\s+$/, ''))

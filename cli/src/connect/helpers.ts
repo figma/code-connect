@@ -1,6 +1,7 @@
 import { FigmaRestApi } from './figma_rest_api'
 import * as url from 'url'
 import { logger } from '../common/logging'
+import { BaseCodeConnectObject } from './figma_connect'
 
 const guidRegex = /^I?[0-9]+:[0-9]+(;[0-9]+:[0-9]+)*$/
 
@@ -108,4 +109,29 @@ export function normalizePropName(name: string) {
 export function exitWithFeedbackMessage(exitCode: number): never {
   logger.info('Please raise any bugs or feedback at https://github.com/figma/code-connect/issues.')
   process.exit(exitCode)
+}
+
+/**
+ * Deduplicates Code Connect documents based on figmaNode + template.
+ * The template contains the actual code example and is unique per component.
+ * This allows multiple different code components to map to the same Figma node,
+ * while preventing the same component from being duplicated in multi-module projects.
+ *
+ * @param docs Array of Code Connect documents to deduplicate
+ * @returns Deduplicated array of Code Connect documents
+ */
+export function deduplicateCodeConnectDocs<T extends BaseCodeConnectObject>(docs: T[]): T[] {
+  const uniqueDocsMap = new Map<string, T>()
+
+  for (const doc of docs) {
+    const dedupeKey = JSON.stringify({
+      figmaNode: doc.figmaNode,
+      template: doc.template,
+    })
+    if (!uniqueDocsMap.has(dedupeKey)) {
+      uniqueDocsMap.set(dedupeKey, doc)
+    }
+  }
+
+  return Array.from(uniqueDocsMap.values())
 }

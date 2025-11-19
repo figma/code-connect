@@ -6,6 +6,7 @@ import {
   CodeConnectExecutableParser,
   CodeConnectParser,
 } from './project'
+import { deduplicateCodeConnectDocs } from './helpers'
 import {
   ParserExecutableMessages,
   ParserRequestPayload,
@@ -183,10 +184,7 @@ export async function callParser(
                 // Filter for .json files only
                 const jsonFiles = files.filter((f) => f.endsWith('.json'))
                 let allMessages: z.infer<typeof ParserExecutableMessages> = []
-                const uniqueDocsMap = new Map<
-                  string,
-                  z.infer<typeof ParseResponsePayload>['docs'][number]
-                >()
+                let allDocs: z.infer<typeof ParseResponsePayload>['docs'] = []
                 let allCreatedFiles: z.infer<typeof CreateResponsePayload>['createdFiles'] = []
 
                 for (const file of jsonFiles) {
@@ -195,19 +193,7 @@ export async function callParser(
                     const content = fs.readFileSync(filePath, 'utf8')
                     const parsed = JSON.parse(content)
                     if (Array.isArray(parsed.docs)) {
-                      // Deduplicate docs based on figmaNode + template
-                      // The template contains the actual code example and is unique per component.
-                      // This allows multiple different code components to map to the same Figma node,
-                      // while preventing the same component from being duplicated in multi-module projects.
-                      for (const doc of parsed.docs) {
-                        const dedupeKey = JSON.stringify({
-                          figmaNode: doc.figmaNode,
-                          template: doc.template,
-                        })
-                        if (!uniqueDocsMap.has(dedupeKey)) {
-                          uniqueDocsMap.set(dedupeKey, doc)
-                        }
-                      }
+                      allDocs = allDocs.concat(parsed.docs)
                     }
                     if (Array.isArray(parsed.createdFiles)) {
                       allCreatedFiles = allCreatedFiles.concat(parsed.createdFiles)
@@ -220,7 +206,11 @@ export async function callParser(
                   }
                 }
 
-                const allDocs = Array.from(uniqueDocsMap.values())
+                // Deduplicate docs based on figmaNode + template
+                // The template contains the actual code example and is unique per component.
+                // This allows multiple different code components to map to the same Figma node,
+                // while preventing the same component from being duplicated in multi-module projects.
+                const deduplicatedDocs = deduplicateCodeConnectDocs(allDocs)
 
                 // Return the appropriate response based on the mode
                 if (payload.mode === 'CREATE') {
@@ -230,7 +220,7 @@ export async function callParser(
                   })
                 } else {
                   resolve({
-                    docs: allDocs,
+                    docs: deduplicatedDocs,
                     messages: allMessages,
                   })
                 }

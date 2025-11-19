@@ -23,7 +23,7 @@ import { fromError } from 'zod-validation-error'
 import { ParseRequestPayload, ParseResponsePayload } from '../connect/parser_executable_types'
 import z from 'zod'
 import { withUpdateCheck } from '../common/updates'
-import { exitWithFeedbackMessage } from '../connect/helpers'
+import { deduplicateCodeConnectDocs, exitWithFeedbackMessage } from '../connect/helpers'
 import { parseHtmlDoc } from '../html/parser'
 import {
   InternalError,
@@ -299,7 +299,9 @@ export async function getCodeConnectObjects(
     })
   }
 
-  return codeConnectObjects
+  // Deduplicate docs based on figmaNode + template to prevent duplicates across
+  // different parsers, multi-module projects, and no-parser templates
+  return deduplicateCodeConnectDocs(codeConnectObjects)
 }
 
 type GetCodeConnectObjectsArgs = {

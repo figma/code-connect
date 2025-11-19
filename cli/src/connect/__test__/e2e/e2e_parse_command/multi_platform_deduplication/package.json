@@ -1,0 +1,9 @@
+{
+  "name": "multi-platform-deduplication-test",
+  "version": "1.0.0",
+  "description": "Test fixture for multi-platform deduplication",
+  "dependencies": {
+    "@figma/code-connect": "*",
+    "react": "^18.0.0"
+  }
+}

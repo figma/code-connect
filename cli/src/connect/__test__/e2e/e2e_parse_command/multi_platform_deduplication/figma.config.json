@@ -1,0 +1,11 @@
+{
+  "codeConnect": {
+    "parser": "react",
+    "include": [
+      "react/**/*.figma.tsx",
+      "ios/**/*.figma.template.js",
+      "compose/**/*.figma.template.js"
+    ],
+    "exclude": []
+  }
+}
