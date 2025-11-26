@@ -1,10 +1,22 @@
+# Code Connect v1.3.12 (TBD)
+
+## Fixed
+
+### General
+
+# Code Connect v1.3.11 (26th November 2025)
+
+### Swift
+
+- Fixed a corner case where the swift parser generated invalid code-connect code.
+
 # Code Connect v1.3.10 (19th November 2025)
 
 ## Fixed
 
 ### General
 
-- Updated glob dependency to 11.0.4 to fix security vulnerability (https://github.com/figma/figma/pull/623532)
+- Updated glob dependency to 11.0.4 to fix security vulnerability
 
 # Code Connect v1.3.9 (14th November 2025)
 

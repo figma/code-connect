@@ -242,18 +242,39 @@ struct CodeConnectTemplateWriter {
             newSyntaxTree = rewriter.visit(newSyntaxTree)
         }
 
-        let rewrittenCode = newSyntaxTree.description.replaceConditionalTemplates(
+        var rewrittenCode = newSyntaxTree.description.replaceConditionalTemplates(
             conditionalTemplates: rewriter.conditionalTemplates
         ).replaceNestedInstancePlaceholders(
             nestedInstanceCalls: rewriter.nestedInstanceCalls
         ).trimmingCharacters(in: .whitespacesAndNewlines)
-        
+
+        // Fix double-wrapped template variables like ${${foo}} -> ${foo}
+        // This happens when ExprSyntax(stringLiteral: "${foo}") adds an extra wrapper (foo was already visited)
+        rewrittenCode = rewrittenCode.fixDoubleWrappedTemplateVariables()
+
         return "export default figma.swift`\(rewrittenCode)`"
     }
 }
 
 fileprivate extension String {
-    
+    // Fix double-wrapped template variables like ${${foo}} -> ${foo}
+    func fixDoubleWrappedTemplateVariables() -> String {
+        var result = self
+        var changed = true
+        while changed {
+            let before = result
+            // Match ${${ followed by anything that's not }, then }}
+            if let range = result.range(of: #"\$\{\$\{([^}]+)\}\}"#, options: .regularExpression) {
+                let match = String(result[range])
+                // Extract the variable name from ${${VAR}}
+                let varName = match.dropFirst(4).dropLast(2)  // Remove ${ at start and }} at end, leaving ${VAR
+                result.replaceSubrange(range, with: "${\(varName)}")
+            }
+            changed = (result != before)
+        }
+        return result
+    }
+
     /// In order to replace `figmaApply` and `hideDefault` calls, we use string substitution to find replacement strings and
     /// Insert the appropriate ternary expression.
     ///
