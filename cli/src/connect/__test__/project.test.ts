@@ -1,4 +1,9 @@
-import { CodeConnectReactConfig, getRemoteFileUrl, mapImportPath } from '../project'
+import {
+  CodeConnectReactConfig,
+  getRemoteFileUrl,
+  mapImportPath,
+  mapImportSpecifier,
+} from '../project'
 
 describe('Project helper functions', () => {
   function getConfig(importPaths: {}): CodeConnectReactConfig {
@@ -71,6 +76,95 @@ describe('Project helper functions', () => {
         getConfig({ importPaths: { 'icons/*': '@ui/icons', 'src/*': '@ui' } }),
       )
       expect(mapped).toEqual('@ui/icons')
+    })
+
+    it('Uses filename for index files (use mapImportSpecifier for better results)', () => {
+      // Note: mapImportPath uses the resolved file path, so index.ts files return 'index'.
+      // For better handling of path aliases, use mapImportSpecifier with the original specifier.
+      const mapped = mapImportPath(
+        '/Users/test/app/src/AlertTitle/index.ts',
+        getConfig({ importPaths: { 'src/*': '@acme/package/*' } }),
+      )
+      expect(mapped).toEqual('@acme/package/index')
+    })
+
+    it('Uses filename for nested index files', () => {
+      const mapped = mapImportPath(
+        '/Users/test/app/src/components/Button/index.tsx',
+        getConfig({ importPaths: { 'src/*': '@ui/*' } }),
+      )
+      expect(mapped).toEqual('@ui/index')
+    })
+
+    it('Uses filename when file is not an index file', () => {
+      const mapped = mapImportPath(
+        '/Users/test/app/src/AlertTitle/AlertTitle.tsx',
+        getConfig({ importPaths: { 'src/*': '@acme/package/*' } }),
+      )
+      expect(mapped).toEqual('@acme/package/AlertTitle')
+    })
+  })
+
+  describe('importSpecifier mappings', () => {
+    it('Transforms path alias with wildcard to package path', () => {
+      const mapped = mapImportSpecifier(
+        '@/AlertTitle',
+        getConfig({ importPaths: { '@/*': '@acme/package/*' } }),
+      )
+      expect(mapped).toEqual('@acme/package/AlertTitle')
+    })
+
+    it('Transforms nested path alias to package path', () => {
+      const mapped = mapImportSpecifier(
+        '@/components/Button',
+        getConfig({ importPaths: { '@/*': '@ui/*' } }),
+      )
+      expect(mapped).toEqual('@ui/components/Button')
+    })
+
+    it('Handles exact match without wildcard', () => {
+      const mapped = mapImportSpecifier(
+        '@/Button',
+        getConfig({ importPaths: { '@/Button': '@acme/Button' } }),
+      )
+      expect(mapped).toEqual('@acme/Button')
+    })
+
+    it('Handles wildcard replacement without output wildcard', () => {
+      const mapped = mapImportSpecifier(
+        '@/components/Button',
+        getConfig({ importPaths: { '@/*': '@ui' } }),
+      )
+      expect(mapped).toEqual('@ui')
+    })
+
+    it('Returns null for non-matching specifiers', () => {
+      const mapped = mapImportSpecifier(
+        './Button',
+        getConfig({ importPaths: { '@/*': '@acme/package/*' } }),
+      )
+      expect(mapped).toBeNull()
+    })
+
+    it('Matches first pattern when multiple patterns could match', () => {
+      const mapped = mapImportSpecifier(
+        '@/icons/icon',
+        getConfig({ importPaths: { '@/icons/*': '@ui/icons/*', '@/*': '@ui/*' } }),
+      )
+      expect(mapped).toEqual('@ui/icons/icon')
+    })
+
+    it('Returns null when no importPaths configured', () => {
+      const mapped = mapImportSpecifier('@/Button', getConfig({}))
+      expect(mapped).toBeNull()
+    })
+
+    it('Handles special regex characters in pattern', () => {
+      const mapped = mapImportSpecifier(
+        '@scope/package/Button',
+        getConfig({ importPaths: { '@scope/package/*': '@acme/*' } }),
+      )
+      expect(mapped).toEqual('@acme/Button')
     })
   })
 

@@ -6,7 +6,6 @@
     "target": "es6",
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "baseUrl": ".",
     "moduleResolution": "node",
     "paths": {
       "@components/*": ["*"] // enables us to use @components/MyComponent

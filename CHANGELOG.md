@@ -1,6 +1,9 @@
-# Code Connect v1.3.12 (TBD)
+# Code Connect v1.3.12
 
 ## Fixed
+
+- Fixed a problem with path alias imports incorrectly importing index files
+- Fixed parsing failure for Compose in Windows.
 
 ### General
 

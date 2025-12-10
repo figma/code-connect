@@ -100,7 +100,7 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
                             LightVirtualFile(
                                 "temp_file.kt",
                                 KotlinFileType.INSTANCE,
-                                tempFile.readText(),
+                                tempFile.readText().replace("\r\n", "\n"),
                             )
                         val ktFile =
                             PsiManager.getInstance(kotlinCoreEnvironment.project)

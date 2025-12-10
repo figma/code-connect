@@ -4,6 +4,7 @@ import {
   DEFAULT_LABEL_PER_PARSER,
   getRemoteFileUrl,
   mapImportPath,
+  mapImportSpecifier,
 } from '../connect/project'
 import { logger } from '../common/logging'
 import {
@@ -138,6 +139,7 @@ function getSourceFilesOfImportedIdentifiers(parserContext: ParserContext, _iden
   const imports: {
     statement: string
     file: string
+    moduleSpecifier: string
   }[] = []
 
   const identifiers = _identifiers.map((identifier) => identifier.split('.')[0])
@@ -156,6 +158,7 @@ function getSourceFilesOfImportedIdentifiers(parserContext: ParserContext, _iden
           imports.push({
             statement,
             file: resolvedImports[moduleSpecifier],
+            moduleSpecifier,
           })
         }
       }
@@ -174,6 +177,7 @@ function getSourceFilesOfImportedIdentifiers(parserContext: ParserContext, _iden
             imports.push({
               statement: statement.replace(/{.*}/s, `{ ${elements.join(', ')} }`),
               file: resolvedImports[moduleSpecifier],
+              moduleSpecifier,
             })
           }
         } else if (ts.isNamespaceImport(namedBindings)) {
@@ -183,6 +187,7 @@ function getSourceFilesOfImportedIdentifiers(parserContext: ParserContext, _iden
             imports.push({
               statement,
               file: resolvedImports[moduleSpecifier],
+              moduleSpecifier,
             })
           }
         }
@@ -618,6 +623,7 @@ export function parseValueRenderFunction(
   let imports: {
     statement: string
     file: string
+    moduleSpecifier: string
   }[] = []
 
   const includeMetadata = propMappings && Object.keys(propMappings).length > 0
@@ -926,24 +932,41 @@ export async function parseReactDoc(
       // that the `figma.connect` call is in the same file as the component. In the latter
       // case - we'll want to generate one
       const fileName = metadata.source.split('/').pop()?.split('.')[0]
+      const relativeImportPath = `./${fileName}`
       imports = [
         {
-          statement: `import { ${metadata.component} } from './${fileName}'`,
+          statement: `import { ${metadata.component} } from '${relativeImportPath}'`,
           file: sourceFile.fileName,
+          moduleSpecifier: relativeImportPath,
         },
       ]
     }
 
-    mappedImports =
-      imports.map((imp) => {
-        if (config) {
-          const mappedPath = mapImportPath(imp.file, config)
-          if (mappedPath) {
-            return imp.statement.replace(/['"]([@\.\/a-zA-Z0-9_-]*)['"]/, `'${mappedPath}'`)
+    mappedImports = [
+      ...new Set(
+        imports.map((imp) => {
+          if (config) {
+            // First try to map the original import specifier directly (preserves user's intent)
+            // e.g., '@/AlertTitle' -> '@acme/package/AlertTitle'
+            if (typeof imp.moduleSpecifier === 'string') {
+              const mappedFromSpecifier = mapImportSpecifier(imp.moduleSpecifier, config)
+              if (mappedFromSpecifier) {
+                return imp.statement.replace(
+                  /['"]([@\.\/a-zA-Z0-9_-]*)['"]/,
+                  `'${mappedFromSpecifier}'`,
+                )
+              }
+            }
+            // Fall back to mapping based on resolved file path (for relative imports)
+            const mappedPath = mapImportPath(imp.file, config)
+            if (mappedPath) {
+              return imp.statement.replace(/['"]([@\.\/a-zA-Z0-9_-]*)['"]/, `'${mappedPath}'`)
+            }
           }
-        }
-        return imp.statement
-      }) ?? []
+          return imp.statement
+        }),
+      ),
+    ]
   }
 
   if (mappedImports.length === 0 && metadata?.component) {

@@ -826,11 +826,50 @@ export function mapImportPath(filePath: string, config: CodeConnectReactConfig):
     }
 
     // If the mapped path ends with a wildcard we want to keep the filename in
-    // the final path (for non-index imports)
+    // the final path
     if (isMatch(patternParts, pathParts)) {
-      return value.endsWith('*') ? `${value.slice(0, -1)}${pathParts[0].split('.')[0]}` : value
+      if (value.endsWith('*')) {
+        const filename = pathParts[0].split('.')[0]
+        return `${value.slice(0, -1)}${filename}`
+      }
+      return value
     }
   }
 
+  return null
+}
+
+/**
+ * Transform an import specifier (the path in the import statement) using importPaths config.
+ * This works directly on the module specifier from the source code, preserving the user's intent.
+ *
+ * E.g., '@/AlertTitle' with config { "@/*": "@acme/package/*" } → '@acme/package/AlertTitle'
+ *
+ * @param specifier The original import specifier from the source file (e.g., '@/AlertTitle', './Button')
+ * @param config The Code Connect config containing importPaths
+ * @returns The transformed import path, or null if no mapping matched
+ */
+export function mapImportSpecifier(
+  specifier: string,
+  config: CodeConnectReactConfig,
+): string | null {
+  for (const [pattern, replacement] of Object.entries(config.importPaths || {})) {
+    // Convert glob pattern to regex: @/* → ^@/(.*)$
+    // First escape special regex chars, then convert * to capture group
+    const regexPattern = pattern
+      .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // Escape special chars except *
+      .replace(/\*/g, '(.*)') // Convert * to capture group
+    const regex = new RegExp(`^${regexPattern}$`)
+    const match = specifier.match(regex)
+
+    if (match) {
+      // Replace * in replacement with captured group
+      let result = replacement
+      if (match[1] !== undefined) {
+        result = replacement.replace('*', match[1])
+      }
+      return result
+    }
+  }
   return null
 }
