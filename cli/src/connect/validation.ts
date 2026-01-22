@@ -1,5 +1,5 @@
 import * as url from 'url'
-import { chunk } from 'lodash'
+import chunk from 'lodash.chunk'
 
 import { CodeConnectJSON } from '../connect/figma_connect'
 import { logger } from '../common/logging'
