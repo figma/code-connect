@@ -11,9 +11,22 @@ export function getApiUrl(figmaNode: string, apiUrlOverride?: string) {
   return 'https://api.figma.com/v1'
 }
 
+/**
+ * Returns the appropriate headers for Figma API requests.
+ *
+ * Figma supports two authentication methods with different headers:
+ * - Personal Access Tokens (PAT): `X-Figma-Token` header
+ * - OAuth2 access tokens: `Authorization: Bearer` header
+ *
+ * OAuth2 tokens are detected by their `figu_` prefix.
+ *
+ * @see https://developers.figma.com/docs/rest-api/authentication/
+ */
 export function getHeaders(accessToken: string) {
   return {
-    'X-Figma-Token': accessToken,
+    ...(accessToken.startsWith('figu_')
+      ? { Authorization: `Bearer ${accessToken}` }
+      : { 'X-Figma-Token': accessToken }),
     'Content-Type': 'application/json',
     'User-Agent': `code-connect-cli/${version}`,
   }
