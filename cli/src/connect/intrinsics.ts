@@ -465,11 +465,21 @@ export function parseIntrinsic(exp: ts.CallExpression, parserContext: ParserCont
 }
 
 /**
- * Replace newlines in enum values with \\n so that we don't output
- * broken JS with newlines inside the string
+ * Escape characters that would break single-quoted JS string literals.
+ * Used for property names, layer names, and enum values interpolated
+ * into generated template code.
  */
-function replaceNewlines(str: string) {
-  return str.toString().replaceAll('\n', '\\n').replaceAll("'", "\\'")
+function escapeForSingleQuotedString(str: string) {
+  return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')
+}
+
+/**
+ * Escape characters that would break double-quoted JS string literals.
+ * Used for mapping keys and layer names interpolated into generated
+ * template code within double quotes.
+ */
+function escapeForDoubleQuotedString(str: string) {
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
 }
 
 export function valueToString(value: ValueMappingKind, childLayer?: string) {
@@ -478,7 +488,7 @@ export function valueToString(value: ValueMappingKind, childLayer?: string) {
   }
 
   if (typeof value === 'string') {
-    return `'${replaceNewlines(value)}'`
+    return `'${escapeForSingleQuotedString(value)}'`
   }
 
   if ('kind' in value) {
@@ -488,7 +498,7 @@ export function valueToString(value: ValueMappingKind, childLayer?: string) {
 
   // Convert objects to strings
   const str = typeof value.$value === 'string' ? value.$value : `${JSON.stringify(value.$value)}`
-  const v = replaceNewlines(str)
+  const v = escapeForSingleQuotedString(str)
 
   switch (value.$type) {
     case 'function':
@@ -517,7 +527,7 @@ export function valueMappingToString(valueMapping: ValueMapping, childLayer?: st
     '{\n' +
     Object.entries(valueMapping)
       .map(([key, value]) => {
-        return `"${key}": ${valueToString(value, childLayer)}`
+        return `"${escapeForDoubleQuotedString(key)}": ${valueToString(value, childLayer)}`
       })
       .join(',\n') +
     '}'
@@ -533,47 +543,49 @@ export function intrinsicToString(
   const selector = childLayer ?? `figma.currentLayer`
   switch (kind) {
     case IntrinsicKind.String:
-      return `${selector}.__properties__.string('${args.figmaPropName}')`
+      return `${selector}.__properties__.string('${escapeForSingleQuotedString(args.figmaPropName)}')`
     case IntrinsicKind.Instance: {
       // Outputs:
       // `const propName = figma.properties.string('propName')`, or
       // `const propName = figma.properties.boolean('propName')`, or
       // `const propName = figma.properties.instance('propName')`
+      const escapedName = escapeForSingleQuotedString(args.figmaPropName)
       if (modifiers.length > 0) {
-        const instance = `${selector}.__properties__.__instance__('${args.figmaPropName}')`
+        const instance = `${selector}.__properties__.__instance__('${escapedName}')`
         let body = `const instance = ${instance}\n`
         body += `return instance && instance.type !== "ERROR" ? ${['instance', ...modifiers.map(modifierToString)].join('.')} : instance`
         return `(function () {${body}})()`
       }
-      return `${selector}.__properties__.instance('${args.figmaPropName}')`
+      return `${selector}.__properties__.instance('${escapedName}')`
     }
     case IntrinsicKind.Boolean: {
+      const escapedName = escapeForSingleQuotedString(args.figmaPropName)
       if (args.valueMapping) {
         const mappingString = valueMappingToString(args.valueMapping, childLayer)
         // Outputs: `const propName = figma.properties.boolean('propName', { ... mapping object from above ... })`
-        return `${selector}.__properties__.boolean('${args.figmaPropName}', ${mappingString})`
+        return `${selector}.__properties__.boolean('${escapedName}', ${mappingString})`
       }
-      return `${selector}.__properties__.boolean('${args.figmaPropName}')`
+      return `${selector}.__properties__.boolean('${escapedName}')`
     }
     case IntrinsicKind.Enum: {
       const mappingString = valueMappingToString(args.valueMapping, childLayer)
 
       // Outputs: `const propName = figma.properties.enum('propName', { ... mapping object from above ... })`
-      return `${selector}.__properties__.enum('${args.figmaPropName}', ${mappingString})`
+      return `${selector}.__properties__.enum('${escapeForSingleQuotedString(args.figmaPropName)}', ${mappingString})`
     }
     case IntrinsicKind.Slot: {
-      return `${selector}.__properties__.slot('${args.figmaPropName}')`
+      return `${selector}.__properties__.slot('${escapeForSingleQuotedString(args.figmaPropName)}')`
     }
     case IntrinsicKind.Children: {
       // Outputs: `const propName = figma.properties.children(["Layer 1", "Layer 2"])`
-      return `${selector}.__properties__.children([${args.layers.map((layerName) => `"${layerName}"`).join(',')}])`
+      return `${selector}.__properties__.children([${args.layers.map((layerName) => `"${escapeForDoubleQuotedString(layerName)}"`).join(',')}])`
     }
     case IntrinsicKind.ClassName: {
       // Outputs: `const propName = ['btn-base', figma.currentLayer.__properties__.enum('Size, { Large: 'btn-large' })].join(" ")`
-      return `[${args.className.map((className) => (typeof className === 'string' ? `"${className}"` : `${intrinsicToString(className, childLayer)}`)).join(', ')}].filter(v => !!v).join(' ')`
+      return `[${args.className.map((className) => (typeof className === 'string' ? `"${escapeForDoubleQuotedString(className)}"` : `${intrinsicToString(className, childLayer)}`)).join(', ')}].filter(v => !!v).join(' ')`
     }
     case IntrinsicKind.TextContent: {
-      return `${selector}.__findChildWithCriteria__({ name: '${args.layer}', type: "TEXT" }).__render__()`
+      return `${selector}.__findChildWithCriteria__({ name: '${escapeForSingleQuotedString(args.layer)}', type: "TEXT" }).__render__()`
     }
     case IntrinsicKind.NestedProps: {
       let body: string = ''
@@ -583,7 +595,7 @@ export function intrinsicToString(
       // for each nested layer reference instead. The only reason it's wrapped in a funciton
       // currently is to keep the error checking out of global scope
       const nestedLayerRef = `nestedLayer${nestedLayerCount++}`
-      body += `const ${nestedLayerRef} = figma.currentLayer.__find__("${args.layer}")\n`
+      body += `const ${nestedLayerRef} = figma.currentLayer.__find__("${escapeForDoubleQuotedString(args.layer)}")\n`
       body += `return ${nestedLayerRef}.type === "ERROR" ? ${nestedLayerRef} : {
 ${Object.entries(args.props).map(
   ([key, intrinsic]) => `${key}: ${intrinsicToString(intrinsic, nestedLayerRef)}\n`,

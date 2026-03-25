@@ -375,6 +375,45 @@ describe('Parser (JS templates)', () => {
     ])
   })
 
+  it('Escapes special characters in Figma property names so generated template code is valid JS', async () => {
+    const result = await testParse('SpecialCharProps.figma.tsx')
+
+    expect(result).toMatchObject([
+      {
+        figmaNode: 'specialCharProps',
+        label: 'React',
+        language: 'typescript',
+        component: 'Button',
+        source: expect.stringMatching(
+          getFileInRepositoryRegex('cli/src/react/__test__/components/TestComponents.tsx'),
+        ),
+        sourceLocation: { line: 12 },
+        template: getExpectedTemplate('SpecialCharProps'),
+        templateData: {
+          props: {
+            label: { kind: 'string', args: { figmaPropName: "Tab's number" } },
+            variant: {
+              kind: 'enum',
+              args: {
+                figmaPropName: "it's variant",
+                valueMapping: {
+                  Primary: 'primary',
+                  "It's secondary": 'secondary',
+                  'He said "hello"': 'quoted',
+                },
+              },
+            },
+            disabled: {
+              kind: 'boolean',
+              args: { figmaPropName: "it's disabled" },
+            },
+          },
+          imports: ["import { Button } from './components/TestComponents'"],
+        },
+      },
+    ])
+  })
+
   it('handles enum-like boolean props with values for false', async () => {
     const result = await testParse('EnumLikeBooleanFalseProp.figma.tsx')
 
