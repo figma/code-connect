@@ -107,7 +107,7 @@ class FigmaCodeConnectPlugin : Plugin<Project> {
                                 .findFile(file) as KtFile
 
                         val parserResult = CodeConnectParser.parseFile(ktFile, codeConnectParserParseInput.config.skipTemplateHelpers)
-                        documents.addAll(parserResult.docs)
+                        documents.addAll(parserResult.docs.map { it.copy(_codeConnectFilePath = path) })
                         messages.addAll(parserResult.messages)
                         // Get all the line numbers for all @Composable functions to assign a SourceLocation
                         composableImportsAndSourceLocations.putAll(

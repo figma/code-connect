@@ -26,6 +26,7 @@ import z from 'zod'
 import path from 'path'
 import { withUpdateCheck } from '../common/updates'
 import { applyDocumentUrlSubstitutions, exitWithFeedbackMessage } from '../connect/helpers'
+import { filterProjectInfoByFile } from './filter_project_info'
 import { parseHtmlDoc } from '../html/parser'
 import {
   InternalError,
@@ -54,11 +55,12 @@ export type BaseCommand = commander.Command & {
   config: string
   dryRun: boolean
   dir: string
+  file: string
   jsonFile: string
   skipUpdateCheck: boolean
   exitOnUnreadableFiles: boolean
   apiUrl?: string
-  removeProps?: boolean
+  includeProps?: boolean
 }
 
 function addBaseCommand(command: commander.Command, name: string, description: string) {
@@ -67,6 +69,7 @@ function addBaseCommand(command: commander.Command, name: string, description: s
     .description(description)
     .usage('[options]')
     .option('-r --dir <dir>', 'directory to parse')
+    .option('-f --file <file>', 'path to a single Code Connect file to process')
     .option('-t --token <token>', 'figma access token')
     .option('-v --verbose', 'enable verbose logging for debugging')
     .option('-o --outFile <file>', 'specify a file to output generated Code Connect')
@@ -151,24 +154,23 @@ export function addConnectCommandToProgram(program: commander.Command) {
     'Parse Code Connect files and migrate their templates into .figma.js files that can be published directly without parsing.',
   )
     .argument('[pattern]', 'glob pattern to match files (optional, uses config if not provided)')
-    .option('-l --label <label>', 'label to apply to the migrated templates')
     .option(
-      '--output-dir <dir>',
-      'directory to write template files (default: same directory as source file)',
+      '--include-props',
+      'preserve __props metadata blocks in migrated templates (removed by default). Use if your templates use the React .getProps() or .render() modifiers, or read executeTemplate().metadata.__props from the migrated components',
     )
-    .option('--remove-props', 'remove __props metadata blocks from migrated templates')
     .option(
-      '--typescript',
-      'output migrated templates as TypeScript (.figma.ts) instead of JavaScript (.figma.js)',
+      '--javascript',
+      'output migrated templates as JavaScript (.figma.js) instead of TypeScript (.figma.ts)',
     )
     .action(withUpdateCheck(handleMigrate))
+
 }
 
 export function getAccessToken(cmd: BaseCommand) {
   return cmd.token ?? process.env.FIGMA_ACCESS_TOKEN
 }
 
-function getAccessTokenOrExit(cmd: BaseCommand) {
+export function getAccessTokenOrExit(cmd: BaseCommand) {
   const token = getAccessToken(cmd)
 
   if (!token) {
@@ -184,7 +186,7 @@ export function getDir(cmd: BaseCommand) {
   return cmd.dir ?? process.cwd()
 }
 
-function setupHandler(cmd: BaseCommand) {
+export function setupHandler(cmd: BaseCommand) {
   if (cmd.verbose) {
     logger.setLogLevel(LogLevel.Debug)
   }
@@ -226,7 +228,7 @@ export async function getCodeConnectObjects(
   cmd: BaseCommand & { label?: string },
   projectInfo: ProjectInfo,
   silent = false,
-  skipTemplateHelpers = false,
+  isForMigration = false,
 ): Promise<CodeConnectJSON[]> {
   if (cmd.jsonFile) {
     try {
@@ -248,7 +250,7 @@ export async function getCodeConnectObjects(
       projectInfo as ProjectInfo<CodeConnectReactConfig>,
       cmd,
       silent,
-      skipTemplateHelpers,
+      isForMigration,
     )
   } else if (projectInfo.config.parser === 'html') {
     codeConnectObjects = await getCodeConnectObjectsFromParseFn({
@@ -257,13 +259,13 @@ export async function getCodeConnectObjects(
       projectInfo,
       cmd,
       silent,
-      skipTemplateHelpers,
+      isForMigration,
     })
   } else {
     const payload: ParseRequestPayload = {
       mode: 'PARSE',
       paths: projectInfo.files,
-      config: { ...projectInfo.config, skipTemplateHelpers },
+      config: { ...projectInfo.config, skipTemplateHelpers: isForMigration },
       verbose: cmd.verbose,
     }
 
@@ -361,7 +363,7 @@ type GetCodeConnectObjectsArgs = {
   projectInfo: ProjectInfo<CodeConnectConfig>
   cmd: BaseCommand
   silent?: boolean
-  skipTemplateHelpers?: boolean
+  isForMigration?: boolean
 }
 
 // React/Storybook and HTML parsers are handled as special cases for now, they
@@ -380,8 +382,8 @@ async function getCodeConnectObjectsFromParseFn({
   cmd,
   /** Silences console output */
   silent = false,
-  /** Skip template helpers (used for extract command) */
-  skipTemplateHelpers = false,
+  /** Whether this parse is for the migrate command */
+  isForMigration = false,
 }: GetCodeConnectObjectsArgs) {
   const codeConnectObjects: CodeConnectJSON[] = []
 
@@ -401,7 +403,7 @@ async function getCodeConnectObjectsFromParseFn({
           repoUrl: remoteUrl,
           debug: cmd.verbose,
           silent,
-          skipTemplateHelpers,
+          isForMigration,
         },
       })
 
@@ -440,7 +442,7 @@ async function getReactCodeConnectObjects(
   projectInfo: ProjectInfo<CodeConnectReactConfig>,
   cmd: BaseCommand,
   silent = false,
-  skipTemplateHelpers = false,
+  isForMigration = false,
 ) {
   const codeConnectObjects = await getCodeConnectObjectsFromParseFn({
     parseFn: parseReactDoc,
@@ -449,11 +451,12 @@ async function getReactCodeConnectObjects(
     projectInfo,
     cmd,
     silent,
-    skipTemplateHelpers,
+    isForMigration,
   })
 
   const storybookCodeConnectObjects = await convertStorybookFiles({
     projectInfo: getReactProjectInfo(projectInfo),
+    isForMigration,
   })
 
   const allCodeConnectObjects = codeConnectObjects.concat(storybookCodeConnectObjects)
@@ -480,7 +483,7 @@ async function handlePublish(
   }
 
   let dir = getDir(cmd)
-  const projectInfo = await getProjectInfo(dir, cmd.config)
+  const projectInfo = filterProjectInfoByFile(await getProjectInfo(dir, cmd.config), cmd.file)
 
   const codeConnectObjects = await getCodeConnectObjects(cmd, projectInfo)
 
@@ -552,7 +555,7 @@ async function handleUnpublish(cmd: BaseCommand & { node: string; label: string 
 
   let nodesToDeleteRelevantInfo
 
-  const projectInfo = await getProjectInfo(dir, cmd.config)
+  const projectInfo = filterProjectInfoByFile(await getProjectInfo(dir, cmd.config), cmd.file)
 
   if (cmd.node) {
     if (!cmd.label) {
@@ -598,7 +601,7 @@ async function handleParse(cmd: BaseCommand & { label: string; includeTemplateFi
   }
 
   const dir = cmd.dir ?? process.cwd()
-  const projectInfo = await getProjectInfo(dir, cmd.config)
+  const projectInfo = filterProjectInfoByFile(await getProjectInfo(dir, cmd.config), cmd.file)
 
   const codeConnectObjects = await getCodeConnectObjects(cmd, projectInfo)
 
@@ -649,7 +652,7 @@ async function handleCreate(nodeUrl: string, cmd: BaseCommand) {
  */
 async function handleMigrate(
   pattern: string | undefined,
-  cmd: BaseCommand & { typescript?: boolean },
+  cmd: BaseCommand & { javascript?: boolean },
 ) {
   setupHandler(cmd)
 
@@ -703,7 +706,7 @@ async function handleMigrate(
 
   const filePathsCreated = new Set<string>()
   const gitRootPath = getGitRepoAbsolutePath(dir)
-  const useTypeScript = !!cmd.typescript
+  const useTypeScript = !cmd.javascript
 
   for (const [figmaUrl, group] of Object.entries(codeConnectObjectsByFigmaUrl)) {
     try {
@@ -734,24 +737,18 @@ async function handleMigrate(
       }
 
       const { outputPath, skipped } = hasVariants
-        ? writeVariantTemplateFile(
-            group,
-            figmaUrl,
-            cmd.outDir,
-            dir,
+        ? writeVariantTemplateFile(group, figmaUrl, cmd.outDir, dir, {
             localSourcePath,
             filePathsCreated,
             useTypeScript,
-          )
-        : writeTemplateFile(
-            representativeDoc,
-            cmd.outDir,
-            dir,
+            includeProps: cmd.includeProps,
+          })
+        : writeTemplateFile(representativeDoc, cmd.outDir, dir, {
             localSourcePath,
             filePathsCreated,
-            cmd.removeProps,
+            includeProps: cmd.includeProps,
             useTypeScript,
-          )
+          })
 
       if (skipped) {
         logger.warn(`Skipping ${outputPath}: file already exists`)

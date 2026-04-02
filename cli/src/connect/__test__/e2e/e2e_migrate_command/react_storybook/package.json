@@ -1,0 +1,7 @@
+{
+  "name": "migrate-storybook-test",
+  "version": "1.0.0",
+  "dependencies": {
+    "react": "^18.3.1"
+  }
+}

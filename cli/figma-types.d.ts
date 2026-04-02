@@ -50,6 +50,7 @@ declare module 'figma' {
   export interface TextHandle {
     readonly type: 'TEXT'
     readonly name: string
+    readonly textContent: string
     __render__(): string
   }
 
@@ -117,7 +118,7 @@ declare module 'figma' {
       opts?: SelectorOptions,
     ): (InstanceHandle | ErrorHandle)[]
     findLayers(
-      selectorFn: (node: InstanceHandle) => boolean,
+      selectorFn: (node: InstanceHandle | TextHandle) => boolean,
       opts?: SelectorOptions,
     ): (InstanceHandle | TextHandle | ErrorHandle)[]
     executeTemplate(): {
@@ -194,10 +195,16 @@ declare module 'figma' {
         isReactComponentArray(prop: unknown): boolean
       }
       swift: {
-        renderChildren(children: ResultSection[], prefix: string): ResultSection[]
+        renderChildren(
+          children: ResultSection[] | string | undefined,
+          prefix: string,
+        ): ResultSection[]
       }
       kotlin: {
-        renderChildren(children: ResultSection[], prefix: string): ResultSection[]
+        renderChildren(
+          children: ResultSection[] | string | undefined,
+          prefix: string,
+        ): ResultSection[]
       }
     }
   }

@@ -8,6 +8,7 @@ import {
   prepareMigratedTemplate,
   groupCodeConnectObjectsByFigmaUrl,
   writeVariantTemplateFile,
+  getFilenameFromComponentName,
 } from '../migration_helpers'
 import { CodeConnectJSON } from '../figma_connect'
 import { SyntaxHighlightLanguage } from '../label_language_mapping'
@@ -655,15 +656,10 @@ export default figma.tsx\`<Button />\``,
       metadata: { cliVersion: '1.0.0' },
     }
 
-    const { outputPath } = writeTemplateFile(
-      doc,
-      tempDir,
-      tempDir,
-      undefined,
-      undefined,
-      false,
-      false,
-    )
+    const { outputPath } = writeTemplateFile(doc, tempDir, tempDir, {
+      includeProps: false,
+      useTypeScript: false,
+    })
     expect(outputPath).toMatch(/\.figma\.js$/)
   })
 
@@ -817,6 +813,89 @@ export default figma.tsx\`<Button>\${label}</Button>\``,
     expect(result).toContain('Button')
     expect(result).not.toContain('// url=')
   })
+
+  describe('TypeScript type assertion for .type !== "ERROR" checks', () => {
+    const baseDoc = (template: string): CodeConnectJSON => ({
+      figmaNode: 'https://figma.com/file/abc?node-id=1:1',
+      component: 'Button',
+      template,
+      templateData: { nestable: false },
+      language: SyntaxHighlightLanguage.TypeScript,
+      label: 'react',
+      metadata: { cliVersion: '1.0.0' },
+    })
+
+    it('adds type assertion when useTypeScript is true', () => {
+      const template = `const figma = require('figma')
+const align = figma.selectedInstance.getInstanceSwap('Align')
+const __props = {}
+if (align && align.type !== "ERROR") {
+  __props["align"] = align
+}
+export default { id: 'Button', example: figma.code\`<Button />\`, metadata: { nestable: false } }`
+      const result = prepareMigratedTemplate(baseDoc(template), true, true)
+      expect(result).toContain('(align as { type?: string }).type !== "ERROR"')
+      expect(result).not.toMatch(/align\.type !== "ERROR"/)
+    })
+
+    it('does NOT add type assertion when useTypeScript is false', () => {
+      const template = `const figma = require('figma')
+const align = figma.selectedInstance.getInstanceSwap('Align')
+const __props = {}
+if (align && align.type !== "ERROR") {
+  __props["align"] = align
+}
+export default { id: 'Button', example: figma.code\`<Button />\`, metadata: { nestable: false } }`
+      const result = prepareMigratedTemplate(baseDoc(template), true, false)
+      expect(result).not.toContain('as { type?: string }')
+      expect(result).toContain('align.type !== "ERROR"')
+    })
+
+    it('handles multiple props with .type !== "ERROR" checks', () => {
+      const template = `const figma = require('figma')
+const align = figma.selectedInstance.getInstanceSwap('Align')
+const children = figma.selectedInstance.getInstanceSwap('Children')
+const __props = {}
+if (align && align.type !== "ERROR") {
+  __props["align"] = align
+}
+if (children && children.type !== "ERROR") {
+  __props["children"] = children
+}
+export default { id: 'Button', example: figma.code\`<Button />\`, metadata: { nestable: false } }`
+      const result = prepareMigratedTemplate(baseDoc(template), true, true)
+      expect(result).toContain('(align as { type?: string }).type !== "ERROR"')
+      expect(result).toContain('(children as { type?: string }).type !== "ERROR"')
+      expect(result).not.toMatch(/\balign\.type !== "ERROR"/)
+      expect(result).not.toMatch(/\bchildren\.type !== "ERROR"/)
+    })
+
+    it('converts require("figma") with double quotes to import when useTypeScript is true', () => {
+      // getDefaultTemplate() in parser.ts generates require("figma") with double quotes
+      const template = `const figma = require("figma")
+
+export default figma.tsx\`<Button />\``
+      const result = prepareMigratedTemplate(baseDoc(template), false, true)
+      expect(result).toContain('import figma from "figma"')
+      expect(result).not.toContain('require(')
+    })
+  })
+
+  it('does not duplicate id when template already has id field', () => {
+    const doc: CodeConnectJSON = {
+      figmaNode: 'https://figma.com/file/abc?node-id=1:1',
+      component: 'Button',
+      template: `const figma = require('figma')
+export default { id: 'Button', example: figma.code\`<Button />\` }`,
+      templateData: { nestable: true },
+      language: SyntaxHighlightLanguage.TypeScript,
+      label: 'react',
+      metadata: { cliVersion: '1.0.0' },
+    }
+    const result = prepareMigratedTemplate(doc)
+    const idMatches = result.match(/\bid:/g)
+    expect(idMatches).toHaveLength(1)
+  })
 })
 
 describe('groupCodeConnectObjectsByFigmaUrl', () => {
@@ -874,14 +953,9 @@ export default { example: figma.tsx\`<ButtonPrimary />\` }`,
       metadata: { cliVersion: '1.0.0' },
     }
     const group = { main: null, variants: [variant] }
-    const { outputPath } = writeVariantTemplateFile(
-      group,
-      url,
-      tempDir,
-      tempDir,
-      undefined,
-      new Set(),
-    )
+    const { outputPath } = writeVariantTemplateFile(group, url, tempDir, tempDir, {
+      filePathsCreated: new Set(),
+    })
     expect(outputPath).toMatch(/\.figma\.ts$/)
   })
 
@@ -899,15 +973,10 @@ export default { example: figma.tsx\`<ButtonPrimary />\` }`,
       metadata: { cliVersion: '1.0.0' },
     }
     const group = { main: null, variants: [variant] }
-    const { outputPath } = writeVariantTemplateFile(
-      group,
-      url,
-      tempDir,
-      tempDir,
-      undefined,
-      new Set(),
-      false,
-    )
+    const { outputPath } = writeVariantTemplateFile(group, url, tempDir, tempDir, {
+      filePathsCreated: new Set(),
+      useTypeScript: false,
+    })
     expect(outputPath).toMatch(/\.figma\.js$/)
   })
 
@@ -940,14 +1009,9 @@ export default { example: figma.tsx\`<ButtonSecondary />\` }`,
       variants: [variantPrimary, variantSecondary],
     }
 
-    const { outputPath, skipped } = writeVariantTemplateFile(
-      group,
-      url,
-      tempDir,
-      tempDir,
-      undefined,
-      new Set(),
-    )
+    const { outputPath, skipped } = writeVariantTemplateFile(group, url, tempDir, tempDir, {
+      filePathsCreated: new Set(),
+    })
     expect(skipped).toBe(false)
 
     const content = fs.readFileSync(outputPath, 'utf-8')
@@ -955,7 +1019,7 @@ export default { example: figma.tsx\`<ButtonSecondary />\` }`,
     const expected = `// url=https://figma.com/file/abc?node-id=1:1
 // component=Button
 
-const figma = require("figma")
+import figma from "figma"
 
 // Branch per variant combination.
 
@@ -993,14 +1057,9 @@ export default { example: figma.tsx\`<ButtonPrimary />\` }`,
 export default { example: figma.tsx\`<ButtonSecondary />\` }`,
     }
     const group = { main: null, variants: [variantPrimary, variantSecondary] }
-    const { outputPath, skipped } = writeVariantTemplateFile(
-      group,
-      url,
-      tempDir,
-      tempDir,
-      undefined,
-      new Set(),
-    )
+    const { outputPath, skipped } = writeVariantTemplateFile(group, url, tempDir, tempDir, {
+      filePathsCreated: new Set(),
+    })
     expect(skipped).toBe(false)
     const content = fs.readFileSync(outputPath, 'utf-8')
     expect(content).toContain('no default')
@@ -1031,14 +1090,9 @@ export default { example: figma.tsx\`<ButtonPrimary>\${label}</ButtonPrimary>\` 
     }
     const group = { main, variants: [variantPrimary] }
 
-    const { outputPath, skipped } = writeVariantTemplateFile(
-      group,
-      url,
-      tempDir,
-      tempDir,
-      undefined,
-      new Set(),
-    )
+    const { outputPath, skipped } = writeVariantTemplateFile(group, url, tempDir, tempDir, {
+      filePathsCreated: new Set(),
+    })
     expect(skipped).toBe(false)
 
     const content = fs.readFileSync(outputPath, 'utf-8')
@@ -1083,14 +1137,9 @@ export default { example: figma.tsx\`<ButtonDanger disabled={\${disabled}}>\${la
     }
     const group = { main, variants: [variantPrimary, variantDanger] }
 
-    const { outputPath, skipped } = writeVariantTemplateFile(
-      group,
-      url,
-      tempDir,
-      tempDir,
-      undefined,
-      new Set(),
-    )
+    const { outputPath, skipped } = writeVariantTemplateFile(group, url, tempDir, tempDir, {
+      filePathsCreated: new Set(),
+    })
     expect(skipped).toBe(false)
 
     const content = fs.readFileSync(outputPath, 'utf-8')
@@ -1139,14 +1188,9 @@ export default { example: figma.tsx\`<Button type="warning">Warning</Button>\` }
     }
     const group = { main, variants: [variantDisabledInfo, variantEnabledWarning] }
 
-    const { outputPath, skipped } = writeVariantTemplateFile(
-      group,
-      url,
-      tempDir,
-      tempDir,
-      undefined,
-      new Set(),
-    )
+    const { outputPath, skipped } = writeVariantTemplateFile(group, url, tempDir, tempDir, {
+      filePathsCreated: new Set(),
+    })
     expect(skipped).toBe(false)
 
     const content = fs.readFileSync(outputPath, 'utf-8')
@@ -1159,5 +1203,41 @@ export default { example: figma.tsx\`<Button type="warning">Warning</Button>\` }
       /else if \([^)]*figma\.selectedInstance\.getPropertyValue\("disabled"\) === false[^)]*&&[^)]*figma\.selectedInstance\.getPropertyValue\("type"\) === "warning"[^)]*\)/,
     )
     expect(content).toContain('export default template')
+  })
+})
+
+describe('getFilenameFromComponentName', () => {
+  it('passes through simple alphanumeric names unchanged', () => {
+    expect(getFilenameFromComponentName('Button')).toBe('Button')
+    expect(getFilenameFromComponentName('MyButton')).toBe('MyButton')
+  })
+
+  it('preserves allowlisted special characters (hyphen, dot)', () => {
+    expect(getFilenameFromComponentName('my-button')).toBe('my-button')
+    expect(getFilenameFromComponentName('Button.swift')).toBe('Button.swift')
+  })
+
+  it('converts disallowed chars to underscore', () => {
+    expect(getFilenameFromComponentName('Button/Primary')).toBe('Button_Primary')
+    expect(getFilenameFromComponentName('Button (Large)')).toBe('Button_Large')
+  })
+
+  it('collapses multiple consecutive underscores into one', () => {
+    expect(getFilenameFromComponentName('Button  Large')).toBe('Button_Large')
+    expect(getFilenameFromComponentName('Foo / Bar')).toBe('Foo_Bar')
+  })
+
+  it('handles kotlin-style fully qualified names', () => {
+    expect(getFilenameFromComponentName('com.example.ButtonComponent')).toBe(
+      'com.example.ButtonComponent',
+    )
+  })
+
+  it('handles swift-style names with underscores', () => {
+    expect(getFilenameFromComponentName('ContentView_Previews')).toBe('ContentView_Previews')
+  })
+
+  it('strips leading and trailing underscores', () => {
+    expect(getFilenameFromComponentName('/Button/')).toBe('Button')
   })
 })

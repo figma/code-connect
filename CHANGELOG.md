@@ -1,3 +1,30 @@
+# Code Connect v1.4.3 (1st April 2026)
+
+## Fixed
+
+### Template files
+
+- Fixed `getBoolean()` returning `undefined` instead of `false` when a boolean property is set to `false` in a template file.
+- Fixed some TS discrepancies in the `figma.*` API in template files
+- Some fixes for the migration script
+
+### Swift & Compose
+
+- Fixed args inconsistency in Swift and Compose helpers that could cause errors during template rendering.
+
+## Features
+
+### CLI
+
+- Added `--file` (`-f`) option to `parse`, `publish`, and `unpublish` commands to process a single Code Connect file instead of the entire project (e.g. `figma connect parse --file=src/Button.figma.tsx`).
+
+### Template files
+
+- The `migrate` command now outputs TypeScript (`.figma.ts`) files by default. Pass `--javascript` to output JavaScript (`.figma.js`) files instead.
+- The `migrate` command now outputs `import figma from "figma"` (ESM syntax) when using the `--typescript` flag
+- The `migrate` command now removes `__props` metadata blocks by default. Pass `--include-props` to preserve them.
+- Storybook connections can now be migrated by the template migration script
+
 # Code Connect v1.4.2 (16th March 2026)
 
 ## Fixed
@@ -26,7 +53,7 @@
   - Type-only imports (`import type`) are supported
   - Other module imports are not yet supported
   - To enable types for the `figma` API, add `"@figma/code-connect/figma-types"` to the `types` array in your `tsconfig.json`.
-  - JavaScript files are the default output of the `migrate` command. Can pass `--typescript` to output TypeScript (`.figma.ts`) files instead.
+  - TypeScript files are the default output of the `migrate` command. Can pass `--javascript` to output JavaScript (`.figma.js`) files instead.
 
 # Code Connect v1.4.1 (20th February 2026)
 

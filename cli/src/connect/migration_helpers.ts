@@ -40,24 +40,31 @@ function writeTemplateFileCommon(
   return writeFileWithDuplicateHandling(baseOutputPath, fileContent, suffix, filePathsCreated)
 }
 
+export function getFilenameFromComponentName(componentName: string): string {
+  const allowlisted = /[a-zA-Z0-9\-\.]/
+  return componentName
+    .split('')
+    .map((ch) => (allowlisted.test(ch) ? ch : '_'))
+    .join('')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+}
+
 /**
  * Determines the base output path for a template file.
  * Shared logic between writeTemplateFile and writeVariantTemplateFile.
  */
 function determineOutputPath(
-  componentName: string,
+  rawComponentName: string,
   suffix: string,
   outputDir: string | undefined,
   baseDir: string,
   localSourcePath: string | undefined,
 ): string {
-  if (outputDir) {
-    // Use specified output directory
-    const filename = `${componentName}${suffix}`
-    return path.join(outputDir, filename)
-  } else if (localSourcePath) {
-    // Use same directory as local source file
-    const sourceDir = path.dirname(localSourcePath)
+  // Extract basename from localSourcePath when available, falling back to componentName
+  const componentFilename = getFilenameFromComponentName(rawComponentName)
+  let basename = componentFilename
+  if (localSourcePath) {
     let sourceBasename = path.basename(localSourcePath)
 
     // If this is a Code Connect file, extract the base component name
@@ -72,11 +79,18 @@ function determineOutputPath(
       sourceBasename = path.basename(localSourcePath, path.extname(localSourcePath))
     }
 
-    const filename = `${sourceBasename}${suffix}`
-    return path.join(sourceDir, filename)
+    basename = sourceBasename
+  }
+
+  if (outputDir) {
+    // Use specified output directory with basename derived from source path
+    return path.join(outputDir, `${basename}${suffix}`)
+  } else if (localSourcePath) {
+    // Use same directory as local source file
+    return path.join(path.dirname(localSourcePath), `${basename}${suffix}`)
   } else {
     // No source info, use current directory
-    const filename = `${componentName}${suffix}`
+    const filename = `${componentFilename}${suffix}`
     return path.join(baseDir, filename)
   }
 }
@@ -139,13 +153,13 @@ function writeFileWithDuplicateHandling(
 /** Migrates a doc's template (Swift helpers, server helpers, V2, id, imports, nestable) and returns the formatted string. */
 export function prepareMigratedTemplate(
   doc: CodeConnectJSON,
-  removeProps?: boolean,
+  includeProps = false,
   useTypeScript?: boolean,
 ): string {
   let template = doc.template
   template = removeSwiftHelpers(template)
   template = migrateTemplateToUseServerSideHelpers(template)
-  if (removeProps) {
+  if (!includeProps) {
     template = removePropsDefinitionAndMetadata(template)
   }
   template = migrateV1TemplateToV2(template)
@@ -193,17 +207,26 @@ function removeSwiftHelpers(template: string): string {
   )
 }
 
+export type WriteTemplateFileOptions = {
+  localSourcePath?: string
+  filePathsCreated?: Set<string>
+  includeProps?: boolean
+  useTypeScript?: boolean
+}
+
 export function writeTemplateFile(
   doc: CodeConnectJSON,
   outputDir: string | undefined,
   baseDir: string,
-  localSourcePath?: string,
-  filePathsCreated?: Set<string>,
-  removeProps?: boolean,
-  useTypeScript = true,
+  {
+    localSourcePath,
+    filePathsCreated,
+    includeProps = false,
+    useTypeScript = true,
+  }: WriteTemplateFileOptions = {},
 ): { outputPath: string; skipped: boolean } {
   const componentName = doc.component || 'template'
-  const template = prepareMigratedTemplate(doc, removeProps, useTypeScript)
+  const template = prepareMigratedTemplate(doc, includeProps, useTypeScript)
 
   // Build comment header lines
   const commentLines: string[] = [`// url=${doc.figmaNode}`]
@@ -253,6 +276,10 @@ export function migrateTemplateToUseServerSideHelpers(template: string) {
 }
 
 export function addId(template: string, id: string): string {
+  // Don't add id if already present (e.g. when re-migrating a previously-migrated template)
+  if (/export default\s*\{\s*id:\s*['"]/.test(template)) {
+    return template
+  }
   return template.replace(/export default \{/, `export default { id: '${id}',`)
 }
 
@@ -458,9 +485,12 @@ export function writeVariantTemplateFile(
   figmaUrl: string,
   outputDir: string | undefined,
   baseDir: string,
-  localSourcePath?: string,
-  filePathsCreated?: Set<string>,
-  useTypeScript = true,
+  {
+    localSourcePath,
+    filePathsCreated,
+    useTypeScript = true,
+    includeProps = false,
+  }: WriteTemplateFileOptions = {},
 ): { outputPath: string; skipped: boolean } {
   const variantDocs = group.variants.map((v) => ({ doc: v, variant: v.variant }))
   const defaultDoc = group.main ? { doc: group.main, variant: null } : null
@@ -468,7 +498,9 @@ export function writeVariantTemplateFile(
 
   // Migrate templates and extract their full code (no deduplication)
   const allDocs = [...variantDocs, ...(defaultDoc ? [defaultDoc] : [])]
-  const migratedTemplates = allDocs.map(({ doc }) => prepareMigratedTemplate(doc, useTypeScript))
+  const migratedTemplates = allDocs.map(({ doc }) =>
+    prepareMigratedTemplate(doc, includeProps, useTypeScript),
+  )
   const exportDefaultPrefix = 'export default '
 
   // For each template, replace 'export default' with 'template =' and remove figma require
@@ -480,9 +512,13 @@ export function writeVariantTemplateFile(
     // Replace 'export default' with 'template ='
     let branchCode = t.replace(exportDefaultPrefix, 'template = ')
 
-    // Remove only the top-level figma require, keep everything else
+    // Remove only the top-level figma require/import, keep everything else
     const lines = branchCode.split('\n')
-    const filteredLines = lines.filter((line) => !line.trim().startsWith('const figma = require'))
+    const filteredLines = lines.filter(
+      (line) =>
+        !line.trim().startsWith('const figma = require') &&
+        !line.trim().startsWith('import figma from'),
+    )
 
     return filteredLines.join('\n').trim()
   })
@@ -517,7 +553,7 @@ export function writeVariantTemplateFile(
       : `// Branch per variant; no default, else first.`
 
   const templateBody = [
-    "const figma = require('figma')",
+    useTypeScript ? `import figma from "figma"` : `const figma = require('figma')`,
     '',
     variantComment,
     '',
@@ -555,5 +591,11 @@ export function writeVariantTemplateFile(
 }
 
 function convertSyntaxToTypeScript(template: string): string {
-  return template.replace(/const __props = {}/, 'const __props: Record<string, unknown> = {}')
+  return template
+    .replace(/const figma = require\(['"]figma['"]\)/, `import figma from "figma"`)
+    .replace(/const __props = {}/, 'const __props: Record<string, unknown> = {}')
+    .replace(
+      /if \((\w+) && \1\.type !== "ERROR"\)/g,
+      'if ($1 && ($1 as { type?: string }).type !== "ERROR")',
+    )
 }

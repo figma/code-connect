@@ -76,7 +76,8 @@ object CodeConnectExpectedOutputs {
         "file": "$filePath",
         "line": 58
       },
-      "source": ""
+      "source": "",
+      "_codeConnectFilePath": "$filePath"
     }
   ],
   "messages": []

@@ -14,7 +14,7 @@ describe('e2e test for `migrate` command', () => {
 
   async function runMigrate(cwd: string, extraArgs = '') {
     return await promisify(exec)(
-      `npx tsx ../../../../../cli connect migrate --skip-update-check --remove-props${extraArgs ? ' ' + extraArgs : ''}`,
+      `npx tsx ../../../../../cli connect migrate --skip-update-check${extraArgs ? ' ' + extraArgs : ''}`,
       {
         cwd,
       },
@@ -31,26 +31,26 @@ describe('e2e test for `migrate` command', () => {
     })
   }
 
-  it('successfully migrates React Code Connect files to parserless templates (JavaScript by default)', async () => {
+  it('successfully migrates React Code Connect files to parserless templates (TypeScript by default)', async () => {
     const testPath = getTestPath('react_basic')
 
     try {
       const result = await runMigrate(testPath)
 
-      // .figma.js files were created (not .figma.ts)
-      const buttonTemplatePath = path.join(testPath, 'Button.figma.js')
-      const avatarTemplatePath = path.join(testPath, 'Avatar.figma.js')
+      // .figma.ts files were created (not .figma.js)
+      const buttonTemplatePath = path.join(testPath, 'Button.figma.ts')
+      const avatarTemplatePath = path.join(testPath, 'Avatar.figma.ts')
       expect(existsSync(buttonTemplatePath)).toBe(true)
       expect(existsSync(avatarTemplatePath)).toBe(true)
-      expect(existsSync(path.join(testPath, 'Button.figma.ts'))).toBe(false)
-      expect(existsSync(path.join(testPath, 'Avatar.figma.ts'))).toBe(false)
+      expect(existsSync(path.join(testPath, 'Button.figma.js'))).toBe(false)
+      expect(existsSync(path.join(testPath, 'Avatar.figma.js'))).toBe(false)
 
       // Read generated files
       const buttonTemplate = readFileSync(buttonTemplatePath, 'utf-8')
       const avatarTemplate = readFileSync(avatarTemplatePath, 'utf-8')
 
       // Check key parts of output (v2 API, helpers, structure)
-      expect(buttonTemplate).toMatch(/const figma = require\("figma"\)/)
+      expect(buttonTemplate).toMatch(/import figma from "figma"/)
       expect(buttonTemplate).toMatch(/figma\.selectedInstance\.getString/)
       expect(buttonTemplate).toMatch(/figma\.selectedInstance\.getBoolean/)
       expect(buttonTemplate).toMatch(/figma\.helpers\.react\.renderProp/)
@@ -58,7 +58,7 @@ describe('e2e test for `migrate` command', () => {
         /export default \{[^]*id:[^]*imports:[^]*example:[^]*metadata:/,
       )
 
-      expect(avatarTemplate).toMatch(/const figma = require\("figma"\)/)
+      expect(avatarTemplate).toMatch(/import figma from "figma"/)
       expect(avatarTemplate).toMatch(/figma\.selectedInstance\.getString/)
       expect(avatarTemplate).toMatch(/figma\.helpers\.react\.renderProp/)
       expect(avatarTemplate).toMatch(/export default \{[^]*id:[^]*imports:[^]*example:/)
@@ -72,7 +72,7 @@ describe('e2e test for `migrate` command', () => {
       // Check that __props has been removed (no longer needed for parserless templates)
       expect(buttonTemplate).not.toContain('__props')
 
-      // Verify the generated .figma.js files are valid — parseRawFile should succeed
+      // Verify the generated .figma.ts files are valid — parseRawFile should succeed
       const buttonParsed = parseRawFile(buttonTemplatePath, undefined)
       expect(buttonParsed.figmaNode).toBeTruthy()
       expect(buttonParsed.template).toBeTruthy()
@@ -88,21 +88,21 @@ describe('e2e test for `migrate` command', () => {
     }
   })
 
-  it('outputs .figma.ts files when --typescript flag is passed', async () => {
+  it('outputs .figma.js files when --javascript flag is passed', async () => {
     const testPath = getTestPath('react_basic')
 
     try {
-      const result = await runMigrate(testPath, '--typescript')
+      const result = await runMigrate(testPath, '--javascript')
 
-      // .figma.ts files were created (not .figma.js)
-      const buttonTemplatePath = path.join(testPath, 'Button.figma.ts')
-      const avatarTemplatePath = path.join(testPath, 'Avatar.figma.ts')
+      // .figma.js files were created (not .figma.ts)
+      const buttonTemplatePath = path.join(testPath, 'Button.figma.js')
+      const avatarTemplatePath = path.join(testPath, 'Avatar.figma.js')
       expect(existsSync(buttonTemplatePath)).toBe(true)
       expect(existsSync(avatarTemplatePath)).toBe(true)
-      expect(existsSync(path.join(testPath, 'Button.figma.js'))).toBe(false)
-      expect(existsSync(path.join(testPath, 'Avatar.figma.js'))).toBe(false)
+      expect(existsSync(path.join(testPath, 'Button.figma.ts'))).toBe(false)
+      expect(existsSync(path.join(testPath, 'Avatar.figma.ts'))).toBe(false)
 
-      // Verify the generated .figma.ts files are valid — parseRawFile should succeed
+      // Verify the generated .figma.js files are valid — parseRawFile should succeed
       const buttonParsed = parseRawFile(buttonTemplatePath, undefined)
       expect(buttonParsed.figmaNode).toBeTruthy()
       expect(buttonParsed.template).toBeTruthy()
@@ -135,13 +135,47 @@ describe('e2e test for `migrate` command', () => {
     }
   })
 
+  it('migrates Storybook connections to parserless template files', async () => {
+    const testPath = getTestPath('react_storybook')
+    const templatePath = path.join(testPath, 'StorybookComponent.figma.ts')
+
+    try {
+      const result = await runMigrate(testPath)
+
+      expect(existsSync(templatePath)).toBe(true)
+
+      // Strip the source= line as it contains a repo-specific remote URL
+      const template = readFileSync(templatePath, 'utf-8').replace(/^\/\/ source=.*\n/m, '')
+      expect(template).toBe(
+        `// url=https://figma.com/test\n` +
+          `// component=StorybookComponent\n` +
+          `\n` +
+          `import figma from "figma"\n` +
+          `\n` +
+          `export default {\n` +
+          `  id: "StorybookComponent",\n` +
+          `  example: figma.code\`<StorybookComponent disabled={false}>Hello</StorybookComponent>\`,\n` +
+          `}\n`,
+      )
+
+      // Verify the file is parseable as a raw template
+      const parsed = parseRawFile(templatePath, undefined)
+      expect(parsed.figmaNode).toBe('https://figma.com/test')
+      expect(parsed.template).toBeTruthy()
+
+      expect(tidyStdOutput(result.stderr)).toContain('1 migrated')
+    } finally {
+      if (existsSync(templatePath)) rmSync(templatePath, { force: true })
+    }
+  })
+
   it('includes imports in the default export when migrating', async () => {
     const testPath = getTestPath('react_basic')
 
     try {
       const result = await runMigrate(testPath)
 
-      const buttonTemplatePath = path.join(testPath, 'Button.figma.js')
+      const buttonTemplatePath = path.join(testPath, 'Button.figma.ts')
       const buttonTemplate = readFileSync(buttonTemplatePath, 'utf-8')
 
       // Check imports are in correct position: id, imports, example

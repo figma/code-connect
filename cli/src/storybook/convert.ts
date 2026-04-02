@@ -43,6 +43,13 @@ interface ConvertStorybookFilesArgs {
    * Information about the project
    */
   projectInfo: ReactProjectInfo
+
+  /**
+   * Whether this conversion is for the migrate command. When true, template
+   * helper function definitions are omitted from the template (they will be
+   * replaced by server-side helpers during migration).
+   */
+  isForMigration?: boolean
 }
 
 /**
@@ -56,6 +63,7 @@ interface ConvertStorybookFilesArgs {
 export async function convertStorybookFiles({
   projectInfo,
   storiesGlob = '**/*.stories.tsx',
+  isForMigration = false,
 }: ConvertStorybookFilesArgs): Promise<CodeConnectJSON[]> {
   const { remoteUrl, config, files, tsProgram } = projectInfo
 
@@ -64,7 +72,14 @@ export async function convertStorybookFiles({
 
   return Promise.all(
     storyFiles.map((path) =>
-      convertStorybookFile({ path, tsProgram, config, remoteUrl, absPath: projectInfo.absPath }),
+      convertStorybookFile({
+        path,
+        tsProgram,
+        config,
+        remoteUrl,
+        absPath: projectInfo.absPath,
+        isForMigration,
+      }),
     ),
   )
     .then((f) => f.filter((x): x is NonNullable<typeof x> => Boolean(x)))
@@ -82,6 +97,7 @@ interface ConvertStorybookFileArgs {
   remoteUrl: string
   config: CodeConnectReactConfig
   absPath: string
+  isForMigration?: boolean
 }
 
 type MappedPropType = 'FigmaString' | 'FigmaBoolean' | 'Mapped'
@@ -93,6 +109,7 @@ async function convertStorybookFile({
   remoteUrl,
   config,
   absPath,
+  isForMigration = false,
 }: ConvertStorybookFileArgs): Promise<CodeConnectJSON[] | undefined> {
   const checker = tsProgram.getTypeChecker()
   const sourceFile = tsProgram.getSourceFile(path)
@@ -220,7 +237,12 @@ async function convertStorybookFile({
 
       const exampleProps = example?.props ?? propMappings
 
-      let render = parseJSXRenderFunction(statementToParse, parserContext, exampleProps)
+      let render = parseJSXRenderFunction(
+        statementToParse,
+        parserContext,
+        exampleProps,
+        isForMigration,
+      )
 
       if (!render) {
         continue

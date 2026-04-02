@@ -1,5 +1,6 @@
 package com.figma.code.connect.models
 
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -46,6 +47,8 @@ data class CodeConnectDocument(
     val label: String = "Compose",
     var sourceLocation: SourceLocation = SourceLocation(file = "", line = 0),
     val source: String = "",
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val _codeConnectFilePath: String? = null,
 )
 
 /**

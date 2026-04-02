@@ -229,6 +229,7 @@ export function visitPropReferencingNode({
  */
 export function getReferencedPropsForTemplate({
   propMappings = {},
+  isForMigration,
 }: {
   /** The prop mappings object */
   propMappings: PropMappings | undefined
@@ -236,13 +237,14 @@ export function getReferencedPropsForTemplate({
   exp: ts.Node
   /** The source file */
   sourceFile: ts.SourceFile
+  isForMigration?: boolean
 }) {
   let templateCode = ''
 
   if (Object.keys(propMappings).length > 0) {
     for (const prop in propMappings) {
       const propMapping = propMappings[prop]
-      templateCode += `const ${prop} = ${valueToString(propMapping)}\n`
+      templateCode += `const ${prop} = ${valueToString(propMapping, undefined, isForMigration)}\n`
     }
     templateCode += `const __props = {}\n`
     Object.keys(propMappings).forEach((prop) => {
@@ -415,7 +417,7 @@ export type ParseOptions = {
   repoUrl?: string
   debug?: boolean
   silent?: boolean
-  skipTemplateHelpers?: boolean
+  isForMigration?: boolean
 }
 
 export type ParseFn = (

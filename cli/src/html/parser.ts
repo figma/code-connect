@@ -204,7 +204,7 @@ export function parseExampleTemplate(
   exp: ts.ArrowFunction,
   parserContext: ParserContext,
   propMappings?: PropMappings,
-  skipTemplateHelpers?: boolean,
+  isForMigration?: boolean,
 ) {
   const { sourceFile } = parserContext
 
@@ -234,7 +234,7 @@ export function parseExampleTemplate(
     let exampleCode = printer.printNode(ts.EmitHint.Unspecified, exp.body, sourceFile)
 
     let templateCode = ''
-    if (!skipTemplateHelpers) {
+    if (!isForMigration) {
       templateCode = getParsedTemplateHelpersString() + '\n\n'
     }
 
@@ -244,6 +244,7 @@ export function parseExampleTemplate(
       propMappings,
       exp,
       sourceFile,
+      isForMigration,
     })
 
     exampleCode = exampleCode.replace(/`/g, '\\`')
@@ -423,7 +424,7 @@ export function parseExampleTemplate(
   }
 
   let templateCode = ''
-  if (!skipTemplateHelpers) {
+  if (!isForMigration) {
     templateCode = getParsedTemplateHelpersString() + '\n\n'
   }
 
@@ -433,6 +434,7 @@ export function parseExampleTemplate(
     propMappings,
     exp,
     sourceFile,
+    isForMigration,
   })
 
   templateCode += `export default figma.html\`${exampleCode}\`\n`
@@ -573,7 +575,7 @@ function parseConfigObjectArg(
 export async function parseHtmlDoc(
   node: ts.CallExpression,
   parserContext: ParserContext,
-  { skipTemplateHelpers }: ParseOptions,
+  { isForMigration }: ParseOptions,
 ): Promise<CodeConnectJSON> {
   const { checker, sourceFile, config } = parserContext
 
@@ -595,7 +597,7 @@ export async function parseHtmlDoc(
 
   const props = propsArg ? parsePropsObject(propsArg, parserContext) : undefined
   const render = exampleArg
-    ? parseExampleTemplate(exampleArg, parserContext, props, skipTemplateHelpers)
+    ? parseExampleTemplate(exampleArg, parserContext, props, isForMigration)
     : undefined
   const variant = variantArg ? parseVariant(variantArg, sourceFile, checker) : undefined
   const links = linksArg ? parseLinks(linksArg, parserContext) : undefined

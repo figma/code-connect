@@ -380,6 +380,8 @@ public enum CodeConnectParser {
                 let finder = FigmaConnectStructVisitor(importMapping: importMapping, baseUrl: url, skipTemplateHelpers: skipTemplateHelpers)
                 finder.walk(syntaxTree)
                 finder.docs.forEach { doc in
+                    var doc = doc
+                    doc._codeConnectFilePath = url.path
                     if let component = doc.component {
                         componentDefinitions.insert(component)
                     }

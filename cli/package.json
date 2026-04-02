@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -20,7 +20,7 @@
       "default": "./dist/react/index_react.js"
     },
     "./figma-types": {
-      "types": "./figma-module.d.ts"
+      "types": "./figma-types.d.ts"
     }
   },
   "repository": {
@@ -33,7 +33,7 @@
   },
   "files": [
     "dist/**/*",
-    "figma-module.d.ts"
+    "figma-types.d.ts"
   ],
   "engines": {
     "node": ">=18"

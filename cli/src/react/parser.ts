@@ -542,7 +542,7 @@ export function parseJSXRenderFunction(
   exp: ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration,
   parserContext: ParserContext,
   propMappings?: PropMappings,
-  skipTemplateHelpers?: boolean,
+  isForMigration?: boolean,
 ) {
   const { sourceFile } = parserContext
 
@@ -556,7 +556,7 @@ export function parseJSXRenderFunction(
 
   // Generate the template code
   // Inject React-specific template helper functions
-  if (!skipTemplateHelpers) {
+  if (!isForMigration) {
     templateCode = getParsedTemplateHelpersString() + '\n\n'
   }
 
@@ -569,6 +569,7 @@ export function parseJSXRenderFunction(
     propMappings,
     exp,
     sourceFile,
+    isForMigration,
   })
 
   const includeMetadata = propMappings && Object.keys(propMappings).length > 0
@@ -593,7 +594,7 @@ export function parseValueRenderFunction(
   exp: ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration,
   parserContext: ParserContext,
   propMappings?: PropMappings,
-  skipTemplateHelpers?: boolean,
+  isForMigration?: boolean,
 ) {
   const { sourceFile } = parserContext
   const printer = ts.createPrinter()
@@ -610,7 +611,7 @@ export function parseValueRenderFunction(
   let templateCode = ''
   // Generate the template code
   // Inject React-specific template helper functions
-  if (!skipTemplateHelpers) {
+  if (!isForMigration) {
     templateCode = getParsedTemplateHelpersString() + '\n\n'
   }
 
@@ -623,6 +624,7 @@ export function parseValueRenderFunction(
     propMappings,
     exp,
     sourceFile,
+    isForMigration,
   })
 
   // Escape backticks from the example code
@@ -890,7 +892,7 @@ export function getDefaultTemplate(
 export async function parseReactDoc(
   node: ts.CallExpression,
   parserContext: ParserContext,
-  { repoUrl, silent, skipTemplateHelpers }: ParseOptions,
+  { repoUrl, silent, isForMigration }: ParseOptions,
 ): Promise<CodeConnectJSON> {
   const { checker, sourceFile, config } = parserContext
 
@@ -914,8 +916,8 @@ export async function parseReactDoc(
   const props = propsArg ? parsePropsObject(propsArg, parserContext) : undefined
   const render = exampleArg
     ? findJSXElement(exampleArg)
-      ? parseJSXRenderFunction(exampleArg, parserContext, props, skipTemplateHelpers)
-      : parseValueRenderFunction(exampleArg, parserContext, props, skipTemplateHelpers)
+      ? parseJSXRenderFunction(exampleArg, parserContext, props, isForMigration)
+      : parseValueRenderFunction(exampleArg, parserContext, props, isForMigration)
     : undefined
   const variant = variantArg ? parseVariant(variantArg, sourceFile, checker) : undefined
   const links = linksArg ? parseLinks(linksArg, parserContext) : undefined
