@@ -2,7 +2,7 @@ import { BaseCommand, getAccessToken, getCodeConnectObjects, getDir } from '../.
 import prompts from 'prompts'
 import fs from 'fs'
 import { exitWithFeedbackMessage, findComponentsInDocument, parseFileKey } from '../helpers'
-import { FigmaRestApi, getApiUrl } from '../figma_rest_api'
+import { FigmaRestApi, getApiUrl, getHeaders } from '../figma_rest_api'
 import { exitWithError, logger, success } from '../../common/logging'
 import {
   ReactProjectInfo,
@@ -105,10 +105,7 @@ async function fetchTopLevelComponentsFromFile({
             ) as CliDataResponse,
           })
         : request.get<CliDataResponse>(apiUrl, {
-            headers: {
-              'X-Figma-Token': accessToken,
-              'Content-Type': 'application/json',
-            },
+            headers: getHeaders(accessToken),
           })
     ).finally(() => {
       if (cmd.verbose) {
