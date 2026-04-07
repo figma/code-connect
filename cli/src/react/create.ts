@@ -1,4 +1,4 @@
-import { camelCase } from 'lodash'
+import camelCase from 'lodash.camelcase'
 import * as prettier from 'prettier'
 import fs from 'fs'
 import z from 'zod'

@@ -7,7 +7,7 @@ import path from 'path'
 import fs from 'fs'
 import { generateProps } from '../react/create'
 import * as prettier from 'prettier'
-import { kebabCase } from 'lodash'
+import kebabCase from 'lodash.kebabcase'
 import { getOutFileName } from '../connect/create_common'
 
 export async function createHtmlCodeConnect(
