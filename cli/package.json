@@ -71,12 +71,13 @@
     "@babel/generator": "7.28.5",
     "@babel/parser": "7.28.5",
     "@babel/types": "7.28.5",
-    
     "@storybook/csf-tools": "8.5.1",
     "@types/cross-spawn": "^6.0.6",
     "@types/jest": "^29.5.13",
     "@types/jsdom": "^21.1.7",
-    "@types/lodash": "4.17.20",
+    "@types/lodash.camelcase": "^4.3.9",
+    "@types/lodash.chunk": "^4.2.9",
+    "@types/lodash.kebabcase": "^4.1.9",
     "@types/node": "22.17.2",
     "@types/prettier": "2.7.3",
     "@types/prompts": "^2.4.9",
@@ -92,11 +93,7 @@
     "webpack-cli": "5.1.4"
   },
   "dependencies": {
-    
-    
     "boxen": "5.1.1",
-    
-    
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
     "compare-versions": "^6.1.0",
@@ -106,7 +103,9 @@
     "find-up": "^5.0.0",
     "glob": "^11.0.4",
     "jsdom": "^24.1.1",
-    "lodash": "4.17.23",
+    "lodash.camelcase": "^4.3.0",
+    "lodash.chunk": "^4.2.0",
+    "lodash.kebabcase": "^4.1.1",
     "minimatch": "^9.0.3",
     "ora": "^5.4.1",
     "parse5": "^7.1.2",
