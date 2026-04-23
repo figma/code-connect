@@ -48,11 +48,11 @@ export function getIncludesGlob({
     if (config.parser === 'custom') {
       return []
     }
-    return DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser].map(
+    return DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser!].map(
       (defaultIncludeGlob) => `${pathToComponentsDir}/${defaultIncludeGlob}`,
     )
   }
-  return DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]
+  return DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser!]
 }
 
 export async function createEnvFile({ dir, accessToken }: { dir: string; accessToken?: string }) {

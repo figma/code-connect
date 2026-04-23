@@ -154,6 +154,9 @@ declare module 'figma' {
   ) => TemplateStringResult
 
   export interface Figma {
+    /** Per-entry data from a .figma.batch.json file. Available in batch templates. */
+    readonly batch: Record<string, any>
+
     /** The currently selected component instance */
     readonly selectedInstance: InstanceHandle & { readonly __properties__: FigmaProperties }
     /** Alias for selectedInstance */

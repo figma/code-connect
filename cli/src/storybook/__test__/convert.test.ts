@@ -392,4 +392,35 @@ describe('convertStorybookFiles (JS templates)', () => {
       ])
     })
   })
+
+  describe('file extensions', () => {
+    it('discovers .stories.jsx files', async () => {
+      const result = await convertStorybookFile('JsxStory.stories.jsx')
+      expect(result).toMatchObject([{ figmaNode: 'https://figma.com/jsxstory' }])
+    })
+
+    it('discovers .stories.js files (no JSX)', async () => {
+      const result = await convertStorybookFile('JsStory.stories.js')
+      expect(result).toMatchObject([{ figmaNode: 'https://figma.com/jsstory' }])
+    })
+
+    it('default storiesGlob picks up both .jsx and .js stories', async () => {
+      const projectInfo: ReactProjectInfo = {
+        ...getReactProjectInfo(
+          (await getProjectInfo(
+            EXAMPLE_DIR,
+            path.join(EXAMPLE_DIR, 'figma.config.json'),
+          )) as ReactProjectInfo,
+        ),
+        remoteUrl: 'git@github.com:figma/code-connect.git',
+      }
+
+      const result = await convertStorybookFiles({ projectInfo })
+
+      const urls = result.map((r) => r.figmaNode)
+      expect(urls).toEqual(
+        expect.arrayContaining(['https://figma.com/jsxstory', 'https://figma.com/jsstory']),
+      )
+    })
+  })
 })

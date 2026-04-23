@@ -21,6 +21,38 @@ describe('e2e test for `create` command', () => {
     )
   }
 
+  async function runCreateTemplate(cwd: string) {
+    return await promisify(exec)(
+      `npx cross-env FIGMA_ACCESS_TOKEN=test CODE_CONNECT_MOCK_CREATE_API_RESPONSE=${testParentPath}/dummy_api_response.json npx tsx ${testParentPath}/cli_template connect create https://www.figma.com/file/1234abcd/Test-File?node-id=1-39`,
+      {
+        cwd,
+      },
+    )
+  }
+
+  it('successfully creates a template file when no parser is configured', async () => {
+    const testPath = getTestPath('template')
+
+    try {
+      const result = await runCreateTemplate(testPath)
+
+      expect(readFileSync(path.join(testPath, 'TestInstanceComponent.figma.ts'), 'utf-8')).toEqual(
+        readFileSync(path.join(testPath, 'expected_component'), 'utf-8'),
+      )
+
+      expect(tidyStdOutput(result.stderr)).toBe(
+        `Config file found, parsing ${testPath} using specified include globs
+Fetching component information from Figma...
+Parsing response
+Generating Code Connect files...
+Code Connect file generated successfully:
+${path.join(testPath, 'TestInstanceComponent.figma.ts')}`,
+      )
+    } finally {
+      rmSync(path.join(testPath, 'TestInstanceComponent.figma.ts'), { force: true })
+    }
+  })
+
   it('successfully creates a React component', async () => {
     const testPath = getTestPath('react')
 

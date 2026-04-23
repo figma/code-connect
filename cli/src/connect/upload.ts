@@ -1,9 +1,11 @@
 import { CodeConnectJSON } from '../connect/figma_connect'
-import { logger, underline, highlight } from '../common/logging'
+import { logger, underline, highlight, warn } from '../common/logging'
 import { getApiUrl, getHeaders } from './figma_rest_api'
 import { exitWithFeedbackMessage } from './helpers'
 import { parseFigmaNode } from './validation'
 import { isFetchError, request } from '../common/fetch'
+
+const COMPONENT_BROWSER_CONFLICT_REASON = 'Code Connect UI mapping already exists'
 
 const RETRY_DELAYS_MS = [5_000, 15_000, 30_000]
 
@@ -11,10 +13,11 @@ async function postWithRetry<T>(
   apiUrl: string,
   batch: CodeConnectJSON[],
   accessToken: string,
+  useOAuth = false,
 ): Promise<{ data: T }> {
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     try {
-      return await request.post<T>(apiUrl, batch, { headers: getHeaders(accessToken) })
+      return await request.post<T>(apiUrl, batch, { headers: getHeaders(accessToken, useOAuth) })
     } catch (err) {
       if (isFetchError(err) && (err.response.status === 429 || err.response.status >= 500)) {
         if (attempt === RETRY_DELAYS_MS.length) {
@@ -38,10 +41,12 @@ async function postWithRetry<T>(
 
 interface Args {
   accessToken: string
+  useOAuth?: boolean
   docs: CodeConnectJSON[]
   batchSize?: number
   verbose: boolean
   apiUrl?: string
+  force?: boolean
 }
 
 interface UploadResponse {
@@ -112,12 +117,17 @@ export function createDocsMap(
 
 export async function upload({
   accessToken,
+  useOAuth = false,
   docs,
   batchSize,
   verbose,
   apiUrl: apiUrlOverride,
+  force,
 }: Args) {
-  const apiUrl = getApiUrl(docs?.[0]?.figmaNode ?? '', apiUrlOverride) + '/code_connect'
+  const apiUrl =
+    getApiUrl(docs?.[0]?.figmaNode ?? '', apiUrlOverride) +
+    '/code_connect' +
+    (force ? '?force=true' : '')
 
   // Strip internal fields before uploading to Figma
   const cleanedDocs = docs.map((doc) => {
@@ -194,7 +204,7 @@ export async function upload({
 
         logger.debug(`Uploading ${size.toFixed(2)}mb to Figma`)
 
-        const response = await postWithRetry<UploadResponse>(apiUrl, batch, accessToken)
+        const response = await postWithRetry<UploadResponse>(apiUrl, batch, accessToken, useOAuth)
 
         const data = response.data
 
@@ -225,9 +235,14 @@ export async function upload({
       }
 
       logger.debug(`Uploading ${size.toFixed(2)}mb to Figma`)
-      logger.info(`uploading to ${apiUrl}`)
+      logger.info(`Uploading to ${apiUrl}`)
 
-      const response = await postWithRetry<UploadResponse>(apiUrl, cleanedDocs, accessToken)
+      const response = await postWithRetry<UploadResponse>(
+        apiUrl,
+        cleanedDocs,
+        accessToken,
+        useOAuth,
+      )
 
       const data = response.data
 
@@ -275,9 +290,36 @@ export async function upload({
     }
 
     if (Object.keys(failedDocsByLabel).length > 0) {
+      let hasComponentBrowserConflicts = false
       for (const [label, failedItems] of Object.entries(failedDocsByLabel)) {
-        logger.error(
-          `Failed to upload to Figma, for ${label}:\n${failedItems.map((item) => `-> ${codeConnectStr(item.doc)} (${item.reason})`).join('\n')}`,
+        const conflicts = failedItems.filter((item) =>
+          item.reason.includes(COMPONENT_BROWSER_CONFLICT_REASON),
+        )
+        const otherFailures = failedItems.filter(
+          (item) => !item.reason.includes(COMPONENT_BROWSER_CONFLICT_REASON),
+        )
+
+        if (conflicts.length > 0) {
+          hasComponentBrowserConflicts = true
+          logger.warn(
+            warn(
+              `Warning: ${conflicts.length} node(s) already have UI-created Code Connect mappings in Figma for label "${label}":\n${conflicts.map((item) => `-> ${codeConnectStr(item.doc)}`).join('\n')}`,
+            ),
+          )
+        }
+
+        if (otherFailures.length > 0) {
+          logger.error(
+            `Failed to upload to Figma, for ${label}:\n${otherFailures.map((item) => `-> ${codeConnectStr(item.doc)} (${item.reason})`).join('\n')}`,
+          )
+        }
+      }
+
+      if (hasComponentBrowserConflicts && !force) {
+        logger.warn(
+          warn(
+            `Re-run with --force to overwrite the existing UI-created mappings with your Code Connect files.`,
+          ),
         )
       }
     }

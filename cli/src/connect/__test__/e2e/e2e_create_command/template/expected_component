@@ -1,0 +1,24 @@
+// url=https://www.figma.com/file/1234abcd/Test-File?node-id=1-39
+import figma from "figma"
+
+/**
+ * NEXT STEPS:
+ * - Replace the `example` with the actual code snippet you want to show
+ *   (e.g. figma.code`<Button label="${propertyValue}" />`)
+ * - Update the `imports` array with any lines of code that should be displayed
+ *   at the top (e.g. imports: ['import { Button } from "./Button"'])
+ */
+
+const color = figma.selectedInstance.getEnum("Color", {
+  Default: "default",
+  Red: "red",
+})
+
+export default {
+  example: figma.code``,
+  imports: [],
+  id: "TestInstanceComponent",
+  metadata: {
+    nestable: true,
+  },
+}

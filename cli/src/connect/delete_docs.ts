@@ -10,11 +10,17 @@ interface NodesToDeleteInfo {
 
 interface Args {
   accessToken: string
+  useOAuth?: boolean
   docs: NodesToDeleteInfo[]
   apiUrl?: string
 }
 
-export async function delete_docs({ accessToken, docs, apiUrl: apiUrlOverride }: Args) {
+export async function delete_docs({
+  accessToken,
+  useOAuth = false,
+  docs,
+  apiUrl: apiUrlOverride,
+}: Args) {
   const apiUrl = getApiUrl(docs?.[0]?.figmaNode ?? '', apiUrlOverride) + '/code_connect'
 
   try {
@@ -24,7 +30,7 @@ export async function delete_docs({ accessToken, docs, apiUrl: apiUrlOverride }:
       apiUrl,
       { nodes_to_delete: docs },
       {
-        headers: getHeaders(accessToken),
+        headers: getHeaders(accessToken, useOAuth),
       },
     )
 

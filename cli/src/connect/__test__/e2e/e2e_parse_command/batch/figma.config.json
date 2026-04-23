@@ -1,0 +1,6 @@
+{
+  "codeConnect": {
+    "include": ["*.figma.batch.json"],
+    "exclude": []
+  }
+}

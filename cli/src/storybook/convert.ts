@@ -62,7 +62,7 @@ interface ConvertStorybookFilesArgs {
  */
 export async function convertStorybookFiles({
   projectInfo,
-  storiesGlob = '**/*.stories.tsx',
+  storiesGlob = '**/*.stories.{tsx,ts,jsx,js}',
   isForMigration = false,
 }: ConvertStorybookFilesArgs): Promise<CodeConnectJSON[]> {
   const { remoteUrl, config, files, tsProgram } = projectInfo

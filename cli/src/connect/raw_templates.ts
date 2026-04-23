@@ -103,11 +103,20 @@ function extractMetadataFields(fileContent: string): {
   return { fields, templateStartLine }
 }
 
+export interface BatchOverrides {
+  url: string
+  source?: string
+  component?: string
+  batchData: Record<string, any>
+  batchFilePath: string
+}
+
 export function parseRawFile(
   filePath: string,
   label: string | undefined,
   config?: CodeConnectConfig,
   dir?: string,
+  batchOverrides?: BatchOverrides,
 ): CodeConnectJSON {
   let fileContent = fs.readFileSync(filePath, 'utf-8')
 
@@ -119,12 +128,19 @@ export function parseRawFile(
     fileContent = transpileTypeScriptTemplate(filePath, fileContent)
   }
 
-  if (!fields.url) {
+  // For batch templates, metadata comes from the batch entry instead of comments
+  const component = batchOverrides?.component || fields.component
+  const source = batchOverrides?.source || fields.source || ''
+
+  const figmaUrl = batchOverrides?.url || fields.url
+  if (!figmaUrl) {
     throw new Error(
-      `Missing required url field in ${filePath}. Please add a // url=... comment to the top of the file.`,
+      batchOverrides
+        ? `Missing required "url" field in ${batchOverrides.batchFilePath}. Please add "url" to each entry in your .figma.batch.json file.`
+        : `Missing required url field in ${filePath}. Please add a // url=... comment to the top of the file.`,
     )
   }
-  let figmaNodeUrl = fields.url
+  let figmaNodeUrl = figmaUrl
 
   // Extract template from the transpiled content, starting at the line
   // where the metadata comments ended in the original source
@@ -143,7 +159,15 @@ export function parseRawFile(
     break
   }
 
-  const template = transpiledLines.slice(templateStartIndex).join('\n')
+  let template = transpiledLines.slice(templateStartIndex).join('\n')
+
+  // For batch templates, set globalThis['__FIGMA_BATCH'] so the runtime exposes it as
+  // figma.batch. Using globalThis rather than a const so it's accessible from
+  // __FIGMA_CODE_CONNECT_REQUIRE's closure regardless of where require('figma') is called.
+  // (globalThis works in both browser and Node.js, unlike window.)
+  if (batchOverrides) {
+    template = `globalThis['__FIGMA_BATCH'] = ${JSON.stringify(batchOverrides.batchData)}\n${template}`
+  }
 
   // Apply documentUrlSubstitutions if provided
   if (config?.documentUrlSubstitutions) {
@@ -157,7 +181,7 @@ export function parseRawFile(
 
   return {
     figmaNode: figmaNodeUrl,
-    component: fields.component,
+    component,
     template,
     // nestable by default unless user specifies in template
     // (templateData.nestable AND template.metadata.nestable need to
@@ -165,7 +189,7 @@ export function parseRawFile(
     templateData: { nestable: true, isParserless: true },
     language,
     label: effectiveLabel,
-    source: fields.source || '',
+    source,
     sourceLocation: { line: -1 },
     metadata: {
       cliVersion: require('../../package.json').version,

@@ -1,3 +1,32 @@
+# Code Connect v1.4.4 (22 April 2026)
+
+## Fixed
+
+### General
+
+- Bumped Lodash version from 4.17 to 4.18 to address vulnerability [CVE-2021-23337](https://www.cve.org/CVERecord?id=)
+
+### Storybook
+
+- Storybook files with `.ts`, `.jsx`, or `.js` extensions (e.g. `Button.stories.jsx`) are now discovered by the CLI. Previously only `.stories.tsx` files were picked up.
+
+### Template files
+
+- `--exit-on-unreadable-files` is now respected for template files (`.figma.ts` / `.figma.js`)
+- Fixed batch data not being picked up when rendering Code Connect snippets
+
+## Features
+
+### General
+
+- Added `--force` flag to `figma connect publish`. When Figma already has UI-created Code Connect mappings for one or more nodes, publishing will now show a warning instead of failing silently. Use `--force` to overwrite those existing mappings with the Code Connect files from your codebase.
+- The `connect create` command can now generates template files.
+- Added `preview` command: you can now run `npx figma connect preview {fileUrl}` to locally preview a Code Connect file without having to publish it.
+
+### Template files
+
+- Added batch template support (`.figma.batch.json` + `.figma.batch.ts`). A batch file defines a shared template and an array of component entries, allowing hundreds of similar components (e.g. icons) to be Code Connected without individual template files. Per-entry data is available in the template via `figma.batch`.
+
 # Code Connect v1.4.3 (1st April 2026)
 
 ## Fixed

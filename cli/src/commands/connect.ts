@@ -1,5 +1,6 @@
 import * as commander from 'commander'
 import fs from 'fs'
+import { handlePreview } from './preview_utils'
 import { upload } from '../connect/upload'
 import { validateDocs } from '../connect/validation'
 import { createCodeConnectFromUrl } from '../connect/create'
@@ -44,6 +45,7 @@ import {
   writeVariantTemplateFile,
 } from '../connect/migration_helpers'
 import { isRawTemplate, parseRawFile } from '../connect/raw_templates'
+import { parseBatchFile } from '../connect/batch_templates'
 import { convertRemoteFileUrlToRelativePath } from '../connect/wizard/run_wizard'
 import { getGitRepoAbsolutePath } from '../connect/project'
 
@@ -112,6 +114,10 @@ export function addConnectCommandToProgram(program: commander.Command) {
       '--include-template-files',
       '(Deprecated) No longer needed - template files are included by default. Will be removed in a future version.',
     )
+    .option(
+      '--force',
+      'overwrite existing UI-created Code Connect mappings if they conflict with the files being published',
+    )
     .action(withUpdateCheck(handlePublish))
 
   addBaseCommand(
@@ -119,7 +125,8 @@ export function addConnectCommandToProgram(program: commander.Command) {
     'unpublish',
     'Run to find any files that have figma connections and unpublish them from Figma. ' +
       'By default this looks for a config file named "figma.config.json", and uses the `include` and `exclude` fields to determine which files to parse. ' +
-      'If no config file is found, this parses the current directory. An optional `--dir` flag can be used to specify a directory to parse.',
+      'If no config file is found, this parses the current directory. An optional `--dir` flag can be used to specify a directory to parse. ' +
+      'Alternatively, use `--node` and `--label` to unpublish a specific component.',
   )
     .option(
       '--node <link_to_node>',
@@ -164,6 +171,17 @@ export function addConnectCommandToProgram(program: commander.Command) {
     )
     .action(withUpdateCheck(handleMigrate))
 
+  addBaseCommand(
+    connectCommand,
+    'preview',
+    'Preview how Code Connect snippets will render in the Figma inspect panel',
+  )
+    .argument(
+      '[files...]',
+      'Code Connect files to preview (e.g., Button.figma.tsx). Leave empty to preview all files.',
+    )
+    .option('--output <format>', 'Output format: table (default) or json', 'table')
+    .action(withUpdateCheck(handlePreview))
 }
 
 export function getAccessToken(cmd: BaseCommand) {
@@ -261,7 +279,7 @@ export async function getCodeConnectObjects(
       silent,
       isForMigration,
     })
-  } else {
+  } else if (projectInfo.config.parser) {
     const payload: ParseRequestPayload = {
       mode: 'PARSE',
       paths: projectInfo.files,
@@ -325,18 +343,59 @@ export async function getCodeConnectObjects(
     // Resolve the label before parsing so language inference works correctly
     const resolvedLabel = cmd.label || projectInfo.config.label
 
-    const rawTemplateDocs = rawTemplateFiles.map((file) => {
-      const doc = parseRawFile(file, resolvedLabel, projectInfo.config, projectInfo.absPath)
-      // Store the Code Connect file path for migration purposes
-      doc._codeConnectFilePath = file
+    const rawTemplateDocs: CodeConnectJSON[] = []
+    for (const file of rawTemplateFiles) {
+      try {
+        const doc = parseRawFile(file, resolvedLabel, projectInfo.config, projectInfo.absPath)
+        // Store the Code Connect file path for migration purposes
+        doc._codeConnectFilePath = file
 
-      if (!silent || cmd.verbose) {
-        logger.info(success(file))
+        if (!silent || cmd.verbose) {
+          logger.info(success(file))
+        }
+        rawTemplateDocs.push(doc)
+      } catch (e) {
+        if (!silent || cmd.verbose) {
+          logger.error(`❌ ${file}`)
+          if (cmd.verbose) {
+            console.trace(e)
+          } else {
+            logger.error(e instanceof Error ? e.message : String(e))
+          }
+        }
+        if (cmd.exitOnUnreadableFiles) {
+          logger.info('Exiting due to unreadable files')
+          process.exit(1)
+        }
       }
-      return doc
-    })
+    }
 
     codeConnectObjects = codeConnectObjects.concat(rawTemplateDocs)
+  }
+
+  // Process batch files (.figma.batch.json)
+  const batchFiles = projectInfo.files.filter((f: string) => f.endsWith('.figma.batch.json'))
+
+  if (batchFiles.length > 0) {
+    const resolvedLabel = cmd.label || projectInfo.config.label
+
+    for (const file of batchFiles) {
+      try {
+        const docs = parseBatchFile(file, resolvedLabel, projectInfo.config, projectInfo.absPath)
+        docs.forEach((doc) => {
+          doc._codeConnectFilePath = file
+        })
+        codeConnectObjects = codeConnectObjects.concat(docs)
+        if (!silent || cmd.verbose) {
+          logger.info(success(`${file} (${docs.length} components)`))
+        }
+      } catch (e) {
+        logger.error(`${file}: ${e}`)
+        if (cmd.exitOnUnreadableFiles) {
+          process.exit(1)
+        }
+      }
+    }
   }
 
   if (cmd.label || projectInfo.config.label) {
@@ -470,6 +529,7 @@ async function handlePublish(
     label: string
     batchSize: string
     includeTemplateFiles?: boolean
+    force?: boolean
   },
 ) {
   setupHandler(cmd)
@@ -541,6 +601,7 @@ async function handlePublish(
     batchSize: batchSize,
     verbose: cmd.verbose,
     apiUrl: cmd.apiUrl || projectInfo.config.apiUrl,
+    force: cmd.force,
   })
 }
 
@@ -776,6 +837,7 @@ async function handleMigrate(
 
         const language = getInferredLanguageForRaw(label, docLanguage)
         const config: CodeConnectParserlessConfig = {
+          parser: undefined,
           include: [useTypeScript ? '**/*.figma.ts' : '**/*.figma.js'],
           language,
           label,

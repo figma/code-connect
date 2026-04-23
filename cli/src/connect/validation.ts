@@ -5,7 +5,7 @@ import { CodeConnectJSON } from '../connect/figma_connect'
 import { logger } from '../common/logging'
 import { validateNodeId } from './helpers'
 import { getApiUrl, getHeaders } from './figma_rest_api'
-import { BaseCommand } from '../commands/connect'
+import type { BaseCommand } from '../commands/connect'
 import { isFetchError, request } from '../common/fetch'
 
 export function parseFigmaNode(
@@ -39,11 +39,12 @@ async function fetchNodeInfo(
   fileKey: string,
   nodeIdsChunk: string[],
   accessToken: string,
+  useOAuth = false,
 ): Promise<any> {
   try {
     const response = await request.get<{ message: string; nodes: any }>(
       `${baseApiUrl}${fileKey}/nodes?ids=${nodeIdsChunk.join(',')}`,
-      { headers: getHeaders(accessToken) },
+      { headers: getHeaders(accessToken, useOAuth) },
     )
     if (response.response.status !== 200) {
       logger.error(
@@ -266,6 +267,7 @@ export async function validateDocs(
   accessToken: string,
   docs: CodeConnectJSON[],
   apiUrlOverride?: string,
+  useOAuth = false,
 ): Promise<boolean> {
   let baseApiUrl = getApiUrl(docs?.[0]?.figmaNode ?? '', apiUrlOverride) + '/files/'
 
@@ -301,7 +303,13 @@ export async function validateDocs(
     for (let batch = 0; batch < chunks.length; batch++) {
       const nodeIdsChunk = chunks[batch]
       logger.debug(`Running for ${baseApiUrl + fileKey + '/nodes?ids=' + nodeIdsChunk.join(',')}`)
-      const nodeMapRet = await fetchNodeInfo(baseApiUrl, fileKey, nodeIdsChunk, accessToken)
+      const nodeMapRet = await fetchNodeInfo(
+        baseApiUrl,
+        fileKey,
+        nodeIdsChunk,
+        accessToken,
+        useOAuth,
+      )
       if (!nodeMapRet) {
         return false
       }

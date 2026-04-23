@@ -59,7 +59,7 @@ export type BaseCodeConnectConfig = {
   /**
    * The parser name, if using an internal parser.
    */
-  parser: CodeConnectParser
+  parser?: CodeConnectParser
 
   /**
    * Label to use for the uploaded code examples
@@ -134,7 +134,9 @@ export type CodeConnectReactConfig = BaseCodeConnectConfig & {
 
 export type CodeConnectHtmlConfig = BaseCodeConnectConfig & {}
 
-export type CodeConnectParserlessConfig = Omit<BaseCodeConnectConfig, 'parser'>
+export type CodeConnectParserlessConfig = BaseCodeConnectConfig & {
+  parser: undefined
+}
 
 export type CodeConnectConfig =
   | CodeConnectReactConfig
@@ -142,6 +144,7 @@ export type CodeConnectConfig =
   | CodeConnectCustomExecutableParserConfig
   | CodeConnectHtmlConfig
   | BaseCodeConnectConfig
+  | CodeConnectParserlessConfig
 
 interface FigmaConfig {
   codeConnect?: CodeConnectConfig
@@ -150,7 +153,13 @@ interface FigmaConfig {
 export function determineConfigFromProject(
   dir: string,
   exitOnError = true,
+  isTemplatesOnlyCLI = false,
 ): FigmaConfig | undefined {
+  if (isTemplatesOnlyCLI) {
+    const label = determineLabelFromProject(dir)
+    return { codeConnect: label ? { label } : {} }
+  }
+
   const parser = determineParserFromProject(dir)
   if (parser) {
     const label = determineLabelFromProject(dir)
@@ -382,13 +391,17 @@ Please raise an issue at https://github.com/figma/code-connect/issues if you hav
   return config
 }
 
-async function parseConfig(configFilePath: string, dir: string): Promise<FigmaConfig | undefined> {
+async function parseConfig(
+  configFilePath: string,
+  dir: string,
+  isTemplatesOnlyCLI = false,
+): Promise<FigmaConfig | undefined> {
   try {
     const rawData = fs.readFileSync(configFilePath, 'utf-8')
     const rawConfig = JSON.parse(rawData)
     const config = await checkForLegacyConfig(rawConfig, configFilePath)
 
-    if (!config.codeConnect?.parser) {
+    if (!isTemplatesOnlyCLI && !config.codeConnect?.parser) {
       const parser = determineParserFromProject(dir)
 
       if (!parser) {
@@ -408,7 +421,7 @@ async function parseConfig(configFilePath: string, dir: string): Promise<FigmaCo
     if (!config.codeConnect?.label) {
       const label = determineLabelFromProject(dir)
       if (label) {
-        config.codeConnect.label = label
+        config.codeConnect = { ...config.codeConnect, label }
       }
     }
 
@@ -626,7 +639,11 @@ export function getEnvPath(dir: string) {
   return path.resolve(path.join(dir, ENV_FILE_NAME))
 }
 
-export async function parseOrDetermineConfig(dir: string, configPath: string) {
+export async function parseOrDetermineConfig(
+  dir: string,
+  configPath: string,
+  isTemplatesOnlyCLI = false,
+) {
   const configFilePath = configPath ? path.resolve(configPath) : getDefaultConfigPath(dir)
 
   const hasConfigFile = fs.existsSync(configFilePath)
@@ -640,8 +657,8 @@ export async function parseOrDetermineConfig(dir: string, configPath: string) {
   }
 
   const globalConfig = hasConfigFile
-    ? await parseConfig(configFilePath, dir)
-    : determineConfigFromProject(dir)
+    ? await parseConfig(configFilePath, dir, isTemplatesOnlyCLI)
+    : determineConfigFromProject(dir, true, isTemplatesOnlyCLI)
 
   if (!globalConfig) {
     throw new Error(`Error parsing config file: ${configFilePath}`)
@@ -720,25 +737,36 @@ export async function checkForEnvAndToken(dir: string) {
 export async function getProjectInfoFromConfig(
   dir: string,
   config: CodeConnectConfig,
+  isTemplatesOnlyCLI = false,
 ): Promise<ProjectInfo> {
   const absPath = path.resolve(dir)
   const remoteUrl = getGitRemoteURL(absPath)
 
-  const defaultIncludeGlobs = config.parser
-    ? DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]
-    : undefined
+  const defaultIncludeGlobs = isTemplatesOnlyCLI
+    ? [
+        '**/*.figma.ts',
+        '**/*.figma.js',
+        '**/*.figma.template.ts',
+        '**/*.figma.template.js',
+        '**/*.figma.batch.json',
+      ]
+    : config.parser
+      ? DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]
+      : undefined
 
-  // always ignore any `node_modules` folders in react projects
-  const defaultExcludeGlobs = config.parser
-    ? ({
-        react: ['node_modules/**'],
-        html: ['node_modules/**'],
-        swift: ['**/__test__/**'],
-        compose: [],
-        custom: [],
-        __unit_test__: [],
-      }[config.parser] ?? [])
-    : []
+  // always ignore node_modules; for parsers, apply parser-specific exclusions
+  const defaultExcludeGlobs = isTemplatesOnlyCLI
+    ? ['node_modules/**']
+    : config.parser
+      ? ({
+          react: ['node_modules/**'],
+          html: ['node_modules/**'],
+          swift: ['**/__test__/**'],
+          compose: [],
+          custom: [],
+          __unit_test__: [],
+        }[config.parser] ?? [])
+      : []
 
   const includeGlobs = config.include || defaultIncludeGlobs
   const excludeGlobs = config.exclude
@@ -799,13 +827,17 @@ function validateLanguage(language: SyntaxHighlightLanguage | undefined): void {
  * @param configPath Optional path to Code Connect config file
  * @returns Object containing information about the project
  */
-export async function getProjectInfo(dir: string, configPath: string): Promise<ProjectInfo> {
-  const { config } = await parseOrDetermineConfig(dir, configPath)
+export async function getProjectInfo(
+  dir: string,
+  configPath: string,
+  isTemplatesOnlyCLI = false,
+): Promise<ProjectInfo> {
+  const { config } = await parseOrDetermineConfig(dir, configPath, isTemplatesOnlyCLI)
 
   // Validate language field if present
   validateLanguage(config.language)
 
-  return getProjectInfoFromConfig(dir, config)
+  return getProjectInfoFromConfig(dir, config, isTemplatesOnlyCLI)
 }
 
 export function getReactProjectInfo(

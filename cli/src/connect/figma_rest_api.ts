@@ -11,12 +11,17 @@ export function getApiUrl(figmaNode: string, apiUrlOverride?: string) {
   return 'https://api.figma.com/v1'
 }
 
-export function getHeaders(accessToken: string) {
-  return {
-    'X-Figma-Token': accessToken,
+export function getHeaders(token: string, useOAuth = false): Record<string, string> {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': `code-connect-cli/${version}`,
   }
+  if (useOAuth) {
+    headers['Authorization'] = `Bearer ${token}`
+  } else {
+    headers['X-Figma-Token'] = token
+  }
+  return headers
 }
 
 // These typings are a subset of the Figma REST API

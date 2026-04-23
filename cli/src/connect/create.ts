@@ -18,6 +18,7 @@ import {
 } from './parser_executable_types'
 import { fromError } from 'zod-validation-error'
 import { createHtmlCodeConnect } from '../html/create'
+import { createTemplateCodeConnect } from './create_template'
 import { isFetchError, request } from '../common/fetch'
 import { BaseCommand } from '../commands/connect'
 
@@ -119,6 +120,17 @@ export async function createCodeConnectFromUrl({
           config: projectInfo.config,
         }
         result = await createHtmlCodeConnect(payload)
+      } else if (!(projectInfo.config as { parser?: string }).parser) {
+        const filename = createTemplateCodeConnect({
+          component: componentPayload,
+          normalizedName,
+          destinationDir: outDir ?? process.env.INIT_CWD ?? process.cwd(),
+          destinationFile: outFile,
+        })
+        result = {
+          createdFiles: [{ filePath: filename }],
+          messages: [],
+        }
       } else {
         try {
           const payload: CreateRequestPayload = {
