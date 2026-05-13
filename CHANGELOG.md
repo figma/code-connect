@@ -1,3 +1,12 @@
+# Code Connect v1.4.5 (13 May 2026)
+
+## Fixed
+
+### General
+
+- The `preview` command now prints a clearer single-line message if the preview service is temporarily unavailable, instead of repeating a per-file error.
+- `figma connect preview` now splits requests into smaller chunks when previewing many components at once, so previews of large component libraries no longer fail with “Payload Too Large” errors.
+
 # Code Connect v1.4.4 (22 April 2026)
 
 ## Fixed

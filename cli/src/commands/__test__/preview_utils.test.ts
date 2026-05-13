@@ -63,7 +63,7 @@ const { logger } = jest.requireMock('../../common/logging')
 const mockFs = jest.requireMock('fs')
 const { getCodeConnectObjects, getAccessTokenOrExit, setupHandler } = jest.requireMock('../connect')
 const { getProjectInfo } = jest.requireMock('../../connect/project')
-const { request } = jest.requireMock('../../common/fetch')
+const { request, isFetchError } = jest.requireMock('../../common/fetch')
 const { getApiUrl, getHeaders } = jest.requireMock('../../connect/figma_rest_api')
 
 describe('preview_utils', () => {
@@ -698,6 +698,43 @@ describe('preview_utils', () => {
       expect(results).toHaveLength(1)
       expect(results[0].success).toBe(false)
       expect(results[0].error).toContain('syntax errors')
+    })
+
+    it('should print only the server message and exit on 503 (killswitch)', async () => {
+      const mockDoc: CodeConnectJSON = {
+        figmaNode: 'https://figma.com/file/ABC123/test?node-id=1-2',
+        _codeConnectFilePath: '/test/dir/Button.figma.tsx',
+        component: 'Button',
+        template: '<Button />',
+        templateData: {},
+        language: 'typescript',
+        label: 'typescript',
+        metadata: { cliVersion: '1.0.0' },
+      } as CodeConnectJSON
+
+      mockFs.existsSync.mockReturnValue(true)
+      mockFs.statSync.mockReturnValue({ isFile: () => true })
+      getCodeConnectObjects.mockResolvedValue([mockDoc])
+      parseFigmaNode.mockReturnValue({ fileKey: 'ABC123', nodeId: '1:2' })
+
+      const killswitchMessage =
+        "The preview command isn't available right now, please try again later."
+      const fetchErr = {
+        response: { status: 503, statusText: 'Service Unavailable' },
+        data: { status: 503, error: true, message: killswitchMessage },
+      }
+      request.post.mockRejectedValue(fetchErr)
+      ;(isFetchError as jest.Mock).mockReturnValue(true)
+      const { exitWithError } = jest.requireMock('../../common/logging')
+
+      const cmd = { dir: '/test/dir', output: 'json', verbose: false } as any
+      await handlePreview(['/test/dir/Button.figma.tsx'], cmd)
+
+      // exitWithError called once with just the server message — no "Failed to preview…" prefix.
+      expect(exitWithError).toHaveBeenCalledWith(killswitchMessage)
+      expect(mockLogger.error).not.toHaveBeenCalledWith(
+        expect.stringContaining('Failed to preview components in file'),
+      )
     })
   })
 

@@ -267,6 +267,194 @@ export function displayResults(results: PreviewResult[]): void {
   )
 }
 
+// The server caps inbound request bodies at 5MB. The figmaDocs payload
+// (one Code Connect template per requested component) dominates the body size,
+// so for projects with many components we split into smaller chunks and send
+// them in parallel rather than risking a 413.
+const PREVIEW_CHUNK_SIZE = 50
+// Bound the number of chunks in flight at once. Without this cap, large
+// libraries (~1k+ components) trigger N parallel preview requests, which
+// overwhelms upstream token validation and causes spurious 403 "Invalid
+// token" responses for the chunks that queue up too long.
+const PREVIEW_MAX_CONCURRENCY = 5
+
+type PreviewResponseData = {
+  status: number
+  error: boolean
+  meta: {
+    results: Array<{
+      nodeId: string
+      nodeUrl: string
+      snippet?: string
+      language?: string
+      component?: string
+      error?: string
+    }>
+  }
+}
+
+type ChunkOutcome = {
+  chunkNodeIds: string[]
+  response: Awaited<ReturnType<typeof request.post<PreviewResponseData>>> | null
+  error: unknown
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size))
+  }
+  return chunks
+}
+
+async function runInWaves<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  maxConcurrency: number,
+): Promise<R[]> {
+  const out: R[] = []
+  for (let i = 0; i < items.length; i += maxConcurrency) {
+    const wave = items.slice(i, i + maxConcurrency)
+    const settled = await Promise.all(wave.map(fn))
+    out.push(...settled)
+  }
+  return out
+}
+
+function sendPreviewChunk({
+  chunkNodeIds,
+  requiredTemplates,
+  baseApiUrl,
+  fileKey,
+  accessToken,
+}: {
+  chunkNodeIds: string[]
+  requiredTemplates: CodeConnectJSON[]
+  baseApiUrl: string
+  fileKey: string
+  accessToken: string
+}): Promise<ChunkOutcome> {
+  const chunkTemplates = filterTemplatesForNodes(chunkNodeIds, requiredTemplates)
+  return request
+    .post<PreviewResponseData>(
+      `${baseApiUrl}/code_connect/preview_snippets?file_key=${fileKey}`,
+      { nodeIds: chunkNodeIds, figmaDocs: { all: chunkTemplates } },
+      { headers: getHeaders(accessToken) },
+    )
+    .then((response) => ({ chunkNodeIds, response, error: null as unknown }))
+    .catch((err: unknown) => ({ chunkNodeIds, response: null, error: err }))
+}
+
+function chunkOutcomeToResults(
+  outcome: ChunkOutcome,
+  nodes: NodeToPreview[],
+  fileKey: string,
+): PreviewResult[] {
+  const { chunkNodeIds, response, error } = outcome
+  const results: PreviewResult[] = []
+
+  if (error) {
+    const errorMsg = isFetchError(error)
+      ? error.data?.message || error.response.statusText
+      : String(error)
+    // 503 means the server-side killswitch is on — surface the server's
+    // message directly without the per-file/per-node noise so the user
+    // sees a single clear line during an incident.
+    if (isFetchError(error) && error.response.status === 503) {
+      exitWithError(errorMsg)
+    } else {
+      logger.error(`Failed to preview components in file ${fileKey}: ${errorMsg}`)
+      for (const nodeId of chunkNodeIds) {
+        for (const node of nodes.filter((n) => n.nodeId === nodeId)) {
+          results.push({
+            url: node.url,
+            nodeId: node.nodeId,
+            filePath: node.filePath,
+            success: false,
+            error: errorMsg,
+          })
+        }
+      }
+    }
+    return results
+  }
+
+  if (response!.response.status === 200 && response!.data.meta?.results) {
+    // Track match index per nodeId so duplicate node IDs get the correct file attribution.
+    // The server returns results in the same order as the templates we sent. Each chunk's
+    // nodeIds are disjoint (we dedupe before chunking), so per-chunk indexing is correct.
+    const nodeMatchIndex: Record<string, number> = {}
+    for (const result of response!.data.meta.results) {
+      const idx = nodeMatchIndex[result.nodeId] ?? 0
+      const matchingNodes = nodes.filter((n) => n.nodeId === result.nodeId)
+      const node = matchingNodes[idx] || matchingNodes[0]
+      nodeMatchIndex[result.nodeId] = idx + 1
+      results.push({
+        url: node?.url || result.nodeUrl,
+        nodeId: result.nodeId,
+        filePath: node?.filePath || '',
+        success: !result.error && !!result.snippet,
+        snippet: result.snippet,
+        language: result.language,
+        component: result.component,
+        error: result.error || (!result.snippet ? 'No snippet returned by server' : undefined),
+      })
+    }
+    return results
+  }
+
+  for (const nodeId of chunkNodeIds) {
+    for (const node of nodes.filter((n) => n.nodeId === nodeId)) {
+      results.push({
+        url: node.url,
+        nodeId: node.nodeId,
+        filePath: node.filePath,
+        success: false,
+        error: `API request failed with status ${response!.response.status}`,
+      })
+    }
+  }
+  return results
+}
+
+async function previewFile({
+  fileKey,
+  nodes,
+  baseApiUrl,
+  accessToken,
+  dir,
+  allCodeConnectObjects,
+}: {
+  fileKey: string
+  nodes: NodeToPreview[]
+  baseApiUrl: string
+  accessToken: string
+  dir: string
+  allCodeConnectObjects: CodeConnectJSON[]
+}): Promise<PreviewResult[]> {
+  const allNodeIds = nodes.map((n) => n.nodeId)
+  // Deduplicate — multiple figma.connect() calls may share the same nodeId;
+  // the individual templates are sent in figmaDocs and the server iterates per-template.
+  const nodeIds = [...new Set(allNodeIds)]
+
+  // Only send templates from the requested files — other files' templates
+  // for the same nodeId exist on the server and shouldn't be rendered individually.
+  const requestedFilePaths = new Set(nodes.map((n) => path.resolve(dir, n.filePath)))
+  const requiredTemplates = filterTemplatesForNodes(allNodeIds, allCodeConnectObjects).filter((t) =>
+    requestedFilePaths.has(path.resolve(t._codeConnectFilePath || '')),
+  )
+
+  const chunks = chunkArray(nodeIds, PREVIEW_CHUNK_SIZE)
+  const outcomes = await runInWaves(
+    chunks,
+    (chunkNodeIds) =>
+      sendPreviewChunk({ chunkNodeIds, requiredTemplates, baseApiUrl, fileKey, accessToken }),
+    PREVIEW_MAX_CONCURRENCY,
+  )
+
+  return outcomes.flatMap((outcome) => chunkOutcomeToResults(outcome, nodes, fileKey))
+}
+
 /**
  * Handle the preview command
  */
@@ -319,87 +507,15 @@ export async function handlePreview(files: string[], cmd: BaseCommand & { output
 
   for (const [fileKey, nodes] of Object.entries(nodesByFileKey)) {
     const baseApiUrl = getApiUrl(nodes[0].url, cmd.apiUrl || projectInfo.config.apiUrl)
-    const allNodeIds = nodes.map((n) => n.nodeId)
-    // Deduplicate — multiple figma.connect() calls may share the same nodeId;
-    // the individual templates are sent in figmaDocs and the server iterates per-template.
-    const nodeIds = [...new Set(allNodeIds)]
-
-    // Only send templates from the requested files — other files' templates
-    // for the same nodeId exist on the server and shouldn't be rendered individually.
-    const requestedFilePaths = new Set(nodes.map((n) => path.resolve(dir, n.filePath)))
-    const requiredTemplates = filterTemplatesForNodes(allNodeIds, allCodeConnectObjects).filter(
-      (t) => requestedFilePaths.has(path.resolve(t._codeConnectFilePath || '')),
-    )
-    const figmaDocs: Record<string, any[]> = { all: requiredTemplates }
-
-    try {
-      const response = await request.post<{
-        status: number
-        error: boolean
-        meta: {
-          results: Array<{
-            nodeId: string
-            nodeUrl: string
-            snippet?: string
-            language?: string
-            component?: string
-            error?: string
-          }>
-        }
-      }>(
-        `${baseApiUrl}/code_connect/preview_snippets?file_key=${fileKey}`,
-        { nodeIds, figmaDocs },
-        { headers: getHeaders(accessToken) },
-      )
-
-      if (response.response.status === 200 && response.data.meta?.results) {
-        // Track match index per nodeId so duplicate node IDs get the correct file attribution.
-        // The server returns results in the same order as the templates we sent.
-        const nodeMatchIndex: Record<string, number> = {}
-
-        for (const result of response.data.meta.results) {
-          const idx = nodeMatchIndex[result.nodeId] ?? 0
-          const matchingNodes = nodes.filter((n) => n.nodeId === result.nodeId)
-          const node = matchingNodes[idx] || matchingNodes[0]
-          nodeMatchIndex[result.nodeId] = idx + 1
-
-          results.push({
-            url: node?.url || result.nodeUrl,
-            nodeId: result.nodeId,
-            filePath: node?.filePath || '',
-            success: !result.error && !!result.snippet,
-            snippet: result.snippet,
-            language: result.language,
-            component: result.component,
-            error: result.error || (!result.snippet ? 'No snippet returned by server' : undefined),
-          })
-        }
-      } else {
-        for (const node of nodes) {
-          results.push({
-            url: node.url,
-            nodeId: node.nodeId,
-            filePath: node.filePath,
-            success: false,
-            error: `API request failed with status ${response.response.status}`,
-          })
-        }
-      }
-    } catch (err) {
-      const errorMsg = isFetchError(err)
-        ? err.data?.message || err.response.statusText
-        : String(err)
-      logger.error(`Failed to preview components in file ${fileKey}: ${errorMsg}`)
-      for (const node of nodes) {
-        results.push({
-          url: node.url,
-          nodeId: node.nodeId,
-          filePath: node.filePath,
-          success: false,
-          error: errorMsg,
-        })
-      }
-    }
+    const fileResults = await previewFile({
+      fileKey,
+      nodes,
+      baseApiUrl,
+      accessToken,
+      dir,
+      allCodeConnectObjects,
+    })
+    results.push(...fileResults)
   }
 
   // Validate snippet syntax
