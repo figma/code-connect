@@ -1,5 +1,5 @@
 import * as url from 'url'
-import { chunk } from 'lodash'
+import split from 'just-split'
 
 import { CodeConnectJSON } from '../connect/figma_connect'
 import { logger } from '../common/logging'
@@ -298,7 +298,7 @@ export async function validateDocs(
     const nodeMap = fileKeyToNodeIds[fileKey]
     const nodeIds = Object.keys(nodeMap)
     logger.debug(`Validating ${nodeIds.length} nodes`)
-    const chunks = chunk(nodeIds, 400)
+    const chunks = split(nodeIds, 400)
 
     for (let batch = 0; batch < chunks.length; batch++) {
       const nodeIdsChunk = chunks[batch]
