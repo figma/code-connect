@@ -1,4 +1,4 @@
-import { camelCase } from 'lodash'
+import camelCase from 'just-camel-case'
 import fs from 'fs'
 import {
   type ComponentPropertyDefinition,
