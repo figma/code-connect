@@ -1,10 +1,11 @@
-# Code Connect v1.4.6 (22 May 2026)
+# Code Connect v1.4.7 (28 May 2026)
 
 ## Features
 
 ### General
 
 - The `--file` (`-f`) option on `figma connect publish`, `unpublish`, and `parse` now accepts multiple files, so you can target several Code Connect files in one command (e.g. `figma connect publish --file a.figma.ts b.figma.ts`). Previously only a single file path was accepted.
+- Tweak retry behavior for `publish` command to reduce 429s errors
 - Shared flags (`--verbose`, `--token`, `--config`, `--dir`, `--file`, `--out-file`, `--out-dir`, `--api-url`, `--skip-update-check`, `--exit-on-unreadable-files`, `--dry-run`) now work whether you write them before or after the subcommand name. Previously, only `figma connect publish -v` toggled verbose mode; `figma connect -v publish` was silently ignored.
 
 ### Compose

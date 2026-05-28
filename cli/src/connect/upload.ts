@@ -7,7 +7,10 @@ import { isFetchError, request } from '../common/fetch'
 
 const COMPONENT_BROWSER_CONFLICT_REASON = 'Code Connect UI mapping already exists'
 
-const RETRY_DELAYS_MS = [5_000, 15_000, 30_000]
+// 429 (rate limit): extended schedule, ignore Retry-After to keep waits predictable.
+const RETRY_DELAYS_MS_429 = [5_000, 15_000, 30_000, 45_000, 60_000, 75_000]
+// 5xx (server error): original shorter schedule, still honoring Retry-After if provided.
+const RETRY_DELAYS_MS_5XX = [5_000, 15_000, 30_000]
 
 async function postWithRetry<T>(
   apiUrl: string,
@@ -15,28 +18,41 @@ async function postWithRetry<T>(
   accessToken: string,
   useOAuth = false,
 ): Promise<{ data: T }> {
-  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+  let attempt429 = 0
+  let attempt5xx = 0
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
     try {
       return await request.post<T>(apiUrl, batch, { headers: getHeaders(accessToken, useOAuth) })
     } catch (err) {
-      if (isFetchError(err) && (err.response.status === 429 || err.response.status >= 500)) {
-        if (attempt === RETRY_DELAYS_MS.length) {
-          throw err
-        }
+      if (!isFetchError(err)) throw err
+
+      const status = err.response.status
+
+      if (status === 429) {
+        if (attempt429 === RETRY_DELAYS_MS_429.length) throw err
+        const delayMs = RETRY_DELAYS_MS_429[attempt429]
+        logger.warn(
+          `Received 429, retrying in ${delayMs / 1000}s (attempt ${attempt429 + 1}/${RETRY_DELAYS_MS_429.length})...`,
+        )
+        await new Promise((resolve) => setTimeout(resolve, delayMs))
+        attempt429++
+      } else if (status >= 500) {
+        if (attempt5xx === RETRY_DELAYS_MS_5XX.length) throw err
         const retryAfterSec = err.response.headers.get('Retry-After')
         const delayMs = retryAfterSec
           ? parseInt(retryAfterSec, 10) * 1_000
-          : RETRY_DELAYS_MS[attempt]
+          : RETRY_DELAYS_MS_5XX[attempt5xx]
         logger.warn(
-          `Received ${err.response.status}, retrying in ${delayMs / 1000}s (attempt ${attempt + 1}/${RETRY_DELAYS_MS.length})...`,
+          `Received ${status}, retrying in ${delayMs / 1000}s (attempt ${attempt5xx + 1}/${RETRY_DELAYS_MS_5XX.length})...`,
         )
         await new Promise((resolve) => setTimeout(resolve, delayMs))
+        attempt5xx++
       } else {
         throw err
       }
     }
   }
-  throw new Error('Unreachable')
 }
 
 interface Args {
