@@ -36,18 +36,35 @@ repositories {
     mavenCentral()
 }
 
+// `kotlin-compiler-embeddable` is only used by the parser worker, which runs in an isolated JVM
+// (see ParseCodeConnectWorkAction / ParseCodeConnectTask). It must NOT appear as a runtime dep of
+// the plugin: putting it on the consumer's buildscript classpath causes IncompatibleClassChangeError
+// against the Kotlin Gradle Plugin when versions diverge (notably Kotlin 2.3+).
+//
+// `compileOnly` lets us compile the worker action's PSI references; at runtime the consumer's
+// `figmaCodeConnectParser` configuration (declared in FigmaCodeConnectPlugin.apply) resolves the
+// compiler jars and Gradle's worker API loads them only into the forked worker process.
+val parserClasspath: Configuration by configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+}
+
 dependencies {
     // WARNING!!! Adding dependencies to the plugins in highly discouraged. Make sure you know
     // what you are doing before adding dependencies to the plugin.
-    implementation(libs.kotlin.compiler.embeddable)
+
+    compileOnly(libs.kotlin.compiler.embeddable)
+    parserClasspath(libs.kotlin.compiler.embeddable)
+
     implementation(libs.kotlin.serialization)
     implementation(libs.kotlin.poet)
+    implementation(project(":annotations"))
 
     // Testing dependencies
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation(libs.kotlin.compiler.embeddable)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation(project(":plugin"))
-    implementation(project(":annotations"))
 }
 
 gradlePlugin {
@@ -83,6 +100,13 @@ val functionalTest by tasks.registering(Test::class) {
 }
 
 gradlePlugin.testSourceSets.add(functionalTestSourceSet)
+
+// TestKit isolates the plugin under test on a custom classpath. The worker process spawned by
+// ParseCodeConnectTask still needs kotlin-compiler-embeddable; in production it comes from the
+// `figmaCodeConnectParser` configuration resolved in the consumer's project. For TestKit, the
+// test build file declares `repositories { mavenCentral() }` so the same resolution path works.
+// We don't need to add anything to pluginUnderTestMetadata for the worker classpath itself —
+// the worker classpath is resolved per-task at execution time.
 
 tasks.named<Task>("check") {
     // Run the functional tests as part of `check`

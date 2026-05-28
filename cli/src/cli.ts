@@ -10,7 +10,6 @@ async function run() {
   maybePrefillWizardQuestionsForTesting()
 
   const program = new commander.Command().version(require('./../package.json').version)
-  program.enablePositionalOptions()
 
   addConnectCommandToProgram(program)
 

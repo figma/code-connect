@@ -1,183 +1,80 @@
 package com.figma.code.connect
 
-import com.figma.code.connect.models.CodeConnectDocument
-import com.figma.code.connect.models.CodeConnectParserCreateInput
-import com.figma.code.connect.models.CodeConnectParserMessage
-import com.figma.code.connect.models.CodeConnectParserParseInput
-import com.figma.code.connect.models.CodeConnectPluginParserOutput
-import com.figma.code.connect.models.FigmaBoolean
-import com.figma.code.connect.models.FigmaEnum
-import com.figma.code.connect.models.FigmaInstance
-import com.figma.code.connect.models.FigmaString
-import com.figma.code.connect.models.PropertyMapping
-import com.figma.code.connect.models.SourceLocation
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.modules.SerializersModule
-import kotlinx.serialization.modules.polymorphic
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
-import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
-import org.jetbrains.kotlin.com.intellij.openapi.util.Disposer
-import org.jetbrains.kotlin.com.intellij.psi.PsiManager
-import org.jetbrains.kotlin.com.intellij.testFramework.LightVirtualFile
-import org.jetbrains.kotlin.config.CompilerConfiguration
-import org.jetbrains.kotlin.idea.KotlinFileType
-import org.jetbrains.kotlin.psi.KtFile
 import java.io.File
 
 /**
  * This plugin is intended to be used in conjunction with the `figma` command line tool which
- * invokes gradle tasks by passing in input parameters and writes the output to a file
+ * invokes gradle tasks by passing in input parameters and writes the output to a file.
  *
  * It can be run standalone as a Gradle task as well, but the `figma` command line tool is still
  * required in order to upload the Code Connect files to Figma.
+ *
+ * The parsing task delegates to a [ParseCodeConnectWorkAction] running in an isolated worker JVM
+ * (see [ParseCodeConnectTask]) so the embedded Kotlin compiler used for parsing never reaches the
+ * consumer's buildscript classpath.
  */
 class FigmaCodeConnectPlugin : Plugin<Project> {
-    private val kotlinCoreEnvironment: KotlinCoreEnvironment by lazy {
-        val disposable = Disposer.newDisposable()
-        KotlinCoreEnvironment.createForProduction(
-            disposable,
-            CompilerConfiguration(),
-            EnvironmentConfigFiles.JVM_CONFIG_FILES,
-        )
-    }
-
-    private fun createImportStatement(
-        file: KtFile,
-        component: String,
-    ): String? {
-        if (file.packageFqName.asString().isBlank()) {
-            return null
-        }
-        return "import ${file.packageFqName.asString()}.$component"
-    }
-
-    @OptIn(ExperimentalSerializationApi::class)
     override fun apply(project: Project) {
-        /**
-         * `parseCodeConnect` takes an argument `filePath` which is the path to the input/output JSON
-         * file and parses through a set of files and finds Code Connect files. It takes a single
-         * argument, `filePath`, which is the path to the input/output JSON file.
-         * The input JSON is documented in the `CodeConnectParserInput` class.
-         */
-        project.tasks.register("parseCodeConnect") { task ->
-            task.doLast {
-                val filePath = project.findProperty("filePath") as? String
-                val outputDirectory = project.findProperty("outputDir") as? String
-
-                if (!filePath.isNullOrBlank()) {
-                    val json =
-                        Json {
-                            ignoreUnknownKeys = true
-                            encodeDefaults = true
-                            serializersModule =
-                                SerializersModule {
-                                    polymorphic(PropertyMapping::class) {
-                                        subclass(FigmaString::class, FigmaString.serializer())
-                                        subclass(FigmaBoolean::class, FigmaBoolean.serializer())
-                                        subclass(FigmaInstance::class, FigmaInstance.serializer())
-                                        subclass(FigmaEnum::class, FigmaEnum.serializer())
-                                    }
-                                }
-                            prettyPrint = true
-                        }
-
-                    val parseInputFile = File(filePath)
-                    val codeConnectParserParseInput =
-                        json.decodeFromString<CodeConnectParserParseInput>(parseInputFile.readText())
-
-                    val documents = mutableListOf<CodeConnectDocument>()
-                    val messages = mutableListOf<CodeConnectParserMessage>()
-                    // Keep track of the import + source Location
-                    val composableImportsAndSourceLocations = mutableMapOf<String, Pair<String?, SourceLocation>>()
-
-                    for (path in codeConnectParserParseInput.paths.filter { it.endsWith(".kt") }) {
-                        val tempFile = File(path)
-                        val file =
-                            LightVirtualFile(
-                                "temp_file.kt",
-                                KotlinFileType.INSTANCE,
-                                tempFile.readText().replace("\r\n", "\n"),
-                            )
-                        val ktFile =
-                            PsiManager.getInstance(kotlinCoreEnvironment.project)
-                                .findFile(file) as KtFile
-
-                        val parserResult = CodeConnectParser.parseFile(ktFile, codeConnectParserParseInput.config.skipTemplateHelpers)
-                        documents.addAll(parserResult.docs.map { it.copy(_codeConnectFilePath = path) })
-                        messages.addAll(parserResult.messages)
-                        // Get all the line numbers for all @Composable functions to assign a SourceLocation
-                        composableImportsAndSourceLocations.putAll(
-                            parserResult.functionLineNumbers.mapValues {
-                                Pair(createImportStatement(ktFile, it.key), SourceLocation(file = path, line = it.value))
-                            },
-                        )
-                    }
-
-                    documents.forEach { doc ->
-                        val sourceInformation = composableImportsAndSourceLocations[doc.component]
-                        if (doc.component == null || sourceInformation == null) {
-                            return@forEach
-                        }
-                        doc.sourceLocation = sourceInformation.second
-
-                        if (codeConnectParserParseInput.config.autoAddImports) {
-                            sourceInformation.first?.let {
-                                doc.templateData.imports += it
-                            }
-                        }
-                    }
-
-                    val outputStr = json.encodeToString(CodeConnectPluginParserOutput(documents, messages)).trimIndent()
-
-                    // Write output to output directory with filename ${moduleName}-output.json
-                    File(outputDirectory, "${project.name}-output.json").writeText(outputStr)
-                } else {
-                    throw IllegalArgumentException("filePath property is required")
-                }
+        val parserClasspath =
+            project.configurations.create("figmaCodeConnectParser") {
+                it.isCanBeConsumed = false
+                it.isCanBeResolved = true
+                it.isVisible = false
+                it.description =
+                    "Classpath for the Code Connect parser worker. Resolved into a forked JVM via " +
+                    "Gradle's worker API so kotlin-compiler-embeddable never appears on the " +
+                    "consumer's buildscript classpath."
             }
-            task.notCompatibleWithConfigurationCache(
-                "This task is not compatible with configuration caching because it reads from a file path property.",
-            )
+        project.dependencies.add(parserClasspath.name, "org.jetbrains.kotlin:kotlin-compiler-embeddable:2.2.21")
+        project.dependencies.add(parserClasspath.name, "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
+        val filePathProvider = project.providers.gradleProperty("filePath")
+        val outputDirProvider = project.providers.gradleProperty("outputDir")
+
+        // Resolve `filePath`/`outputDir` against the root project so that, in a multi-project
+        // build where the plugin is applied to several subprojects, every per-subproject task
+        // sees the same input JSON the CLI wrote at the build root rather than looking for it
+        // under its own `subproject/` directory.
+        //
+        // The path-resolution helper captures only `rootDir` (a `java.io.File`). Capturing
+        // `project.rootProject` itself or calling `rootProject.file(...)` inside a Provider
+        // lambda would force Gradle's configuration cache to serialize a `Project` reference,
+        // which it cannot do — and the resulting error is opaque ("cannot serialize object of
+        // type 'DefaultProject'") rather than the clean opt-out we want.
+        val rootDir: File = project.rootProject.projectDir
+        val resolveAgainstRoot: (String) -> File = { path ->
+            val f = File(path)
+            if (f.isAbsolute) f else File(rootDir, path)
         }
 
         /**
-         * `createCodeConnect` takes an argument `filePath` which is the path to the input/output
-         * JSON file and create a Code Connect file based on information provided about the Figma
-         * Component. It takes a single argument `filePath`, which is the path to the input/output
-         * JSON file.
-         * The input JSON is documented in the `CodeConnectParserCreateInput` class.
+         * Parses a set of Kotlin source files for `@FigmaConnect`-annotated documents.
+         * Takes `-PfilePath=<json>` (input contract documented on [models.CodeConnectParserParseInput])
+         * and `-PoutputDir=<dir>` (output file is `${project.name}-output.json`).
          */
-        project.tasks.register("createCodeConnect") { task ->
-            task.doLast {
-                val filePath = project.findProperty("filePath") as? String
-                val outputDirectory = project.findProperty("outputDir") as? String
+        project.tasks.register("parseCodeConnect", ParseCodeConnectTask::class.java) { task ->
+            task.inputFile.fileProvider(filePathProvider.map(resolveAgainstRoot))
+            task.outputDirectory.fileProvider(outputDirProvider.map(resolveAgainstRoot))
+            task.projectNameProperty.set(project.name)
+            task.parserClasspath.from(parserClasspath)
+            // The source files referenced inside the input JSON are not declared inputs, so
+            // Gradle cannot detect when they change. Disable up-to-date until we feed those
+            // paths into the input snapshot.
+            task.outputs.upToDateWhen { false }
+        }
 
-                if (!filePath.isNullOrBlank()) {
-                    val json =
-                        Json {
-                            ignoreUnknownKeys = true
-                            encodeDefaults = true
-                            allowTrailingComma = true
-                        }
-
-                    val tempFile = File(filePath)
-                    val codeConnectParserCreateInput =
-                        json.decodeFromString<CodeConnectParserCreateInput>(tempFile.readText())
-
-                    val output = CodeConnectCreator.create(codeConnectParserCreateInput)
-                    val outputStr = json.encodeToString(output)
-
-                    // Write output to output directory with filename ${moduleName}-output.json
-                    File(outputDirectory, "${project.name}-output.json").writeText(outputStr)
-                }
-            }
-            task.notCompatibleWithConfigurationCache(
-                "This task is not compatible with configuration caching because it reads from a file path property.",
-            )
+        /**
+         * Creates a starter Code Connect file from a Figma component description.
+         * Takes `-PfilePath=<json>` (input contract documented on [models.CodeConnectParserCreateInput])
+         * and `-PoutputDir=<dir>`.
+         */
+        project.tasks.register("createCodeConnect", CreateCodeConnectTask::class.java) { task ->
+            task.inputFile.fileProvider(filePathProvider.map(resolveAgainstRoot))
+            task.outputDirectory.fileProvider(outputDirProvider.map(resolveAgainstRoot))
+            task.projectNameProperty.set(project.name)
+            task.outputs.upToDateWhen { false }
         }
     }
 }

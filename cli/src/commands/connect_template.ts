@@ -24,7 +24,7 @@ export type BaseCommand = commander.Command & {
   config: string
   dryRun: boolean
   dir: string
-  file: string
+  file: string[]
   jsonFile: string
   skipUpdateCheck: boolean
   exitOnUnreadableFiles: boolean
@@ -321,7 +321,7 @@ interface ProgramOptions {
  *
  * Note: does NOT use addBaseCommand internally because that function registers
  * both `-o --outFile` and `-o --outDir` with the same `-o` short flag.
- * commander@12+ (used by litmus-cli) throws a conflict error on duplicate flags.
+ * commander@12+ (used by @figma/cli) throws a conflict error on duplicate flags.
  */
 export function addCodeConnectCommandsToProgram(
   program: commander.Command,
@@ -333,7 +333,10 @@ export function addCodeConnectCommandsToProgram(
       .description(description)
       .usage('[options]')
       .option('-r --dir <dir>', 'directory to parse')
-      .option('-f --file <file>', 'path to a single Code Connect file to process')
+      .option(
+        '-f --file <file...>',
+        'paths to one or more Code Connect files to process (space-separated)',
+      )
       .option('--outFile <file>', 'specify a file to output generated Code Connect')
       .option('--outDir <dir>', 'specify a directory to output generated Code Connect')
       .option('-c --config <path>', 'path to a figma config file')

@@ -30,7 +30,13 @@ describe('filterProjectInfoByFile', () => {
     expect(filterProjectInfoByFile(info, '')).toBe(info)
   })
 
-  it('filters files to only the specified file', () => {
+  it('returns projectInfo unchanged when file list is empty', () => {
+    const info = makeProjectInfo(['/a.ts'])
+    expect(filterProjectInfoByFile(info, [])).toBe(info)
+    expect(existsSync).not.toHaveBeenCalled()
+  })
+
+  it('filters files to only the specified file (string input)', () => {
     const absFile = path.resolve('/project/a.ts')
     const info = makeProjectInfo([absFile, '/project/b.ts'])
     existsSync.mockReturnValue(true)
@@ -43,18 +49,42 @@ describe('filterProjectInfoByFile', () => {
     expect(result).not.toBe(info)
   })
 
-  it('exits with error when the file does not exist on disk', () => {
-    existsSync.mockReturnValue(false)
-    filterProjectInfoByFile(makeProjectInfo([]), '/project/missing.ts')
+  it('filters files to the specified files (array input)', () => {
+    const absA = path.resolve('/project/a.ts')
+    const absB = path.resolve('/project/b.ts')
+    const info = makeProjectInfo([absA, absB, '/project/c.ts'])
+    existsSync.mockReturnValue(true)
+
+    const result = filterProjectInfoByFile(info, ['/project/a.ts', '/project/b.ts'])
+
+    expect(result.files).toEqual([absA, absB])
+  })
+
+  it('preserves projectInfo.files ordering regardless of input order', () => {
+    const absA = path.resolve('/project/a.ts')
+    const absB = path.resolve('/project/b.ts')
+    const info = makeProjectInfo([absA, absB])
+    existsSync.mockReturnValue(true)
+
+    const result = filterProjectInfoByFile(info, ['/project/b.ts', '/project/a.ts'])
+
+    expect(result.files).toEqual([absA, absB])
+  })
+
+  it('exits with error when any file does not exist on disk', () => {
+    existsSync.mockImplementation((p: string) => !p.endsWith('missing.ts'))
+    filterProjectInfoByFile(makeProjectInfo([]), ['/project/a.ts', '/project/missing.ts'])
     expect(exitWithError).toHaveBeenCalledWith(expect.stringContaining('File not found:'))
   })
 
-  it('exits with error when the file is not in the project file list', () => {
+  it('exits with error when any file is not in the project file list', () => {
     existsSync.mockReturnValue(true)
-    const absFile = path.resolve('/project/unlisted.ts')
-    filterProjectInfoByFile(makeProjectInfo(['/other.ts']), '/project/unlisted.ts')
-    expect(exitWithError).toHaveBeenCalledWith(
-      expect.stringContaining(`File ${absFile} was not found in the project's file list`),
-    )
+    const absUnlisted = path.resolve('/project/unlisted.ts')
+    const absListed = path.resolve('/project/listed.ts')
+    filterProjectInfoByFile(makeProjectInfo([absListed]), [
+      '/project/listed.ts',
+      '/project/unlisted.ts',
+    ])
+    expect(exitWithError).toHaveBeenCalledWith(expect.stringContaining(`  - ${absUnlisted}`))
   })
 })

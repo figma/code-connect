@@ -57,7 +57,7 @@ export type BaseCommand = commander.Command & {
   config: string
   dryRun: boolean
   dir: string
-  file: string
+  file: string[]
   jsonFile: string
   skipUpdateCheck: boolean
   exitOnUnreadableFiles: boolean
@@ -71,7 +71,10 @@ function addBaseCommand(command: commander.Command, name: string, description: s
     .description(description)
     .usage('[options]')
     .option('-r --dir <dir>', 'directory to parse')
-    .option('-f --file <file>', 'path to a single Code Connect file to process')
+    .option(
+      '-f --file <file...>',
+      'paths to one or more Code Connect files to process (space-separated)',
+    )
     .option('-t --token <token>', 'figma access token')
     .option('-v --verbose', 'enable verbose logging for debugging')
     .option('-o --outFile <file>', 'specify a file to output generated Code Connect')
@@ -95,6 +98,12 @@ export function addConnectCommandToProgram(program: commander.Command) {
   const connectCommand = addBaseCommand(program, 'connect', 'Figma Code Connect').action(
     withUpdateCheck(runWizard),
   )
+
+  // Make shared base flags work on either side of the subcommand name —
+  // `figma connect -v publish` and `figma connect publish -v` both honour -v.
+  connectCommand.hook('preAction', (_thisCommand, actionCommand) => {
+    Object.assign(actionCommand.opts(), actionCommand.optsWithGlobals())
+  })
 
   // Sub-commands, invoked with e.g. `figma connect publish`
   addBaseCommand(

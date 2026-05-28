@@ -1,3 +1,18 @@
+# Code Connect v1.4.6 (22 May 2026)
+
+## Features
+
+### General
+
+- The `--file` (`-f`) option on `figma connect publish`, `unpublish`, and `parse` now accepts multiple files, so you can target several Code Connect files in one command (e.g. `figma connect publish --file a.figma.ts b.figma.ts`). Previously only a single file path was accepted.
+- Shared flags (`--verbose`, `--token`, `--config`, `--dir`, `--file`, `--out-file`, `--out-dir`, `--api-url`, `--skip-update-check`, `--exit-on-unreadable-files`, `--dry-run`) now work whether you write them before or after the subcommand name. Previously, only `figma connect publish -v` toggled verbose mode; `figma connect -v publish` was silently ignored.
+
+### Compose
+
+- Fixed a crash that prevented the Code Connect Gradle plugin from being used with projects on Kotlin 2.3 or newer. The plugin now runs Kotlin source parsing in an isolated worker process, so it no longer ships an embedded Kotlin compiler in the consumer's build environment and cannot conflict with the host project's Kotlin Gradle Plugin across version upgrades.
+- Fixed `parseCodeConnect` / `createCodeConnect` failing in multi-module Gradle projects when the plugin is applied to more than one subproject. The task now resolves the `-PfilePath`/`-PoutputDir` arguments against the root project so every subproject finds the input the CLI wrote at the build root.
+- The Code Connect Gradle tasks now work cleanly with Gradle's configuration cache enabled. Previously, enabling `--configuration-cache` caused an opaque serialization error; the tasks now store and reuse the configuration cache entry as expected.
+
 # Code Connect v1.4.5 (13 May 2026)
 
 ## Fixed

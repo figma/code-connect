@@ -29,6 +29,9 @@ class FigmaCodeConnectPluginFunctionalTest {
             plugins {
                 id('com.figma.code.connect')
             }
+            repositories {
+                mavenCentral()
+            }
             """.trimIndent(),
         )
 
@@ -94,6 +97,9 @@ class FigmaCodeConnectPluginFunctionalTest {
             plugins {
                 id('com.figma.code.connect')
             }
+            repositories {
+                mavenCentral()
+            }
             """.trimIndent(),
         )
 
@@ -152,6 +158,153 @@ class FigmaCodeConnectPluginFunctionalTest {
             projectDir.resolve(
                 "TestInstanceComponent.figma.kt",
             ).readText().removeWhiteSpaces().contains(expected.readText().removeWhiteSpaces()),
+        )
+    }
+
+    /**
+     * Regression test for the multi-module case (issue #282): when the plugin is applied to
+     * several subprojects and the CLI invokes `parseCodeConnect` with a `-PfilePath` that is
+     * relative (or absolute), each subproject's task must locate the same input JSON the CLI
+     * wrote at the build root. Historically [ParseCodeConnectTask.inputFile] resolved the path
+     * against each subproject's own directory and the build failed with
+     * `property 'inputFile' specifies file '<root>/<subproject>/<filePath>' which doesn't exist`.
+     */
+    @Test fun testParsingInMultiModuleProject() {
+        settingsFile.writeText(
+            """
+            rootProject.name = 'multi-module-test'
+            include('app', 'lib')
+            """.trimIndent(),
+        )
+        // Root build script — no plugin applied here, only at the subproject level (this is
+        // the configuration that exposed the regression in §B5).
+        buildFile.writeText("")
+
+        val pluginBlock =
+            """
+            plugins {
+                id('com.figma.code.connect')
+            }
+            repositories {
+                mavenCentral()
+            }
+            """.trimIndent()
+
+        val appDir = projectDir.resolve("app").apply { mkdirs() }
+        val libDir = projectDir.resolve("lib").apply { mkdirs() }
+        appDir.resolve("build.gradle").writeText(pluginBlock)
+        libDir.resolve("build.gradle").writeText(pluginBlock)
+
+        // Put a Code Connect doc in each subproject so we can confirm each task actually ran.
+        val resourceFile =
+            File(javaClass.classLoader.getResource("CodeConnectTestDocument.kt")?.file ?: throw IllegalArgumentException("File not found"))
+        val appKotlinComponent = appDir.resolve("src/com/figma/code/connect/test/CodeConnectTestDocument.kt").apply { parentFile.mkdirs() }
+        val libKotlinComponent = libDir.resolve("src/com/figma/code/connect/test/CodeConnectTestDocument.kt").apply { parentFile.mkdirs() }
+        resourceFile.copyTo(appKotlinComponent)
+        resourceFile.copyTo(libKotlinComponent)
+
+        val inputJson =
+            """
+            {
+                "mode": "PARSE",
+                "paths": [
+                "${appKotlinComponent.absolutePath}",
+                "${libKotlinComponent.absolutePath}"
+                ],
+                "config": {
+                    "autoAddImports": false,
+                    "skipTemplateHelpers": false
+                }
+            }
+            """.trimIndent()
+        inputFile.writeText(inputJson)
+
+        val outputDir = projectDir.resolve("parser-output").apply { mkdirs() }
+
+        val runner = GradleRunner.create()
+        runner.forwardOutput()
+        runner.withPluginClasspath()
+        runner.withProjectDir(projectDir)
+        // Invoke `parseCodeConnect` from the root. Gradle dispatches it to every subproject
+        // that registers the task, exercising the path-resolution fix.
+        runner.withArguments(
+            "parseCodeConnect",
+            "-PfilePath=${inputFile.absolutePath}",
+            "-PoutputDir=${outputDir.absolutePath}",
+            "-q",
+        )
+        runner.build()
+
+        val outputFiles = outputDir.listFiles { file -> file.name.endsWith("-output.json") }?.map { it.name }?.toSet() ?: emptySet()
+        assertTrue(
+            "Expected both app-output.json and lib-output.json, got $outputFiles",
+            outputFiles.contains("app-output.json") && outputFiles.contains("lib-output.json"),
+        )
+    }
+
+    /**
+     * Regression test: `parseCodeConnect` must work with Gradle's configuration cache enabled.
+     * The previous version of this branch captured `project.rootProject` inside a `Provider.map`
+     * lambda for `inputFile`/`outputDirectory`, which the configuration cache cannot serialize
+     * — it produced `cannot serialize object of type 'DefaultProject'` instead of either
+     * succeeding or opting out cleanly.
+     */
+    @Test fun testParsingWithConfigurationCache() {
+        settingsFile.writeText("")
+        buildFile.writeText(
+            """
+            plugins {
+                id('com.figma.code.connect')
+            }
+            repositories {
+                mavenCentral()
+            }
+            """.trimIndent(),
+        )
+
+        val srcDir = projectDir.resolve("src/com/figma/code/connect/test").apply { mkdirs() }
+        val kotlinComponent = srcDir.resolve("CodeConnectTestDocument.kt")
+        val resourceFile =
+            File(javaClass.classLoader.getResource("CodeConnectTestDocument.kt")?.file ?: throw IllegalArgumentException("File not found"))
+        resourceFile.copyTo(kotlinComponent)
+
+        val inputJson =
+            """
+            {
+                "mode": "PARSE",
+                "paths": [
+                "${kotlinComponent.absolutePath}"
+                ],
+                "config": {
+                    "autoAddImports": false,
+                    "skipTemplateHelpers": false
+                }
+            }
+            """.trimIndent()
+        inputFile.writeText(inputJson)
+
+        val runner = GradleRunner.create()
+        runner.forwardOutput()
+        runner.withPluginClasspath()
+        runner.withProjectDir(projectDir)
+        // No `-q` here — we need Gradle's "Configuration cache entry stored/reused" lifecycle
+        // messages in the output to assert against.
+        runner.withArguments(
+            "parseCodeConnect",
+            "-PfilePath=${inputFile.absolutePath}",
+            "-PoutputDir=${projectDir.absolutePath}",
+            "--configuration-cache",
+        )
+        val firstRun = runner.build()
+        assertTrue(
+            "Expected 'Configuration cache entry stored' on the first run, got:\n${firstRun.output}",
+            firstRun.output.contains("Configuration cache entry stored"),
+        )
+
+        val secondRun = runner.build()
+        assertTrue(
+            "Expected 'Configuration cache entry reused' on the second run, got:\n${secondRun.output}",
+            secondRun.output.contains("Configuration cache entry reused"),
         )
     }
 

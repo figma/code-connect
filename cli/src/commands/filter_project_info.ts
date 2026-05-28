@@ -4,34 +4,40 @@ import { ProjectInfo } from '../connect/project'
 import { exitWithError } from '../common/logging'
 
 /**
- * If --file is specified, filter projectInfo.files to only include that file.
- * Exits with an error if the file doesn't exist or isn't in the project's file list.
+ * If --file is specified, filter projectInfo.files to only include those files.
+ * Exits with an error if any file doesn't exist or isn't in the project's file list.
  */
 export function filterProjectInfoByFile(
   projectInfo: ProjectInfo,
-  file: string | undefined,
+  files: string[] | string | undefined,
 ): ProjectInfo {
-  if (!file) {
+  if (!files || (Array.isArray(files) && files.length === 0)) {
     return projectInfo
   }
 
-  const absFile = path.resolve(file)
+  const inputs = Array.isArray(files) ? files : [files]
+  const absFiles = inputs.map((f) => path.resolve(f))
 
-  if (!fs.existsSync(absFile)) {
-    exitWithError(`File not found: ${absFile}`)
+  for (const absFile of absFiles) {
+    if (!fs.existsSync(absFile)) {
+      exitWithError(`File not found: ${absFile}`)
+    }
   }
 
-  const matched = projectInfo.files.filter((f) => f === absFile)
+  const projectFileSet = new Set(projectInfo.files)
+  const missing = absFiles.filter((f) => !projectFileSet.has(f))
 
-  if (matched.length === 0) {
+  if (missing.length > 0) {
     exitWithError(
-      `File ${absFile} was not found in the project's file list. ` +
-        `Make sure it matches the include/exclude globs in your config.`,
+      `The following file(s) were not found in the project's file list:\n` +
+        missing.map((f) => `  - ${f}`).join('\n') +
+        `\nMake sure they match the include/exclude globs in your config.`,
     )
   }
 
+  const requestedSet = new Set(absFiles)
   return {
     ...projectInfo,
-    files: matched,
+    files: projectInfo.files.filter((f) => requestedSet.has(f)),
   }
 }

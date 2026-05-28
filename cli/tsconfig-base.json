@@ -52,7 +52,9 @@
     // Backward compatibility with TS 5.x
     // TODO: fix violations and remove
     "noUncheckedSideEffectImports": false,
-    "ignoreDeprecations": "6.0",
+
+    // Forward compatibility with TS 7.0
+    "stableTypeOrdering": true,
 
     // By default, all `@types` packages in all ancestor node_modules trees are visible. This
     // is slow and the wrong behavior for monorepos. For example, it makes it very easy to
