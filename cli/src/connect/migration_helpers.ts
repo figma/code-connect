@@ -12,7 +12,7 @@ const PRETTIER_OPTIONS = {
 }
 
 /** Formats template code with consistent prettier configuration */
-function formatTemplate(code: string): string {
+export function formatTemplate(code: string): string {
   return prettier.format(code, PRETTIER_OPTIONS)
 }
 
@@ -150,8 +150,8 @@ function writeFileWithDuplicateHandling(
   return { outputPath, skipped: false }
 }
 
-/** Migrates a doc's template (Swift helpers, server helpers, V2, id, imports, nestable) and returns the formatted string. */
-export function prepareMigratedTemplate(
+/** Migrates a doc's template (Swift helpers, server helpers, V2, id, imports, nestable) without formatting. */
+export function prepareMigratedTemplateBody(
   doc: CodeConnectJSON,
   includeProps = false,
   useTypeScript?: boolean,
@@ -169,6 +169,16 @@ export function prepareMigratedTemplate(
   if (useTypeScript) {
     template = convertSyntaxToTypeScript(template)
   }
+  return template
+}
+
+/** Migrates a doc's template (Swift helpers, server helpers, V2, id, imports, nestable) and returns the formatted string. */
+export function prepareMigratedTemplate(
+  doc: CodeConnectJSON,
+  includeProps = false,
+  useTypeScript?: boolean,
+): string {
+  const template = prepareMigratedTemplateBody(doc, includeProps, useTypeScript)
   return formatTemplate(template)
 }
 
@@ -353,14 +363,28 @@ export const migrateV1TemplateToV2 = (template: string): string => {
   migrated = migrated.replace(/\.__getPropertyValue__\(/g, '.getPropertyValue(')
 
   // 6. __findChildWithCriteria__ - migrate based on type parameter
-  // For TEXT type with __render__(): __findChildWithCriteria__({ name: 'X', type: "TEXT" }).__render__() → findText('X').textContent
+  // For TEXT type with __render__(): __findChildWithCriteria__({ name: 'X', type: "TEXT" }).__render__() → findText('X').__render__()
+  //
+  // We intentionally keep `.__render__()` here rather than the friendlier
+  // `.textContent`. `findText` returns `TextHandle | ErrorHandle`, and
+  // `textContent` only exists on `TextHandle` - so `.findText('X').textContent`
+  // (a) fails to typecheck (`textContent` does not exist on `ErrorHandle`), and
+  // (b) silently evaluates to `undefined` for a missing layer, swallowing the
+  // error. `__render__()` exists on both handles (returning the text string on
+  // success and an error section on failure), exactly matching the pre-migration
+  // runtime behavior of the React parser's `figma.textContent('X')`.
+  //
+  // We emit a sentinel so the blanket `__render__()` -> `executeTemplate().example`
+  // rewrite below (step 8) doesn't clobber it - `TextHandle` has no
+  // `executeTemplate`, so that rewrite would re-break the text case. The sentinel
+  // is converted back to `__render__()` at the end of this function.
   migrated = migrated.replace(
     /\.__findChildWithCriteria__\(\{\s*name:\s*'([^']+)',\s*type:\s*"TEXT"\s*\}\)\.__render__\(\)/g,
-    ".findText('$1').textContent",
+    ".findText('$1').__FCC_TEXT_RENDER__()",
   )
   migrated = migrated.replace(
     /\.__findChildWithCriteria__\(\{\s*type:\s*"TEXT",\s*name:\s*'([^']+)'\s*\}\)\.__render__\(\)/g,
-    ".findText('$1').textContent",
+    ".findText('$1').__FCC_TEXT_RENDER__()",
   )
   // For INSTANCE type: __findChildWithCriteria__({ type: 'INSTANCE', name: 'X' }) → findInstance('X')
   migrated = migrated.replace(
@@ -415,6 +439,10 @@ export const migrateV1TemplateToV2 = (template: string): string => {
     /\{\s*\.\.\.figma\.(code|tsx|html|swift|kotlin)`/g,
     '{ example: figma.$1`',
   )
+
+  // 12. Restore the TEXT __render__ sentinel emitted in step 6 (kept out of the
+  // way of step 8's __render__ -> executeTemplate().example rewrite).
+  migrated = migrated.replace(/\.__FCC_TEXT_RENDER__\(\)/g, '.__render__()')
 
   return migrated
 }

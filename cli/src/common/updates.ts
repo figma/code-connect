@@ -1,6 +1,5 @@
 import chalk from 'chalk'
 import { logger } from './logging'
-import { execSync } from 'child_process'
 import { compareVersions } from 'compare-versions'
 import { BaseCommand } from '../commands/connect'
 import { Command } from 'commander'
@@ -102,5 +101,6 @@ To update, run ${chalk.whiteBright('npm install @figma/code-connect@latest')} fo
 }
 
 export function updateCli() {
+  const { execSync } = require('child_process')
   execSync(getUpdateCommand(), { stdio: 'inherit' })
 }

@@ -10,7 +10,7 @@ import { LogLevel, exitWithError, highlight, logger, success } from '../common/l
 import { CodeConnectJSON } from '../connect/figma_connect'
 import { delete_docs } from '../connect/delete_docs'
 import { exitWithFeedbackMessage } from '../connect/helpers'
-import { isRawTemplate, parseRawFile } from '../connect/raw_templates'
+import { CodePropertiesError, isRawTemplate, parseRawFile } from '../connect/raw_templates'
 import { parseBatchFile } from '../connect/batch_templates'
 import { filterProjectInfoByFile } from './filter_project_info'
 import { createCodeConnectFromUrl } from '../connect/create_template'
@@ -92,6 +92,15 @@ async function getCodeConnectObjects(
         }
         rawTemplateDocs.push(doc)
       } catch (e) {
+        // A url-less file containing `codeProperties` is not Code Connect (e.g.
+        // Make's code component property definitions). Log and skip it instead
+        // of failing — never exit, not even with --exit-on-unreadable-files.
+        if (e instanceof CodePropertiesError) {
+          if (!silent || cmd.verbose) {
+            logger.info(e.message)
+          }
+          continue
+        }
         if (!silent || cmd.verbose) {
           logger.error(`❌ ${file}`)
           if (cmd.verbose) {

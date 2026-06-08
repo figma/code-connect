@@ -24,6 +24,16 @@ export const DEFAULT_INCLUDE_GLOBS_BY_PARSER = {
   __unit_test__: [''],
 }
 
+export const DEFAULT_PARSERLESS_INCLUDE_GLOBS = [
+  '**/*.figma.ts',
+  '**/*.figma.js',
+  '**/*.figma.template.ts',
+  '**/*.figma.template.js',
+  '**/*.figma.batch.json',
+]
+
+const DEFAULT_PARSERLESS_EXCLUDE_GLOBS = ['node_modules/**']
+
 export const DEFAULT_LABEL_PER_PARSER: Partial<Record<CodeConnectParser, string>> = {
   react: CodeConnectLabel.React,
   html: CodeConnectLabel.WebComponents,
@@ -150,19 +160,15 @@ interface FigmaConfig {
   codeConnect?: CodeConnectConfig
 }
 
-export function determineConfigFromProject(
-  dir: string,
-  exitOnError = true,
-  isTemplatesOnlyCLI = false,
-): FigmaConfig | undefined {
+export function determineConfigFromProject(dir: string, isTemplatesOnlyCLI = false): FigmaConfig {
   if (isTemplatesOnlyCLI) {
     const label = determineLabelFromProject(dir)
     return { codeConnect: label ? { label } : {} }
   }
 
   const parser = determineParserFromProject(dir)
+  const label = determineLabelFromProject(dir)
   if (parser) {
-    const label = determineLabelFromProject(dir)
     if (label) {
       return { codeConnect: { parser, label } }
     }
@@ -170,11 +176,9 @@ export function determineConfigFromProject(
     return { codeConnect: { parser } }
   }
 
-  if (exitOnError) {
-    exitWithError(
-      `Code Connect was not able to determine your project type, and no config file was found. Please ensure you are running Code Connect from your project root. You may need to create a config file specifying which parser to use. See https://github.com/figma/code-connect/ for instructions.`,
-    )
-  }
+  logger.info(`Can't determine parser from project. Proceeding without a parser.`)
+
+  return { codeConnect: label ? { label } : {} }
 }
 
 function showParserMessage(message: string) {
@@ -404,18 +408,15 @@ async function parseConfig(
     if (!isTemplatesOnlyCLI && !config.codeConnect?.parser) {
       const parser = determineParserFromProject(dir)
 
-      if (!parser) {
-        logger.error(
-          `Code Connect was not able to determine your project type, and no \`parser\` was specified. Please ensure you are running Code Connect from your project root. You may need to add a \`parser\` key to your config file, specifying which parser to use. See https://github.com/figma/code-connect/ for instructions.`,
-        )
-        exitWithFeedbackMessage(1)
+      if (parser) {
+        if (!config.codeConnect) {
+          config.codeConnect = { parser }
+        }
+        // TS errors if this is in an else
+        config.codeConnect.parser = parser
+      } else {
+        logger.info(`Can't determine parser from project. Proceeding without a parser.`)
       }
-
-      if (!config.codeConnect) {
-        config.codeConnect = { parser }
-      }
-      // TS errors if this is in an else
-      config.codeConnect.parser = parser
     }
 
     if (!config.codeConnect?.label) {
@@ -658,7 +659,7 @@ export async function parseOrDetermineConfig(
 
   const globalConfig = hasConfigFile
     ? await parseConfig(configFilePath, dir, isTemplatesOnlyCLI)
-    : determineConfigFromProject(dir, true, isTemplatesOnlyCLI)
+    : determineConfigFromProject(dir, isTemplatesOnlyCLI)
 
   if (!globalConfig) {
     throw new Error(`Error parsing config file: ${configFilePath}`)
@@ -743,20 +744,14 @@ export async function getProjectInfoFromConfig(
   const remoteUrl = getGitRemoteURL(absPath)
 
   const defaultIncludeGlobs = isTemplatesOnlyCLI
-    ? [
-        '**/*.figma.ts',
-        '**/*.figma.js',
-        '**/*.figma.template.ts',
-        '**/*.figma.template.js',
-        '**/*.figma.batch.json',
-      ]
+    ? DEFAULT_PARSERLESS_INCLUDE_GLOBS
     : config.parser
       ? DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]
-      : undefined
+      : DEFAULT_PARSERLESS_INCLUDE_GLOBS
 
   // always ignore node_modules; for parsers, apply parser-specific exclusions
   const defaultExcludeGlobs = isTemplatesOnlyCLI
-    ? ['node_modules/**']
+    ? DEFAULT_PARSERLESS_EXCLUDE_GLOBS
     : config.parser
       ? ({
           react: ['node_modules/**'],
@@ -766,7 +761,7 @@ export async function getProjectInfoFromConfig(
           custom: [],
           __unit_test__: [],
         }[config.parser] ?? [])
-      : []
+      : DEFAULT_PARSERLESS_EXCLUDE_GLOBS
 
   const includeGlobs = config.include || defaultIncludeGlobs
   const excludeGlobs = config.exclude

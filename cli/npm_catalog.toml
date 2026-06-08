@@ -250,7 +250,7 @@
 "@zip.js/zip.js" = "2.8.19"
 "zod-to-json-schema" = "^3.23.5"
 "zod" = "3.25.58"
-"@anthropic-ai/claude-agent-sdk" = "0.2.69"
+"@anthropic-ai/claude-agent-sdk" = "0.3.168"
 "ai" = "4.1.62"
 "@ai-sdk/amazon-bedrock" = "2.1.4"
 "@ai-sdk/anthropic" = "1.2.5"

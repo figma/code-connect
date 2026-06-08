@@ -1,10 +1,16 @@
 import chalk from 'chalk'
-import { Console } from 'console'
-import { exitWithUpdateCheck } from './updates'
 
-// Redirect all console output to stderr, so that JSON output to stdout in parse
-// mode can be piped to other commands
-const console = new Console(process.stderr)
+// Get console instance - use stderr in Node.js CLI contexts, fall back to global console in browser
+function getConsole(): Console {
+  if (typeof process !== 'undefined' && process.stderr) {
+    const { Console } = require('console')
+    return new Console(process.stderr)
+  }
+  return console
+}
+
+// Redirect all console output to stderr in CLI contexts, use global console in browser
+const console: Console = getConsole()
 
 export const error = chalk.red
 export const success = chalk.green
@@ -56,5 +62,9 @@ export const logger = {
  */
 export function exitWithError(msg: string, errorCode = 1): never {
   logger.error(msg)
+  const {
+    exitWithUpdateCheck,
+  }: { exitWithUpdateCheck: (errorCode?: number) => never } = require('./updates')
   exitWithUpdateCheck(errorCode)
+  throw new Error('unreachable')
 }

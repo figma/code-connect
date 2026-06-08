@@ -6,6 +6,20 @@ import { CodeConnectLabel, getInferredLanguageForRaw } from './label_language_ma
 import { applyDocumentUrlSubstitutions } from './helpers'
 
 /**
+ * Thrown when a raw template file has no `// url=` directive but contains the
+ * string `codeProperties`. These files (e.g. Make's code component property
+ * definitions) are not Code Connect, so callers skip them with a log instead of
+ * failing. Every other file is handled exactly as before — a missing url is
+ * still a hard error.
+ */
+export class CodePropertiesError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CodePropertiesError'
+  }
+}
+
+/**
  * Returns true if the file content looks like a raw template file, i.e. its
  * leading comment block contains a `// url=`, `// component=`, or `// source=`
  * directive. Used to distinguish raw `.figma.ts` templates from React/HTML
@@ -26,21 +40,22 @@ export function isRawTemplate(content: string): boolean {
   return false
 }
 
-function transpileTypeScriptTemplate(filePath: string, fileContent: string): string {
-  // Convert ESM import of 'figma' to require syntax
-  // Supports: import figma from 'figma'
-  const figmaImportRegex = /^import\s+figma\s+from\s+['"]figma['"]\s*;?\s*$/m
-  if (figmaImportRegex.test(fileContent)) {
-    fileContent = fileContent.replace(figmaImportRegex, "const figma = require('figma')")
-  }
+// Convert ESM import of 'figma' to require syntax. Supports: import figma from 'figma'
+const figmaImportRegex = /^import\s+figma\s+from\s+['"]figma['"]\s*;?\s*$/m
 
-  // Detect any remaining non-type import statements. Type-only imports (`import type`)
-  // are erased by the TS compiler and are fine. Regular imports (except the figma
-  // import we just converted) are not supported in Phase 1 (no bundling), so we show
-  // a helpful error.
+/**
+ * Throws if the file imports from anything other than 'figma'. Type-only imports
+ * (`import type`) are erased by the TS compiler and are fine; the `figma` default
+ * import is the one supported module (no bundling in Phase 1). This runs BEFORE
+ * the `codeProperties` skip guard so an unsupported import is always a hard error,
+ * even in a file that would otherwise be skipped.
+ */
+function assertOnlyFigmaImports(filePath: string, fileContent: string): void {
+  // Ignore the supported `import figma from 'figma'` form before scanning.
+  const withoutFigmaImport = fileContent.replace(figmaImportRegex, '')
   const importRegex = /^import\s+(?!type\s)/m
-  if (importRegex.test(fileContent)) {
-    const match = fileContent.match(/^(import\s+.+)$/m)
+  if (importRegex.test(withoutFigmaImport)) {
+    const match = withoutFigmaImport.match(/^(import\s+.+)$/m)
     const importLine = match ? match[1] : 'import ...'
     throw new Error(
       `TypeScript template files only support importing from 'figma'.\n` +
@@ -49,6 +64,12 @@ function transpileTypeScriptTemplate(filePath: string, fileContent: string): str
         `Use "const figma = require('figma')" or "import figma from 'figma'" to access the Figma API.\n` +
         `Other module imports will be supported in a future version.`,
     )
+  }
+}
+
+function transpileTypeScriptTemplate(filePath: string, fileContent: string): string {
+  if (figmaImportRegex.test(fileContent)) {
+    fileContent = fileContent.replace(figmaImportRegex, "const figma = require('figma')")
   }
 
   const result = ts.transpileModule(fileContent, {
@@ -124,6 +145,25 @@ export function parseRawFile(
   // that appear before type-only imports (which TypeScript erases)
   const { fields, templateStartLine } = extractMetadataFields(fileContent)
 
+  const figmaUrl = batchOverrides?.url || fields.url
+
+  // An unsupported (non-figma) import is always a hard error, even in a file that
+  // would otherwise be skipped as a `codeProperties` file below. Checked first so
+  // an import mistake is never silently swallowed by the skip guard.
+  if (filePath.endsWith('.ts')) {
+    assertOnlyFigmaImports(filePath, fileContent)
+  }
+
+  // A file with no // url= directive that contains the string `codeProperties`
+  // is not Code Connect (e.g. Make's code component property definitions). Skip
+  // it (callers log and continue) instead of failing. Every other file is
+  // handled exactly as before.
+  if (!figmaUrl && fileContent.includes('codeProperties')) {
+    throw new CodePropertiesError(
+      `Skipping ${filePath}: file has no // url= directive and contains "codeProperties", so it is not treated as a Code Connect file.`,
+    )
+  }
+
   if (filePath.endsWith('.ts')) {
     fileContent = transpileTypeScriptTemplate(filePath, fileContent)
   }
@@ -132,7 +172,6 @@ export function parseRawFile(
   const component = batchOverrides?.component || fields.component
   const source = batchOverrides?.source || fields.source || ''
 
-  const figmaUrl = batchOverrides?.url || fields.url
   if (!figmaUrl) {
     throw new Error(
       batchOverrides

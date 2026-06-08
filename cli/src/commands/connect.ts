@@ -44,7 +44,11 @@ import {
   writeTemplateFile,
   writeVariantTemplateFile,
 } from '../connect/migration_helpers'
-import { isRawTemplate, parseRawFile } from '../connect/raw_templates'
+import {
+  getBatchMigrationGroups,
+  writeBatchTemplateFiles,
+} from '../connect/migration_batch_helpers'
+import { CodePropertiesError, isRawTemplate, parseRawFile } from '../connect/raw_templates'
 import { parseBatchFile } from '../connect/batch_templates'
 import { convertRemoteFileUrlToRelativePath } from '../connect/wizard/run_wizard'
 import { getGitRepoAbsolutePath } from '../connect/project'
@@ -63,7 +67,10 @@ export type BaseCommand = commander.Command & {
   exitOnUnreadableFiles: boolean
   apiUrl?: string
   includeProps?: boolean
+  batch?: BatchMigrationMode
 }
+
+type BatchMigrationMode = 'auto' | 'all' | 'none'
 
 function addBaseCommand(command: commander.Command, name: string, description: string) {
   return command
@@ -167,9 +174,8 @@ export function addConnectCommandToProgram(program: commander.Command) {
   addBaseCommand(
     connectCommand,
     'migrate',
-    'Parse Code Connect files and migrate their templates into .figma.js files that can be published directly without parsing.',
+    'Parse Code Connect files and migrate their templates into .figma.ts or .figma.js files that can be published directly without parsing.',
   )
-    .argument('[pattern]', 'glob pattern to match files (optional, uses config if not provided)')
     .option(
       '--include-props',
       'preserve __props metadata blocks in migrated templates (removed by default). Use if your templates use the React .getProps() or .render() modifiers, or read executeTemplate().metadata.__props from the migrated components',
@@ -177,6 +183,14 @@ export function addConnectCommandToProgram(program: commander.Command) {
     .option(
       '--javascript',
       'output migrated templates as JavaScript (.figma.js) instead of TypeScript (.figma.ts)',
+    )
+    .addOption(
+      new commander.Option(
+        '--batch <mode>',
+        'batch migration mode: auto attempts files with 10 or more Code Connect docs; all attempts every source file; none disables batch migration',
+      )
+        .choices(['auto', 'all', 'none'])
+        .default('auto'),
     )
     .action(withUpdateCheck(handleMigrate))
 
@@ -364,6 +378,15 @@ export async function getCodeConnectObjects(
         }
         rawTemplateDocs.push(doc)
       } catch (e) {
+        // A url-less file containing `codeProperties` is not Code Connect (e.g.
+        // Make's code component property definitions). Log and skip it instead
+        // of failing — never exit, not even with --exit-on-unreadable-files.
+        if (e instanceof CodePropertiesError) {
+          if (!silent || cmd.verbose) {
+            logger.info(e.message)
+          }
+          continue
+        }
         if (!silent || cmd.verbose) {
           logger.error(`❌ ${file}`)
           if (cmd.verbose) {
@@ -720,14 +743,11 @@ async function handleCreate(nodeUrl: string, cmd: BaseCommand) {
  * - Format as valid parserless file w/ url="" comment
  * - Name collisions are skipped, unless file is from migration (in which case add "_1")
  */
-async function handleMigrate(
-  pattern: string | undefined,
-  cmd: BaseCommand & { javascript?: boolean },
-) {
+async function handleMigrate(cmd: BaseCommand & { javascript?: boolean }) {
   setupHandler(cmd)
 
   const dir = cmd.dir ?? process.cwd()
-  let projectInfo = await getProjectInfo(dir, cmd.config)
+  let projectInfo = filterProjectInfoByFile(await getProjectInfo(dir, cmd.config), cmd.file)
   const documentUrlSubstitutions = projectInfo.config.documentUrlSubstitutions
 
   // Clear documentUrlSubstitutions so we preserve original URLs in migrated templates
@@ -739,44 +759,63 @@ async function handleMigrate(
     },
   }
 
-  // If a glob pattern is provided, override the project files
-  if (pattern) {
-    const { globSync } = require('glob')
-    const files = globSync(pattern, {
-      cwd: dir,
-      absolute: true,
-      nodir: true,
-    })
-
-    if (files.length === 0) {
-      exitWithError(`No files found matching pattern: ${pattern}`)
-    }
-
-    logger.info(`Found ${files.length} file(s) matching pattern: ${pattern}`)
-    projectInfo = {
-      ...projectInfo,
-      files,
-    }
-  }
-
   // Parse the files to get Code Connect objects
   const allCodeConnectObjects = await getCodeConnectObjects(cmd, projectInfo, false, true)
 
-  const codeConnectObjectsByFigmaUrl = groupCodeConnectObjectsByFigmaUrl(allCodeConnectObjects)
-
-  const groupCount = Object.keys(codeConnectObjectsByFigmaUrl).length
+  const allCodeConnectObjectsByFigmaUrl = groupCodeConnectObjectsByFigmaUrl(allCodeConnectObjects)
+  const groupCount = Object.keys(allCodeConnectObjectsByFigmaUrl).length
   if (groupCount === 0) {
     exitWithError('No Code Connect objects found to migrate')
   }
 
   logger.info(`Found ${groupCount} component(s) to migrate`)
   let migratedCount = 0
+  let batchMigratedCount = 0
   let skippedCount = 0
   const errors: string[] = []
+  const batchMigrationWarnings: Array<{
+    path: string
+    connectionCount: number
+    reason: string
+  }> = []
 
   const filePathsCreated = new Set<string>()
   const gitRootPath = getGitRepoAbsolutePath(dir)
   const useTypeScript = !cmd.javascript
+  const batchMigratedDocs = new Set<CodeConnectJSON>()
+  const batchDocsByPath = getBatchMigrationGroups(allCodeConnectObjects, {
+    batchAll: cmd.batch === 'all',
+    disabled: cmd.batch === 'none',
+  })
+
+  for (const [batchPath, docs] of batchDocsByPath) {
+    const result = writeBatchTemplateFiles(docs, cmd.outDir, dir, {
+      localSourcePath: batchPath,
+      filePathsCreated,
+      includeProps: cmd.includeProps,
+      useTypeScript,
+    })
+
+    if (result.skipped) {
+      batchMigrationWarnings.push({
+        path: batchPath,
+        connectionCount: docs.length,
+        reason: result.reason || 'unable to create batch files',
+      })
+    } else {
+      logger.info(
+        `${success('✓')} Migrated ${result.componentCount} component(s) to batch ${highlight(result.batchPath || batchPath)}`,
+      )
+      migratedCount += result.componentCount
+      batchMigratedCount += result.componentCount
+      docs.forEach((doc) => batchMigratedDocs.add(doc))
+    }
+  }
+
+  const regularCodeConnectObjects = allCodeConnectObjects.filter(
+    (doc) => !batchMigratedDocs.has(doc),
+  )
+  const codeConnectObjectsByFigmaUrl = groupCodeConnectObjectsByFigmaUrl(regularCodeConnectObjects)
 
   for (const [figmaUrl, group] of Object.entries(codeConnectObjectsByFigmaUrl)) {
     try {
@@ -847,7 +886,10 @@ async function handleMigrate(
         const language = getInferredLanguageForRaw(label, docLanguage)
         const config: CodeConnectParserlessConfig = {
           parser: undefined,
-          include: [useTypeScript ? '**/*.figma.ts' : '**/*.figma.js'],
+          include: [
+            useTypeScript ? '**/*.figma.ts' : '**/*.figma.js',
+            ...(batchMigratedCount > 0 ? ['**/*.figma.batch.json'] : []),
+          ],
           language,
           label,
           ...(documentUrlSubstitutions && Object.keys(documentUrlSubstitutions).length > 0
@@ -858,6 +900,20 @@ async function handleMigrate(
         logger.info(`${success('✓')} Wrote Figma config to ${highlight(configFilePath)}`)
       }
     }
+  }
+
+  if (batchMigrationWarnings.length > 0) {
+    console.log('')
+    logger.warn('Unable to migrate the following files to batch files:')
+    batchMigrationWarnings.forEach((warning) => {
+      logger.warn(
+        `- ${highlight(warning.path)} (${warning.connectionCount} connections): ${formatBatchMigrationWarningReason(warning.reason)}`,
+      )
+    })
+    console.log('')
+    logger.warn(
+      "If you'd like to create batch files for these, we recommend using a coding agent. See example prompt: https://developers.figma.com/docs/code-connect/template-files/#migration-script",
+    )
   }
 
   // Summary
@@ -876,4 +932,11 @@ async function handleMigrate(
   if (migratedCount === 0) {
     exitWithError('No files were migrated')
   }
+}
+
+function formatBatchMigrationWarningReason(reason: string) {
+  const strippedReason = reason.replace(/^Cannot batch:\s*/i, '')
+  return strippedReason.replace(/^(\s*)(\S)/, (_match, prefix: string, firstChar: string) => {
+    return `${prefix}${firstChar.toUpperCase()}`
+  })
 }

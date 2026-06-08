@@ -1,4 +1,4 @@
-import { parseRawFile, isRawTemplate } from '../../connect/raw_templates'
+import { parseRawFile, isRawTemplate, CodePropertiesError } from '../../connect/raw_templates'
 import { CodeConnectConfig } from '../../connect/project'
 import { SyntaxHighlightLanguage } from '../../connect/label_language_mapping'
 import fs from 'fs'
@@ -411,6 +411,49 @@ export default figma.code\`<Button />\``
     const fileContent = `// url=https://figma.com/design/abc123?node-id=1:1
 import figma, { code } from 'figma'
 export default figma.code\`<Button />\``
+
+    fs.writeFileSync(tempFilePath, fileContent)
+
+    expect(() => parseRawFile(tempFilePath, undefined)).toThrow(
+      'TypeScript template files only support importing from',
+    )
+  })
+
+  it('throws CodePropertiesError (skip) for a url-less file containing codeProperties', () => {
+    // No url + contains `codeProperties` => skip signal, as long as the file has
+    // no unsupported import (see the test below).
+    const fileContent = `// component=Button
+export const codeProperties = { value: 1 }`
+
+    fs.writeFileSync(tempFilePath, fileContent)
+
+    expect(() => parseRawFile(tempFilePath, undefined)).toThrow(CodePropertiesError)
+    expect(() => parseRawFile(tempFilePath, undefined)).not.toThrow(
+      'TypeScript template files only support importing from',
+    )
+  })
+
+  it('fails on a non-figma import even when the file contains codeProperties', () => {
+    // An unsupported import is always a hard error and takes precedence over the
+    // codeProperties skip, so an import mistake is never silently swallowed.
+    const fileContent = `// component=Button
+import { helper } from './helper'
+export const codeProperties = { value: helper() }`
+
+    fs.writeFileSync(tempFilePath, fileContent)
+
+    expect(() => parseRawFile(tempFilePath, undefined)).toThrow(
+      'TypeScript template files only support importing from',
+    )
+    expect(() => parseRawFile(tempFilePath, undefined)).not.toThrow(CodePropertiesError)
+  })
+
+  it('still surfaces the original import error for a url-less file WITHOUT codeProperties', () => {
+    // Unchanged behaviour: only `codeProperties` files are skipped; any other
+    // url-less file with a non-figma import fails on the import error as before.
+    const fileContent = `// component=Button
+import { helper } from './helper'
+export default helper`
 
     fs.writeFileSync(tempFilePath, fileContent)
 

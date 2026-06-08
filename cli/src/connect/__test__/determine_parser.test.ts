@@ -11,7 +11,7 @@ describe('Determining parser from project', () => {
     const tempDir = fs.mkdtempSync(join(tmpdir(), 'test'))
     fs.cpSync(path.join(__dirname, 'determine_parser', project), tempDir, { recursive: true })
 
-    const result = determineConfigFromProject(path.join(tempDir, ...subdirs), false)
+    const result = determineConfigFromProject(path.join(tempDir, ...subdirs))
 
     fs.rmSync(tempDir, { recursive: true })
     return result?.codeConnect

@@ -3,6 +3,7 @@ import { readFileSync, rmSync, existsSync } from 'fs'
 import path from 'path'
 import { promisify } from 'util'
 import { tidyStdOutput } from '../../../__test__/utils'
+import { parseBatchFile } from '../../batch_templates'
 import { parseRawFile } from '../../raw_templates'
 
 describe('e2e test for `migrate` command', () => {
@@ -22,7 +23,43 @@ describe('e2e test for `migrate` command', () => {
   }
 
   function cleanupTemplateFiles(testPath: string) {
-    const files = ['Button.figma.ts', 'Button.figma.js', 'Avatar.figma.ts', 'Avatar.figma.js']
+    const files = [
+      'Button.figma.ts',
+      'Button.figma.js',
+      'Avatar.figma.ts',
+      'Avatar.figma.js',
+      'Incompatible.figma.ts',
+      'Incompatible_1.figma.ts',
+      'PropIcons.figma.ts',
+      'PropIcons_1.figma.ts',
+      'PropIcons_2.figma.ts',
+      'PropIcons_3.figma.ts',
+      'PropIcons_4.figma.ts',
+      'PropIcons_5.figma.ts',
+      'PropIcons_6.figma.ts',
+      'PropIcons_7.figma.ts',
+      'PropIcons_8.figma.ts',
+      'PropIcons_9.figma.ts',
+    ]
+    files.forEach((file) => {
+      const filePath = path.join(testPath, file)
+      if (existsSync(filePath)) {
+        rmSync(filePath, { force: true })
+      }
+    })
+  }
+
+  function cleanupBatchFiles(testPath: string) {
+    const files = [
+      'Icons.figma.batch.ts',
+      'Icons.figma.batch.json',
+      'HeroSquare.figma.batch.ts',
+      'HeroSquare.figma.batch.json',
+      'PropIcons.figma.batch.ts',
+      'PropIcons.figma.batch.json',
+      'Incompatible.figma.batch.ts',
+      'Incompatible.figma.batch.json',
+    ]
     files.forEach((file) => {
       const filePath = path.join(testPath, file)
       if (existsSync(filePath)) {
@@ -186,6 +223,146 @@ describe('e2e test for `migrate` command', () => {
       expect(tidyStdOutput(result.stderr)).toContain('Migration complete')
     } finally {
       cleanupTemplateFiles(testPath)
+    }
+  })
+
+  it('migrates selected Code Connect files to batch files', async () => {
+    const testPath = getTestPath('react_batch')
+
+    try {
+      const result = await runMigrate(
+        testPath,
+        '--file Icons.figmadoc.tsx HeroSquare.figmadoc.tsx --batch all',
+      )
+
+      const iconsTemplatePath = path.join(testPath, 'Icons.figma.batch.ts')
+      const iconsBatchPath = path.join(testPath, 'Icons.figma.batch.json')
+      const heroTemplatePath = path.join(testPath, 'HeroSquare.figma.batch.ts')
+      const heroBatchPath = path.join(testPath, 'HeroSquare.figma.batch.json')
+
+      expect(existsSync(iconsTemplatePath)).toBe(true)
+      expect(existsSync(iconsBatchPath)).toBe(true)
+      expect(existsSync(heroTemplatePath)).toBe(true)
+      expect(existsSync(heroBatchPath)).toBe(true)
+      expect(existsSync(path.join(testPath, 'IconAdd.figma.ts'))).toBe(false)
+      expect(existsSync(path.join(testPath, 'HeroSquare.figma.ts'))).toBe(false)
+
+      const iconsTemplate = readFileSync(iconsTemplatePath, 'utf-8')
+      expect(iconsTemplate).toContain('id: figma.batch.id')
+      expect(iconsTemplate).toContain(
+        'imports: [`import { ${figma.batch.componentName} } from "./Icons"`]',
+      )
+      expect(iconsTemplate).toContain('example: figma.code`<${figma.batch.componentName} />`')
+
+      const iconsBatch = JSON.parse(readFileSync(iconsBatchPath, 'utf-8'))
+      expect(iconsBatch.components).toEqual([
+        {
+          url: 'https://figma.com/test/icon-add',
+          component: 'IconAdd',
+          id: 'IconAdd',
+          componentName: 'IconAdd',
+        },
+        {
+          url: 'https://figma.com/test/icon-remove',
+          component: 'IconRemove',
+          id: 'IconRemove',
+          componentName: 'IconRemove',
+        },
+        {
+          url: 'https://figma.com/test/icon-search',
+          component: 'IconSearch',
+          id: 'IconSearch',
+          componentName: 'IconSearch',
+        },
+      ])
+
+      const heroTemplate = readFileSync(heroTemplatePath, 'utf-8')
+      expect(heroTemplate).toContain('// component=HeroSquare')
+      expect(heroTemplate).toContain(
+        'example: figma.code`<HeroSquare name="${figma.batch.name}"/>`',
+      )
+
+      const heroBatch = JSON.parse(readFileSync(heroBatchPath, 'utf-8'))
+      expect(heroBatch.components).toEqual([
+        { url: 'https://figma.com/test/hero-btc', name: 'cbbtc' },
+        { url: 'https://figma.com/test/hero-eth', name: 'eth' },
+      ])
+
+      expect(parseBatchFile(iconsBatchPath, undefined)).toHaveLength(3)
+      expect(parseBatchFile(heroBatchPath, undefined)).toHaveLength(2)
+      expect(tidyStdOutput(result.stderr)).toContain('5 migrated')
+    } finally {
+      cleanupBatchFiles(testPath)
+    }
+  })
+
+  it('automatically migrates files with at least 10 Code Connect docs to batch files', async () => {
+    const testPath = getTestPath('react_batch')
+
+    try {
+      const result = await runMigrate(testPath, '--file PropIcons.figmadoc.tsx')
+
+      const templatePath = path.join(testPath, 'PropIcons.figma.batch.ts')
+      const batchPath = path.join(testPath, 'PropIcons.figma.batch.json')
+
+      expect(existsSync(templatePath)).toBe(true)
+      expect(existsSync(batchPath)).toBe(true)
+
+      const template = readFileSync(templatePath, 'utf-8')
+      expect(template).not.toContain('__props')
+      expect(template).toMatch(
+        /example: figma\.code`<\$\{figma\.batch\.componentName\} size=\{\$\{figma\.batch\.size\}\}\s*\/>`/,
+      )
+
+      const batch = JSON.parse(readFileSync(batchPath, 'utf-8'))
+      expect(batch.components).toHaveLength(10)
+      expect(batch.components[0]).toEqual({
+        url: 'https://figma.com/test/glyph-alpha',
+        component: 'GlyphAlphaIcon',
+        id: 'GlyphAlphaIcon',
+        componentName: 'GlyphAlphaIcon',
+        size: 12,
+      })
+
+      expect(parseBatchFile(batchPath, undefined)).toHaveLength(10)
+      expect(tidyStdOutput(result.stderr)).toContain('10 migrated')
+    } finally {
+      cleanupTemplateFiles(testPath)
+      cleanupBatchFiles(testPath)
+    }
+  })
+
+  it('falls back to regular migration when an explicit batch migration is incompatible', async () => {
+    const testPath = getTestPath('react_batch')
+
+    try {
+      const result = await runMigrate(testPath, '--file Incompatible.figmadoc.tsx --batch all')
+
+      const firstTemplatePath = path.join(testPath, 'Incompatible.figma.ts')
+      const secondTemplatePath = path.join(testPath, 'Incompatible_1.figma.ts')
+
+      expect(existsSync(firstTemplatePath)).toBe(true)
+      expect(existsSync(secondTemplatePath)).toBe(true)
+      expect(existsSync(path.join(testPath, 'Incompatible.figma.batch.ts'))).toBe(false)
+      expect(existsSync(path.join(testPath, 'Incompatible.figma.batch.json'))).toBe(false)
+
+      expect(parseRawFile(firstTemplatePath, undefined).template).toBeTruthy()
+      expect(parseRawFile(secondTemplatePath, undefined).template).toBeTruthy()
+      const stderr = tidyStdOutput(result.stderr)
+      const successIndex = stderr.indexOf('✓ Migrated to')
+      const warningIndex = stderr.indexOf('Unable to migrate the following files to batch files:')
+      expect(successIndex).toBeGreaterThan(-1)
+      expect(warningIndex).toBeGreaterThan(successIndex)
+      expect(stderr).toContain(
+        `- ${path.join(testPath, 'Incompatible.figmadoc.tsx')} (2 connections): Templates did not reduce to one compatible shape`,
+      )
+      expect(stderr).toContain(
+        "If you'd like to create batch files for these, we recommend using a coding agent. See example prompt: https://developers.figma.com/docs/code-connect/template-files/#migration-script",
+      )
+      expect(stderr).toContain('2 migrated')
+    } finally {
+      cleanupTemplateFiles(testPath)
+      cleanupBatchFiles(testPath)
     }
   })
 })

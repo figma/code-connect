@@ -103,7 +103,7 @@ declare module 'figma' {
       propName: string,
       options: O,
     ): EnumOptionsValues<O> | undefined
-    getInstanceSwap(propName: string): InstanceHandle | undefined
+    getInstanceSwap(propName: string): InstanceHandle | ErrorHandle | undefined
     getSlot(propName: string): ResultSection[] | undefined
     hasCodeConnect(): boolean
     getPropertyValue(name: string): string | boolean | ErrorHandle

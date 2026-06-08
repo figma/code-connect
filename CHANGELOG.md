@@ -1,6 +1,27 @@
-# Code Connect v1.4.7 (28 May 2026)
+# Code Connect v1.4.8 (8 June 2026)
+
+## Fixed
+
+### General
+
+- Fixed browser compatibility issues where importing `@figma/code-connect` in Storybook or webpack environments would fail with "Can't resolve 'child_process'" or "Console is not a constructor" errors. Node.js-only modules (`child_process`, `console`) are now imported dynamically only when needed by CLI commands, making the package safe to use in browser environments.
+
+### Template files
+
+- Fixed parserless template projects failing to publish or parse when Code Connect could not infer a React, HTML, Swift, or Compose parser. The CLI now proceeds without a parser and uses the default template-file globs.
+- Fixed a "`getInstanceSwap(...)?.executeTemplate is not a function`" error that could break a template when `getInstanceSwap('prop')` referenced an instance-swap property that isn't present on the selected node (for example a property that is conditionally hidden by a boolean). The missing property now renders an inline error, consistent with the other accessors, instead of failing the whole template.
+- Fixed migrated text-layer references (from the React/HTML `figma.textContent('...')` helper) producing a TypeScript error and silently rendering nothing when the layer was missing. Migration now preserves the original behavior — the text renders when the layer is found, and a clear error is shown when it isn't.
 
 ## Features
+
+### Template files
+
+- The `figma connect migrate` command now uses the same `--dir` and `--file` filtering behavior as `publish`, `parse`, and `unpublish`. The migrate-only positional glob argument has been removed.
+- The `figma connect migrate` command can now migrate compatible large source files into batch template files. Files with 10 or more Code Connect docs are attempted automatically, `--batch all` forces a batch attempt, and `--batch none` disables batch migration.
+
+# Code Connect v1.4.7 (28 May 2026)
+
+## Fixed
 
 ### General
 

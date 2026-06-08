@@ -1,6 +1,7 @@
 import path from 'path'
 import {
   DEFAULT_INCLUDE_GLOBS_BY_PARSER,
+  DEFAULT_PARSERLESS_INCLUDE_GLOBS,
   ProjectInfo,
   ReactProjectInfo,
   getProjectInfo,
@@ -34,6 +35,30 @@ describe('getIncludesGlob', () => {
       },
     })
     expect(result).toEqual(['src/connect/wizard/__test__/**/*.{tsx,jsx}'])
+  })
+
+  it('returns parserless includes glob if no parser is configured', () => {
+    const result = getIncludesGlob({
+      dir: './',
+      componentDirectory: null,
+      config: {},
+    })
+    expect(result).toBe(DEFAULT_PARSERLESS_INCLUDE_GLOBS)
+  })
+
+  it('prepends path to component directory to parserless default globs', () => {
+    const result = getIncludesGlob({
+      dir: './',
+      componentDirectory: './src/connect/wizard/__test__',
+      config: {},
+    })
+    expect(result).toEqual([
+      'src/connect/wizard/__test__/**/*.figma.ts',
+      'src/connect/wizard/__test__/**/*.figma.js',
+      'src/connect/wizard/__test__/**/*.figma.template.ts',
+      'src/connect/wizard/__test__/**/*.figma.template.js',
+      'src/connect/wizard/__test__/**/*.figma.batch.json',
+    ])
   })
 })
 

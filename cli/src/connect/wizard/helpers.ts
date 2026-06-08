@@ -5,6 +5,7 @@ import {
   CodeConnectParser,
   DEFAULT_INCLUDE_GLOBS_BY_PARSER,
   DEFAULT_LABEL_PER_PARSER,
+  DEFAULT_PARSERLESS_INCLUDE_GLOBS,
   ProjectInfo,
   ReactProjectInfo,
   getDefaultConfigPath,
@@ -48,11 +49,16 @@ export function getIncludesGlob({
     if (config.parser === 'custom') {
       return []
     }
-    return DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser!].map(
+    const defaultIncludeGlobs = config.parser
+      ? DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]
+      : DEFAULT_PARSERLESS_INCLUDE_GLOBS
+    return defaultIncludeGlobs?.map(
       (defaultIncludeGlob) => `${pathToComponentsDir}/${defaultIncludeGlob}`,
     )
   }
-  return DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser!]
+  return config.parser
+    ? DEFAULT_INCLUDE_GLOBS_BY_PARSER[config.parser]
+    : DEFAULT_PARSERLESS_INCLUDE_GLOBS
 }
 
 export async function createEnvFile({ dir, accessToken }: { dir: string; accessToken?: string }) {
