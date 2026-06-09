@@ -1,0 +1,22 @@
+const figma = require('figma')
+
+const label = figma.currentLayer.__properties__.string('Tab\'s number')
+const variant = figma.currentLayer.__properties__.enum('it\'s variant', {
+"Primary": 'primary',
+"It's secondary": 'secondary',
+"He said \"hello\"": 'quoted'})
+const disabled = figma.currentLayer.__properties__.boolean('it\'s disabled')
+const __props = {}
+if (label && label.type !== 'ERROR') {
+  __props["label"] = label
+}
+if (variant && variant.type !== 'ERROR') {
+  __props["variant"] = variant
+}
+if (disabled && disabled.type !== 'ERROR') {
+  __props["disabled"] = disabled
+}
+
+export default { ...figma.tsx`<Button${_fcc_renderReactProp('variant', variant)}${_fcc_renderReactProp('disabled', disabled)}>
+      ${_fcc_renderReactChildren(label)}
+    </Button>`, metadata: { __props } }
