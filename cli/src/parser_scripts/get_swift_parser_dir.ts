@@ -22,14 +22,15 @@ export async function getSwiftParserDir(
   let xcodeprojFile: string | undefined
   let packageSwiftFile: string | undefined
 
-  // // Check for the supported project types giving precedence top the user provided path
+  // Check for the supported project types giving precedence to the user provided path.
+  // Paths are passed as argv elements to spawnSync, so no shell escaping is needed.
   if (xcodeprojPath) {
-    xcodeprojFile = xcodeprojPath.replace(/\s/g, '\\ ')
+    xcodeprojFile = xcodeprojPath
   } else if (swiftPackagePath) {
-    packageSwiftFile = path.dirname(swiftPackagePath).replace(/\s/g, '\\ ')
+    packageSwiftFile = path.dirname(swiftPackagePath)
   } else {
-    xcodeprojFile = getFileIfExists(cwd, '*.xcodeproj').replace(/\s/g, '\\ ')
-    packageSwiftFile = getFileIfExists(cwd, 'Package.swift').replace(/\s/g, '\\ ')
+    xcodeprojFile = getFileIfExists(cwd, '*.xcodeproj')
+    packageSwiftFile = getFileIfExists(cwd, 'Package.swift')
   }
 
   if (!(xcodeprojFile || packageSwiftFile)) {

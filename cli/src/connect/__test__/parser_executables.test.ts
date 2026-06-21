@@ -101,6 +101,13 @@ describe('callParser', () => {
 
     const result = await resultPromise
 
+    // Verify spawn was called with a structured cmd+args (not a split string)
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.stringContaining('gradlew'),
+      expect.arrayContaining(['-p', '/path/to/gradle', 'parseCodeConnect']),
+      expect.objectContaining({ cwd: '/test/cwd' }),
+    )
+
     // Verify results are combined and deduplicated
     expect(result).toEqual({
       docs: [
@@ -187,6 +194,63 @@ describe('callParser', () => {
     // Verify temp file cleanup
     expect(mockFs.unlinkSync).toHaveBeenCalledWith(
       expect.stringContaining('tmp/figma-code-connect-parser-io.json.tmp'),
+    )
+  })
+
+  it('passes gradle wrapper path containing spaces as a single argv element', async () => {
+    // Regression test for #395: command.split(' ') would fragment paths with spaces
+    mockGetGradleWrapperPath.mockResolvedValue('/path/to/My Project/gradle')
+
+    mockFs.readFileSync = jest.fn().mockReturnValue(
+      JSON.stringify({ docs: [], messages: [] }),
+    )
+
+    const mockChildProcess = createMockChildProcess()
+    mockSpawn.mockReturnValue(mockChildProcess)
+
+    const payload = {
+      mode: 'PARSE' as const,
+      paths: ['/path/to/Component.kt'],
+      config: {},
+    }
+
+    const resultPromise = callParser({ parser: 'compose' as const }, payload, '/test/cwd')
+    setImmediate(() => mockChildProcess.emit('close', 0))
+    await resultPromise
+
+    // The path with a space must arrive as a single element, not fragmented
+    const spawnArgs = mockSpawn.mock.calls[0]
+    expect(spawnArgs[1]).toContain('/path/to/My Project/gradle')
+    expect(spawnArgs[0]).not.toContain(' ')
+  })
+
+  it('invokes custom parser via shell so user quoting is preserved', async () => {
+    const mockChildProcess = createMockChildProcess()
+    mockSpawn.mockReturnValue(mockChildProcess)
+
+    const payload = {
+      mode: 'PARSE' as const,
+      paths: ['/path/to/Component.foo'],
+      config: {},
+    }
+
+    const resultPromise = callParser(
+      { parser: 'custom' as const, parserCommand: 'node "/My Tools/parser.js"' },
+      payload,
+      '/test/cwd',
+    )
+
+    setImmediate(() => {
+      mockChildProcess.stdout.emit('data', JSON.stringify({ docs: [], messages: [] }))
+      mockChildProcess.emit('close', 0)
+    })
+
+    await resultPromise
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      'node "/My Tools/parser.js"',
+      [],
+      expect.objectContaining({ shell: true }),
     )
   })
 })
