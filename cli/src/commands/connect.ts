@@ -286,7 +286,46 @@ export async function getCodeConnectObjects(
 
   let codeConnectObjects: CodeConnectJSON[] = []
 
-  if (projectInfo.config.parser === 'react') {
+  // Parserless template files (.figma.ts/.figma.js with a leading url/component/source
+  // directive) are handled directly below by parseRawFile and never need a native parser.
+  // Identify them up front so we can decide whether the native parser is needed at all.
+  const rawTemplateFiles = projectInfo.files.filter((f: string) => {
+    // Suffix may be used by HTML / custom parsers
+    const isPotentialRawTemplate =
+      f.endsWith('.figma.js') ||
+      f.endsWith('.figma.template.js') ||
+      f.endsWith('.figma.ts') ||
+      f.endsWith('.figma.template.ts')
+    if (!isPotentialRawTemplate) return false
+    try {
+      return isRawTemplate(fs.readFileSync(f, 'utf-8'))
+    } catch {
+      return false
+    }
+  })
+
+  // A project is "template-only" when it has at least one matched file and every
+  // matched file is a parserless template. Such projects never need the native
+  // parser, so skip invoking it. This avoids spawning a native build (e.g.
+  // `swift run figma-swift`) that does no useful work and can fail outright — for
+  // example a Swift package on macOS 12 whose `Figma` dependency requires macOS 13.
+  // The native parser only ever produces docs from native source files
+  // (.swift/.kt/.tsx etc.), which are disjoint from raw templates, so skipping it
+  // here drops no docs.
+  //
+  // An empty file set is deliberately NOT treated as template-only: we leave the
+  // existing behavior intact (the configured parser still runs), so e.g. a Swift
+  // config that matches no files surfaces the same parser output as before.
+  const rawTemplateFileSet = new Set(rawTemplateFiles)
+  const isTemplateOnlyProject =
+    rawTemplateFiles.length > 0 && projectInfo.files.every((f) => rawTemplateFileSet.has(f))
+
+  if (isTemplateOnlyProject) {
+    // Verbose-only: this is a diagnostic detail and must not alter normal output.
+    if (projectInfo.config.parser && cmd.verbose) {
+      logger.info('All Code Connect files are templates; skipping the native parser.')
+    }
+  } else if (projectInfo.config.parser === 'react') {
     codeConnectObjects = await getReactCodeConnectObjects(
       projectInfo as ProjectInfo<CodeConnectReactConfig>,
       cmd,
@@ -346,21 +385,6 @@ export async function getCodeConnectObjects(
       }
     }
   }
-
-  const rawTemplateFiles = projectInfo.files.filter((f: string) => {
-    // Suffix may be used by HTML / custom parsers
-    const isPotentialRawTemplate =
-      f.endsWith('.figma.js') ||
-      f.endsWith('.figma.template.js') ||
-      f.endsWith('.figma.ts') ||
-      f.endsWith('.figma.template.ts')
-    if (!isPotentialRawTemplate) return false
-    try {
-      return isRawTemplate(fs.readFileSync(f, 'utf-8'))
-    } catch {
-      return false
-    }
-  })
 
   if (rawTemplateFiles.length > 0) {
     // Resolve the label before parsing so language inference works correctly

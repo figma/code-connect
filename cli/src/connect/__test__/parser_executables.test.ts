@@ -1,13 +1,24 @@
 import { callParser } from '../parser_executables'
 import { spawn } from 'cross-spawn'
 import fs from 'fs'
-import { getGradleWrapperPath } from '../../parser_scripts/get_gradlew_path'
+import {
+  getGradleWrapperPath,
+  getGradleWrapperExecutablePath,
+} from '../../parser_scripts/get_gradlew_path'
+import { CodeConnectCustomExecutableParserConfig } from '../project'
+import { getSwiftParserDir } from '../../parser_scripts/get_swift_parser_dir'
 import type { ChildProcess } from 'child_process'
 import { EventEmitter } from 'events'
 
 jest.mock('cross-spawn')
 jest.mock('fs')
-jest.mock('../../parser_scripts/get_gradlew_path')
+jest.mock('../../parser_scripts/get_gradlew_path', () => ({
+  getGradleWrapperPath: jest.fn(),
+  getGradleWrapperExecutablePath: jest.fn((dir: string) =>
+    dir === '.' ? './gradlew' : `${dir}/gradlew`,
+  ),
+}))
+jest.mock('../../parser_scripts/get_swift_parser_dir')
 
 describe('callParser', () => {
   const mockSpawn = spawn as jest.MockedFunction<typeof spawn>
@@ -15,6 +26,7 @@ describe('callParser', () => {
   const mockGetGradleWrapperPath = getGradleWrapperPath as jest.MockedFunction<
     typeof getGradleWrapperPath
   >
+  const mockGetSwiftParserDir = getSwiftParserDir as jest.MockedFunction<typeof getSwiftParserDir>
 
   // Helper to create a mock child process that completes successfully
   const createMockChildProcess = () => {
@@ -42,6 +54,97 @@ describe('callParser', () => {
 
     // Mock gradle wrapper path
     mockGetGradleWrapperPath.mockResolvedValue('/path/to/gradle')
+  })
+
+  describe('preserves arguments containing spaces', () => {
+    it('compose: passes gradle path with a space as a single argv entry', async () => {
+      const gradleDirWithSpace = '/Users/me/My Projects/app'
+      mockGetGradleWrapperPath.mockResolvedValue(gradleDirWithSpace)
+
+      mockFs.readFileSync = jest.fn().mockReturnValue(JSON.stringify({ docs: [], messages: [] }))
+
+      const mockChildProcess = createMockChildProcess()
+      mockSpawn.mockReturnValue(mockChildProcess)
+
+      const resultPromise = callParser(
+        { parser: 'compose' as const },
+        { mode: 'PARSE' as const, paths: [], config: {} },
+        '/test/cwd',
+      )
+      setImmediate(() => mockChildProcess.emit('close', 0))
+      await resultPromise
+
+      expect(mockSpawn).toHaveBeenCalledTimes(1)
+      const [cmd, args] = mockSpawn.mock.calls[0] as [string, string[], object]
+
+      expect(cmd).toBe(`${gradleDirWithSpace}/gradlew`)
+
+      const dashPIdx = args.indexOf('-p')
+      expect(dashPIdx).toBeGreaterThanOrEqual(0)
+      expect(args[dashPIdx + 1]).toBe(gradleDirWithSpace)
+
+      expect(args).not.toContain('My')
+      expect(args).not.toContain('Projects/app')
+    })
+
+    it('swift: passes package path with a space as a single argv entry', async () => {
+      const swiftDirWithSpace = '/Users/me/My App/code-connect'
+      mockGetSwiftParserDir.mockResolvedValue(swiftDirWithSpace)
+
+      const mockChildProcess = createMockChildProcess()
+      mockSpawn.mockReturnValue(mockChildProcess)
+
+      const resultPromise = callParser(
+        { parser: 'swift' as const },
+        { mode: 'PARSE' as const, paths: [], config: {} },
+        '/test/cwd',
+      )
+      setImmediate(() => {
+        mockChildProcess.stdout!.emit('data', JSON.stringify({ docs: [], messages: [] }))
+        mockChildProcess.emit('close', 0)
+      })
+      await resultPromise
+
+      expect(mockSpawn).toHaveBeenCalledTimes(1)
+      const [cmd, args] = mockSpawn.mock.calls[0] as [string, string[], object]
+
+      expect(cmd).toBe('swift')
+
+      const packagePathIdx = args.indexOf('--package-path')
+      expect(packagePathIdx).toBeGreaterThanOrEqual(0)
+      expect(args[packagePathIdx + 1]).toBe(swiftDirWithSpace)
+      expect(args[packagePathIdx + 1]).not.toContain('\\')
+
+      expect(args).not.toContain('My')
+      expect(args).not.toContain('App/code-connect')
+    })
+
+    it('custom: passes parserCommand string with shell: true', async () => {
+      const mockChildProcess = createMockChildProcess()
+      mockSpawn.mockReturnValue(mockChildProcess)
+
+      const customConfig: CodeConnectCustomExecutableParserConfig = {
+        parser: 'custom',
+        parserCommand: 'node "/tmp/My Test Dir/parser.js"',
+      }
+      const resultPromise = callParser(
+        customConfig,
+        { mode: 'PARSE' as const, paths: [], config: {} },
+        '/test/cwd',
+      )
+
+      setImmediate(() => {
+        mockChildProcess.stdout!.emit('data', JSON.stringify({ docs: [], messages: [] }))
+        mockChildProcess.emit('close', 0)
+      })
+      await resultPromise
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'node "/tmp/My Test Dir/parser.js"',
+        [],
+        expect.objectContaining({ shell: true, cwd: '/test/cwd' }),
+      )
+    })
   })
 
   it('successfully calls parser in PARSE mode and returns combined, deduplicated results', async () => {

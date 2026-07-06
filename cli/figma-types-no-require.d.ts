@@ -1,13 +1,16 @@
 /**
  * Type definitions for the `figma` module available in Code Connect template files
- * (.figma.ts).
- * Usage: add to your tsconfig.json:
- *   { "compilerOptions": { "types": ["@figma/code-connect/figma-types"] } }
+ * (.figma.ts) — variant WITHOUT the global `require('figma')` shim.
+ *
+ * Use this instead of `@figma/code-connect/figma-types` if your project has
+ * @types/node installed. The default entry declares a global `require`, which
+ * overrides Node's `NodeRequire` type and breaks `require.resolve` (and similar)
+ * elsewhere in your project. This variant omits that declaration so the figma
+ * types can be added to your main tsconfig.json without a conflict. It types the
+ * recommended `import figma from 'figma'` syntax; `require('figma')` is typed by
+ * @types/node's own `require`.
+ *   { "compilerOptions": { "types": ["@figma/code-connect/figma-types-no-require"] } }
  */
-// Declare require() for the 'figma' module so that template files can use
-// `const figma = require('figma')` without needing @types/node installed.
-declare function require(module: 'figma'): typeof import('figma')
-declare function require(module: string): any
 declare module 'figma' {
   export type CodeSection = { type: 'CODE'; code: string; nestedImports?: string[] }
   export type InstanceSection = {

@@ -111,6 +111,8 @@ export interface FigmaSlot extends IntrinsicBase {
   kind: IntrinsicKind.Slot
   args: {
     figmaPropName: string
+    // When true (authored as `figma.slot('Prop').connectedInstances`), render the slot's connected instances instead of the slot placeholder.
+    connectedInstances?: boolean
   }
 }
 
@@ -571,6 +573,13 @@ export function intrinsicToString(
       return `${selector}.__properties__.enum('${args.figmaPropName}', ${mappingString})`
     }
     case IntrinsicKind.Slot: {
+      if (args.connectedInstances) {
+        // `slot()` is undefined when the slot has no value, so guard before reading connectedInstances.
+        return `(function () {
+          const slot = ${selector}.__properties__.slot('${args.figmaPropName}')
+          return slot ? slot.connectedInstances.map((instance) => instance.__render__()).flat() : []
+        })()`
+      }
       return `${selector}.__properties__.slot('${args.figmaPropName}')`
     }
     case IntrinsicKind.Children: {
@@ -698,8 +707,38 @@ export function parsePropsObject(
     if (ts.isCallExpression(valueNode)) {
       return parseIntrinsic(valueNode, parserContext)
     }
+    const slotConnectedInstances = parseSlotConnectedInstances(valueNode, parserContext)
+    if (slotConnectedInstances) {
+      return slotConnectedInstances
+    }
     return expressionToFccEnumValue(valueNode, parserContext)
   }) as PropMappings
+}
+
+// Matches `figma.slot('Prop').connectedInstances` (a property access, so it never reaches parseIntrinsic) and parses it as a Slot intrinsic flagged to render the connected instances.
+function parseSlotConnectedInstances(
+  valueNode: ts.Expression,
+  parserContext: ParserContext,
+): FigmaSlot | undefined {
+  if (
+    !ts.isPropertyAccessExpression(valueNode) ||
+    valueNode.name.text !== 'connectedInstances' ||
+    !ts.isCallExpression(valueNode.expression)
+  ) {
+    return undefined
+  }
+
+  const slotCall = valueNode.expression
+  const slotIntrinsic = Intrinsics[`${API_PREFIX}.slot`]
+  if (!slotIntrinsic || !slotIntrinsic.match(slotCall)) {
+    return undefined
+  }
+
+  const intrinsic = slotIntrinsic.parse(slotCall, parserContext) as FigmaSlot
+  return {
+    ...intrinsic,
+    args: { ...intrinsic.args, connectedInstances: true },
+  }
 }
 
 export type PropMappings = Record<string, Intrinsic>

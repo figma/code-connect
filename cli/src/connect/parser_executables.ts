@@ -25,12 +25,15 @@ import { getComposeErrorSuggestion } from '../parser_scripts/compose_errors'
 const temporaryInputFilePath = 'tmp/figma-code-connect-parser-io.json.tmp'
 const temporaryOutputDirectoryPath = 'tmp/parser-output'
 
+// Parser invocation in argv form; only custom parser uses shell.
+type ParserCommand = { cmd: string; args: string[]; shell?: boolean }
+
 type ParserInfo = {
   command: (
     cwd: string,
     config: CodeConnectExecutableParserConfig | CodeConnectCustomExecutableParserConfig,
     mode: ParserRequestPayload['mode'],
-  ) => Promise<string>
+  ) => Promise<ParserCommand>
   temporaryInputFilePath?: string
   temporaryOutputDirectoryPath?: string
 }
@@ -38,24 +41,33 @@ type ParserInfo = {
 const FIRST_PARTY_PARSERS: Record<CodeConnectExecutableParser, ParserInfo> = {
   swift: {
     command: async (cwd, config) => {
-      return `swift run --package-path ${await getSwiftParserDir(
+      const packagePath = await getSwiftParserDir(
         cwd,
         (config as any).xcodeprojPath,
         (config as any).swiftPackagePath,
         (config as any).sourcePackagesPath,
-      )} figma-swift`
+      )
+      return {
+        cmd: 'swift',
+        args: ['run', '--package-path', packagePath, 'figma-swift'],
+      }
     },
   },
   compose: {
     command: async (cwd, config, mode) => {
       const gradlewPath = await getGradleWrapperPath(cwd, (config as any).gradleWrapperPath)
       const gradleExecutableInvocation = getGradleWrapperExecutablePath(gradlewPath)
-      const verboseFlags = (config as any).verbose ? ' --stacktrace' : ''
-      if (mode === 'CREATE') {
-        return `${gradleExecutableInvocation} -p ${gradlewPath} createCodeConnect -PfilePath=${temporaryInputFilePath}${verboseFlags} -PoutputDir=${temporaryOutputDirectoryPath}`
-      } else {
-        return `${gradleExecutableInvocation} -p ${gradlewPath} parseCodeConnect -PfilePath=${temporaryInputFilePath}${verboseFlags} -PoutputDir=${temporaryOutputDirectoryPath}`
-      }
+      const verbose = Boolean((config as any).verbose)
+      const task = mode === 'CREATE' ? 'createCodeConnect' : 'parseCodeConnect'
+      const args = [
+        '-p',
+        gradlewPath,
+        task,
+        `-PfilePath=${temporaryInputFilePath}`,
+        ...(verbose ? ['--stacktrace'] : []),
+        `-PoutputDir=${temporaryOutputDirectoryPath}`,
+      ]
+      return { cmd: gradleExecutableInvocation, args }
     },
     temporaryInputFilePath: temporaryInputFilePath,
     temporaryOutputDirectoryPath: temporaryOutputDirectoryPath,
@@ -68,11 +80,15 @@ const FIRST_PARTY_PARSERS: Record<CodeConnectExecutableParser, ParserInfo> = {
         )
       }
       logger.info('Using custom parser command: ' + config.parserCommand)
-      return config.parserCommand
+      // Keep user quoting intact for free-form custom commands.
+      return { cmd: config.parserCommand, args: [], shell: true }
     },
   },
   __unit_test__: {
-    command: async () => 'node parser/unit_test_parser.js',
+    command: async () => ({
+      cmd: 'node',
+      args: ['parser/unit_test_parser.js'],
+    }),
   },
 }
 
@@ -116,11 +132,11 @@ export async function callParser(
         fs.mkdirSync(parser.temporaryOutputDirectoryPath, { recursive: true })
       }
 
-      logger.debug(`Running parser: ${command}`)
-      const commandSplit = command.split(' ')
+      logger.debug(`Running parser: ${command.cmd} ${command.args.join(' ')}`)
 
-      const child = spawn(commandSplit[0], commandSplit.slice(1), {
+      const child = spawn(command.cmd, command.args, {
         cwd,
+        shell: command.shell,
       })
 
       let stdout = ''

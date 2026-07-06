@@ -1,3 +1,32 @@
+# Code Connect v1.4.9 (6 July 2026)
+
+## Fixed
+
+### General
+
+- Fixed parser invocation failing when a path or argument contained a space. This affected the Swift parser (Xcode project / Swift package paths), the Compose parser (Gradle wrapper paths), and the custom parser (any user-provided `parserCommand` referencing a path with spaces).
+
+### Template files
+
+- Fixed template-only projects unnecessarily building and running a native parser. When every Code Connect file is a parserless template (`.figma.ts`/`.figma.js`), the CLI no longer invokes the Swift or Compose parser — which is slow at best and can fail outright (for example a Swift package targeting macOS 12 whose `Figma` dependency requires macOS 13, producing "the library '...' requires macos 12.0, but depends on the product 'Figma' which requires macos 13.0"). Projects that also contain native source files are unaffected and still run the parser.
+
+### Swift
+
+- Raised the supported `swift-syntax` upper bound to allow the 603.x release. Previously the cap below 603 could silently downgrade `swift-syntax` in projects that depend on both Code Connect and `swift-syntax` (directly or transitively) on a Swift 6.3 toolchain. Older toolchains remain supported.
+
+## Features
+
+### General
+
+- Added `@figma/code-connect/figma-types-no-require`, a variant of the template type definitions for projects that have `@types/node` installed. The default `@figma/code-connect/figma-types` entry declares a global `require` (so `const figma = require('figma')` works without `@types/node`), but that declaration overrides Node's own `require` type and causes errors like `Property 'resolve' does not exist` on `require.resolve(...)` elsewhere in projects that use `@types/node`. Such projects can now use `"@figma/code-connect/figma-types-no-require"` in their `types` array instead, adding it to their main `tsconfig.json` without a separate config. The default entry is unchanged, so no existing setup needs to change.
+
+### Template files
+
+- Augmented the `getSlot` API: `getSlot('SlotName')` still renders the same way, and the returned value now also exposes `connectedInstances` (the connected instances directly in the slot). This lets you render a slot's connected children inline. For example `getSlot('body').connectedInstances.map((c) => c.executeTemplate().example)`.
+
+### React & HTML
+- Augmented the `figma.slot` API: `figma.slot('SlotName')` still maps the slot the same way, and you can now also write `figma.slot('SlotName').connectedInstances` in a `props` object to render the slot's code-connected instances inline. For example `props: { content: figma.slot('Content').connectedInstances }`.
+
 # Code Connect v1.4.8 (8 June 2026)
 
 ## Fixed

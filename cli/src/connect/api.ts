@@ -41,6 +41,32 @@ export interface ConnectedComponent {
   render<T = unknown>(renderFunction: (props: T) => React.ReactElement): React.ReactElement
 }
 
+/**
+ * The value returned by `figma.slot(...)`. It can be used directly as a slot
+ * prop (rendering the slot placeholder, exactly as before), and additionally
+ * exposes `connectedInstances` to render the code-connected instances placed in
+ * the slot, like `figma.children`. For example:
+ * ```ts
+ * figma.connect(Component, {
+ *  props: {
+ *    // Renders the connected instances of the "Content" slot, like figma.children
+ *    content: figma.slot('Content').connectedInstances,
+ *  },
+ * })
+ * ```
+ *
+ * `InstanceChildrenT` is the platform's slot/instance type (so the bare value
+ * keeps behaving as it did before), and `ChildrenT` is the platform's children
+ * type, matching the return type of `figma.children`.
+ */
+export type SlotValue<InstanceChildrenT, ChildrenT> = InstanceChildrenT & {
+  /**
+   * The code-connected instances placed in this slot, rendered like
+   * `figma.children`.
+   */
+  connectedInstances: ChildrenT
+}
+
 // This contains the base API interface for figma.connect calls across React and
 // HTML. Any parts which are platform-specific (either the function signature or
 // its docblock) are specified in the individual index_<platform> and added to
@@ -105,9 +131,17 @@ export interface FigmaConnectAPI<InstanceChildrenT, ChildrenT> {
    * ```
    * Would show the "Menu" slot layer connected as an instance property in Figma.
    *
+   * The returned value also exposes `connectedInstances`, which renders the
+   * code-connected instances placed in the slot like `figma.children`:
+   * ```ts
+   * props: {
+   *  Menu: figma.slot('Menu').connectedInstances,
+   * }
+   * ```
+   *
    * @param figmaPropName The name of the property on the Figma component
    */
-  slot<T = InstanceChildrenT>(figmaPropName: string): T
+  slot<T = SlotValue<InstanceChildrenT, ChildrenT>>(figmaPropName: string): T
 
   /**
    * Maps a Figma instance layer to a nested code example. For example:
