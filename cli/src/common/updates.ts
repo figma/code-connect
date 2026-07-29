@@ -7,6 +7,15 @@ import { request } from './fetch'
 
 let updatedVersionAvailable: string | false | undefined = undefined
 let message: string | undefined = undefined
+let parserBasedCodeConnectFound = false
+let deprecationWarningHidden = false
+let skipUpdateCheck = false
+
+// Called when the native parser has actually produced Code Connect docs, which
+// is the only definitive signal that a project still uses the legacy parsers.
+export function flagParserBasedCodeConnect() {
+  parserBasedCodeConnectFound = true
+}
 
 // The type of the arguments passed to a command handler:
 // any arguments, then the command arguments, then the Command object
@@ -14,10 +23,11 @@ type CommandArgs<T extends BaseCommand> = [...any[], T, Command]
 
 // Wrap action handlers to check for updates or a message, and output a message
 // after the action if any are available
-export function withUpdateCheck<T extends BaseCommand>(
+export function withVersionWarnings<T extends BaseCommand>(
   // The second to last argument is always the command args, but I couldn't work
   // out how to model this with Typescript here
   fn: (...args: any[]) => void | Promise<void>,
+  { hideDeprecationWarning = false }: { hideDeprecationWarning?: boolean } = {},
 ) {
   return (...args: CommandArgs<T>) => {
     // Get the args passed at the command line (the second to last argument)
@@ -25,7 +35,10 @@ export function withUpdateCheck<T extends BaseCommand>(
     // Anything before that is a regular arg
     const restArgs = args.slice(0, -2)
 
-    if (commandArgs.skipUpdateCheck) {
+    skipUpdateCheck = !!commandArgs.skipUpdateCheck
+    deprecationWarningHidden = hideDeprecationWarning
+
+    if (skipUpdateCheck) {
       return fn(...restArgs, commandArgs)
     }
 
@@ -80,7 +93,9 @@ async function waitAndCheckForUpdates() {
 // complete, so if the request has not completed yet, nothing will be shown.
 // This is to avoid confusion about when the process _actually_ exits.
 export function exitWithUpdateCheck(errorCode = 1): never {
-  maybeShowUpdateMessage()
+  if (!skipUpdateCheck) {
+    maybeShowUpdateMessage()
+  }
   process.exit(errorCode)
 }
 
@@ -88,7 +103,18 @@ function getUpdateCommand() {
   return 'npm update -g @figma/code-connect'
 }
 
+// Keep in sync with the deprecation notices in figmadoc/README.md and
+// figmadoc/CHANGELOG.md, which repeat this date.
+const PARSER_DEPRECATION_DATE = 'August 17th, 2026'
+
+const DEPRECATION_NOTICE = `
+${chalk.yellow('⚠')}  ${chalk.bold(`We've detected framework-specific Code Connect in your project. Starting ${PARSER_DEPRECATION_DATE} Code Connect users should use the new templates format for Code Connect.`)} You may continue publishing, but we recommend following our migration guide to update your Code Connect: https://developers.figma.com/docs/code-connect/templates-migration-guide/`
+
 function maybeShowUpdateMessage() {
+  if (parserBasedCodeConnectFound && !deprecationWarningHidden) {
+    logger.warn(DEPRECATION_NOTICE)
+  }
+
   if (updatedVersionAvailable) {
     logger.warn(`\nA new version of the Figma CLI is available. v${require('../../package.json').version} is currently installed, and the latest version available is v${updatedVersionAvailable}.
 

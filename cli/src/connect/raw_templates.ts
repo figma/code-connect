@@ -1,9 +1,18 @@
 import fs from 'fs'
+import path from 'path'
 import ts from 'typescript'
 import { CodeConnectJSON } from './figma_connect'
 import { CodeConnectConfig } from './project'
 import { CodeConnectLabel, getInferredLanguageForRaw } from './label_language_mapping'
 import { applyDocumentUrlSubstitutions } from './helpers'
+import {
+  bundleTemplateWithHelpers,
+  allowedHelperExtensions,
+  isRelativeImportPath,
+  unsupportedImportError,
+  relativeRequireError,
+  getRequireCallRequest,
+} from './raw_template_bundler'
 
 /**
  * Thrown when a raw template file has no `// url=` directive but contains the
@@ -43,28 +52,97 @@ export function isRawTemplate(content: string): boolean {
 // Convert ESM import of 'figma' to require syntax. Supports: import figma from 'figma'
 const figmaImportRegex = /^import\s+figma\s+from\s+['"]figma['"]\s*;?\s*$/m
 
-/**
- * Throws if the file imports from anything other than 'figma'. Type-only imports
- * (`import type`) are erased by the TS compiler and are fine; the `figma` default
- * import is the one supported module (no bundling in Phase 1). This runs BEFORE
- * the `codeProperties` skip guard so an unsupported import is always a hard error,
- * even in a file that would otherwise be skipped.
- */
-function assertOnlyFigmaImports(filePath: string, fileContent: string): void {
-  // Ignore the supported `import figma from 'figma'` form before scanning.
-  const withoutFigmaImport = fileContent.replace(figmaImportRegex, '')
-  const importRegex = /^import\s+(?!type\s)/m
-  if (importRegex.test(withoutFigmaImport)) {
-    const match = withoutFigmaImport.match(/^(import\s+.+)$/m)
-    const importLine = match ? match[1] : 'import ...'
+// Matches the backend's max template size; we fail here rather than let the
+// server reject the publish request.
+const MAX_TEMPLATE_SIZE_MB = 1
+
+function assertTemplateWithinSizeLimit(filePath: string, template: string): void {
+  const sizeMb = Buffer.byteLength(template, 'utf-8') / (1024 * 1024)
+  if (sizeMb > MAX_TEMPLATE_SIZE_MB) {
     throw new Error(
-      `TypeScript template files only support importing from 'figma'.\n` +
-        `Found in ${filePath}:\n` +
-        `  ${importLine}\n\n` +
-        `Use "const figma = require('figma')" or "import figma from 'figma'" to access the Figma API.\n` +
-        `Other module imports will be supported in a future version.`,
+      `Template "${filePath}" is ${sizeMb.toFixed(2)}mb, which exceeds the ` +
+        `${MAX_TEMPLATE_SIZE_MB}mb maximum template size. ` +
+        `Reduce the template size, for example by removing unneeded helper imports.`,
     )
   }
+}
+
+interface TypeScriptImportValidationResult {
+  hasRelativeHelperImports: boolean
+}
+
+// Parserless entry templates may be authored in TypeScript or JavaScript.
+function isRawTemplateSourceFile(filePath: string): boolean {
+  return allowedHelperExtensions.some((ext) => filePath.endsWith(ext))
+}
+
+/**
+ * Validates a template entry's imports: only the default `figma` import,
+ * type-only imports and relative helper imports are allowed. Returns whether
+ * the entry imports helpers, so the caller knows whether to bundle.
+ */
+function validateTypeScriptTemplateImports(
+  filePath: string,
+  fileContent: string,
+): TypeScriptImportValidationResult {
+  const sourceFile = ts.createSourceFile(filePath, fileContent, ts.ScriptTarget.Latest, true)
+  let hasRelativeHelperImports = false
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      if (statement.importClause?.isTypeOnly) {
+        continue
+      }
+
+      const moduleSpecifierText = ts.isStringLiteral(statement.moduleSpecifier)
+        ? statement.moduleSpecifier.text
+        : ''
+      const importLine = statement.getText(sourceFile).split('\n')[0]?.trim() ?? 'import ...'
+
+      if (moduleSpecifierText === 'figma') {
+        const hasDefaultImport = !!statement.importClause?.name
+        const hasNamedOrNamespaceImport = !!statement.importClause?.namedBindings
+        if (!hasDefaultImport || hasNamedOrNamespaceImport) {
+          throw unsupportedImportError(filePath, importLine)
+        }
+        continue
+      }
+
+      if (isRelativeImportPath(moduleSpecifierText)) {
+        hasRelativeHelperImports = true
+        continue
+      }
+
+      throw unsupportedImportError(filePath, importLine)
+    }
+
+    // Re-exports aren't supported: the runtime only reads the default export.
+    if (ts.isExportDeclaration(statement) && statement.moduleSpecifier && !statement.isTypeOnly) {
+      const exportLine = statement.getText(sourceFile).split('\n')[0]?.trim() ?? 'export ...'
+      throw new Error(
+        `Template files do not support re-exports ('export ... from ...').\n` +
+          `Found in ${filePath}:\n` +
+          `  ${exportLine}\n\n` +
+          `Import the helper instead (for example: import { helper } from './helpers').`,
+      )
+    }
+  }
+
+  // `require` is for the Figma API only: a pure ESM graph is what lets the
+  // bundler emit a flat, tree-shaken template. Walking the AST (not the raw
+  // text) keeps a `require(...)` inside an emitted snippet from matching.
+  const visitRequire = (node: ts.Node): void => {
+    const request = getRequireCallRequest(node)
+    if (request && request !== 'figma') {
+      throw isRelativeImportPath(request)
+        ? relativeRequireError(filePath, request)
+        : unsupportedImportError(filePath, `require('${request}')`)
+    }
+    ts.forEachChild(node, visitRequire)
+  }
+  visitRequire(sourceFile)
+
+  return { hasRelativeHelperImports }
 }
 
 function transpileTypeScriptTemplate(filePath: string, fileContent: string): string {
@@ -132,14 +210,15 @@ export interface BatchOverrides {
   batchFilePath: string
 }
 
-export function parseRawFile(
+export async function parseRawFile(
   filePath: string,
   label: string | undefined,
   config?: CodeConnectConfig,
   dir?: string,
   batchOverrides?: BatchOverrides,
-): CodeConnectJSON {
+): Promise<CodeConnectJSON> {
   let fileContent = fs.readFileSync(filePath, 'utf-8')
+  let shouldBundleTypeScriptTemplate = false
 
   // Extract metadata fields BEFORE transpilation to avoid losing comments
   // that appear before type-only imports (which TypeScript erases)
@@ -147,11 +226,13 @@ export function parseRawFile(
 
   const figmaUrl = batchOverrides?.url || fields.url
 
-  // An unsupported (non-figma) import is always a hard error, even in a file that
-  // would otherwise be skipped as a `codeProperties` file below. Checked first so
-  // an import mistake is never silently swallowed by the skip guard.
-  if (filePath.endsWith('.ts')) {
-    assertOnlyFigmaImports(filePath, fileContent)
+  // Validate imports first, before the `codeProperties` skip guard below, so an
+  // unsupported import is always a hard error rather than silently swallowed.
+  if (isRawTemplateSourceFile(filePath)) {
+    shouldBundleTypeScriptTemplate = validateTypeScriptTemplateImports(
+      filePath,
+      fileContent,
+    ).hasRelativeHelperImports
   }
 
   // A file with no // url= directive that contains the string `codeProperties`
@@ -164,7 +245,13 @@ export function parseRawFile(
     )
   }
 
-  if (filePath.endsWith('.ts')) {
+  // Bundle when helpers are present; otherwise transpile TS and emit JS verbatim.
+  // Bundling takes some extra time.
+  if (shouldBundleTypeScriptTemplate) {
+    // Confining resolution to the project dir
+    const projectRoot = dir ? path.resolve(dir) : path.dirname(path.resolve(filePath))
+    fileContent = await bundleTemplateWithHelpers(filePath, projectRoot)
+  } else if (filePath.endsWith('.ts')) {
     fileContent = transpileTypeScriptTemplate(filePath, fileContent)
   }
 
@@ -205,8 +292,14 @@ export function parseRawFile(
   // __FIGMA_CODE_CONNECT_REQUIRE's closure regardless of where require('figma') is called.
   // (globalThis works in both browser and Node.js, unlike window.)
   if (batchOverrides) {
-    template = `globalThis['__FIGMA_BATCH'] = ${JSON.stringify(batchOverrides.batchData)}\n${template}`
+    template = `globalThis['__FIGMA_BATCH'] = ${JSON.stringify(
+      batchOverrides.batchData,
+    )}\n${template}`
   }
+
+  // Check the final template (incl. any bundled helpers and batch data) against
+  // the backend's size cap so an oversized template fails here, not on upload.
+  assertTemplateWithinSizeLimit(filePath, template)
 
   // Apply documentUrlSubstitutions if provided
   if (config?.documentUrlSubstitutions) {

@@ -40,7 +40,7 @@ export default {
   id: figma.batch.id,
 }`
 
-  it('produces correct number of CodeConnectJSON objects', () => {
+  it('produces correct number of CodeConnectJSON objects', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.js',
@@ -51,11 +51,11 @@ export default {
       ],
     })
 
-    const results = parseBatchFile(batchPath, undefined)
+    const results = await parseBatchFile(batchPath, undefined)
     expect(results).toHaveLength(3)
   })
 
-  it('prepends __FIGMA_BATCH with entry data to each template', () => {
+  it('prepends __FIGMA_BATCH with entry data to each template', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.js',
@@ -65,7 +65,7 @@ export default {
       ],
     })
 
-    const results = parseBatchFile(batchPath, undefined)
+    const results = await parseBatchFile(batchPath, undefined)
 
     // globalThis['__FIGMA_BATCH'] contains the full entry
     expect(results[0].template).toContain("globalThis['__FIGMA_BATCH'] =")
@@ -74,7 +74,7 @@ export default {
     expect(results[0].template).toContain('figma.batch.name')
   })
 
-  it('puts reserved fields in both __FIGMA_BATCH and standard CodeConnectJSON spots', () => {
+  it('puts reserved fields in both __FIGMA_BATCH and standard CodeConnectJSON spots', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.js',
@@ -89,7 +89,7 @@ export default {
       ],
     })
 
-    const results = parseBatchFile(batchPath, undefined)
+    const results = await parseBatchFile(batchPath, undefined)
 
     // Reserved fields go to their standard CodeConnectJSON spots
     expect(results[0].source).toBe('./src/Icon24Arrow.tsx')
@@ -101,7 +101,7 @@ export default {
     expect(results[0].template).toContain('"Icon24Arrow"')
   })
 
-  it('does not have batchData field on CodeConnectJSON', () => {
+  it('does not have batchData field on CodeConnectJSON', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.js',
@@ -110,11 +110,11 @@ export default {
       ],
     })
 
-    const results = parseBatchFile(batchPath, undefined)
+    const results = await parseBatchFile(batchPath, undefined)
     expect((results[0] as any).batchData).toBeUndefined()
   })
 
-  it('handles .ts template files', () => {
+  it('handles .ts template files', async () => {
     writeTemplate('template.figma.batch.ts', tsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.ts',
@@ -123,13 +123,13 @@ export default {
       ],
     })
 
-    const results = parseBatchFile(batchPath, undefined)
+    const results = await parseBatchFile(batchPath, undefined)
     expect(results[0].template).toContain("const figma = require('figma')")
     expect(results[0].template).not.toContain("import figma from 'figma'")
     expect(results[0].template).toContain("globalThis['__FIGMA_BATCH'] =")
   })
 
-  it('supports array format for multiple groups', () => {
+  it('supports array format for multiple groups', async () => {
     writeTemplate('icons.figma.batch.js', jsTemplate)
 
     const buttonTemplate = `const figma = require('figma')
@@ -157,13 +157,13 @@ export default figma.code\`<\${figma.batch.name} variant="\${figma.batch.variant
       },
     ])
 
-    const results = parseBatchFile(batchPath, undefined)
+    const results = await parseBatchFile(batchPath, undefined)
     expect(results).toHaveLength(2)
     expect(results[0].template).toContain('"Icon24Arrow"')
     expect(results[1].template).toContain('"PrimaryButton"')
   })
 
-  it('applies documentUrlSubstitutions', () => {
+  it('applies documentUrlSubstitutions', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.js',
@@ -179,11 +179,11 @@ export default figma.code\`<\${figma.batch.name} variant="\${figma.batch.variant
       },
     }
 
-    const results = parseBatchFile(batchPath, undefined, config)
+    const results = await parseBatchFile(batchPath, undefined, config)
     expect(results[0].figmaNode).toBe('https://figma.com/file/TARGET?node-id=1-1')
   })
 
-  it('allows object and array values in custom fields', () => {
+  it('allows object and array values in custom fields', async () => {
     const template = `const figma = require('figma')
 
 export default figma.code\`name: \${figma.batch.name}\``
@@ -201,12 +201,12 @@ export default figma.code\`name: \${figma.batch.name}\``
       ],
     })
 
-    const results = parseBatchFile(batchPath, undefined)
+    const results = await parseBatchFile(batchPath, undefined)
     expect(results[0].template).toContain('"config":{"size":24,"nested":true}')
     expect(results[0].template).toContain('"tags":["icon","navigation"]')
   })
 
-  it('sets correct metadata', () => {
+  it('sets correct metadata', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.js',
@@ -215,7 +215,7 @@ export default figma.code\`name: \${figma.batch.name}\``
       ],
     })
 
-    const results = parseBatchFile(batchPath, undefined)
+    const results = await parseBatchFile(batchPath, undefined)
     expect(results[0].templateData).toEqual({ nestable: true, isParserless: true })
     expect(results[0].sourceLocation).toEqual({ line: -1 })
     expect(results[0].label).toBe('Code')
@@ -223,7 +223,7 @@ export default figma.code\`name: \${figma.batch.name}\``
     expect(results[0].metadata.cliVersion).toBeDefined()
   })
 
-  it('uses provided label', () => {
+  it('uses provided label', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.js',
@@ -232,62 +232,64 @@ export default figma.code\`name: \${figma.batch.name}\``
       ],
     })
 
-    const results = parseBatchFile(batchPath, 'React')
+    const results = await parseBatchFile(batchPath, 'React')
     expect(results[0].label).toBe('React')
     expect(results[0].language).toBe(SyntaxHighlightLanguage.JSX)
   })
 
   // Validation tests
 
-  it('throws for missing templateFile', () => {
+  it('throws for missing templateFile', async () => {
     const batchPath = writeBatch({
       components: [{ url: 'https://figma.com/file/ABC?node-id=1-1', name: 'Arrow' }],
     })
-    expect(() => parseBatchFile(batchPath, undefined)).toThrow(
+    await expect(parseBatchFile(batchPath, undefined)).rejects.toThrow(
       'Missing required field "templateFile"',
     )
   })
 
-  it('throws for empty components array', () => {
+  it('throws for empty components array', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.js',
       components: [],
     })
-    expect(() => parseBatchFile(batchPath, undefined)).toThrow(
+    await expect(parseBatchFile(batchPath, undefined)).rejects.toThrow(
       '"components" must be a non-empty array',
     )
   })
 
-  it('throws when template file does not exist', () => {
+  it('throws when template file does not exist', async () => {
     const batchPath = writeBatch({
       templateFile: './nonexistent.figma.batch.js',
       components: [{ url: 'https://figma.com/file/ABC?node-id=1-1', name: 'Arrow' }],
     })
-    expect(() => parseBatchFile(batchPath, undefined)).toThrow('Template file not found')
+    await expect(parseBatchFile(batchPath, undefined)).rejects.toThrow('Template file not found')
   })
 
-  it('throws when template file has wrong extension', () => {
+  it('throws when template file has wrong extension', async () => {
     writeTemplate('template.figma.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.js',
       components: [{ url: 'https://figma.com/file/ABC?node-id=1-1', name: 'Arrow' }],
     })
-    expect(() => parseBatchFile(batchPath, undefined)).toThrow(
+    await expect(parseBatchFile(batchPath, undefined)).rejects.toThrow(
       'must have a .figma.batch.ts or .figma.batch.js extension',
     )
   })
 
-  it('throws for missing url in entry', () => {
+  it('throws for missing url in entry', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.js',
       components: [{ name: 'Icon24Arrow', id: 'arrow' }],
     })
-    expect(() => parseBatchFile(batchPath, undefined)).toThrow('Missing required field "url"')
+    await expect(parseBatchFile(batchPath, undefined)).rejects.toThrow(
+      'Missing required field "url"',
+    )
   })
 
-  it('defaults source and component to empty string', () => {
+  it('defaults source and component to empty string', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
       templateFile: './template.figma.batch.js',
@@ -296,7 +298,7 @@ export default figma.code\`name: \${figma.batch.name}\``
       ],
     })
 
-    const results = parseBatchFile(batchPath, undefined)
+    const results = await parseBatchFile(batchPath, undefined)
     expect(results[0].source).toBe('')
     expect(results[0].component).toBeUndefined()
   })

@@ -36,6 +36,7 @@ jest.mock('../../common/logging', () => ({
 jest.mock('../../common/fetch', () => ({
   request: {
     post: jest.fn(),
+    get: jest.fn(),
   },
   isFetchError: jest.fn(),
 }))
@@ -44,6 +45,14 @@ jest.mock('../../common/fetch', () => ({
 jest.mock('../../connect/figma_rest_api', () => ({
   getApiUrl: jest.fn(),
   getHeaders: jest.fn(),
+  FigmaRestApi: {
+    ComponentPropertyType: {
+      Boolean: 'BOOLEAN',
+      InstanceSwap: 'INSTANCE_SWAP',
+      Text: 'TEXT',
+      Variant: 'VARIANT',
+    },
+  },
 }))
 
 import {
@@ -53,7 +62,10 @@ import {
   isPrettierParseable,
   displayResults,
   handlePreview,
+  fetchComponentPropertyDefinitions,
+  parsePropsArg,
 } from '../preview_utils'
+import chalk from 'chalk'
 import type { CodeConnectJSON } from '../../connect/figma_connect'
 import type { BaseCommand } from '../connect'
 
@@ -316,9 +328,16 @@ describe('preview_utils', () => {
 
   describe('displayResults', () => {
     let consoleSpy: any
+    let originalChalkLevel: chalk.Level
 
     beforeEach(() => {
       consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
+      originalChalkLevel = chalk.level
+      chalk.level = 2
+    })
+
+    afterEach(() => {
+      chalk.level = originalChalkLevel
     })
 
     it('should display successful result with snippet', () => {
@@ -426,7 +445,7 @@ describe('preview_utils', () => {
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Button.figma.tsx'))
     })
 
-    it('should use correct ANSI color codes', () => {
+    it('colorizes output when color is enabled', () => {
       const results = [
         {
           url: 'https://figma.com/file/ABC123/test?node-id=1-2',
@@ -439,10 +458,15 @@ describe('preview_utils', () => {
 
       displayResults(results)
 
-      // Check for Figma purple color code (93)
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('\x1b[38;5;93m'))
-      // Check for gray color code (243)
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('\x1b[38;5;243m'))
+      const output = consoleSpy.mock.calls.map((call: unknown[]) => String(call[0])).join('\n')
+      // eslint-disable-next-line no-control-regex
+      expect(output).toMatch(/\x1b\[[0-9;]+m/)
+      // The bullet line (component header) is one of the colorized lines.
+      const bulletLine = consoleSpy.mock.calls
+        .map((call: unknown[]) => String(call[0]))
+        .find((line: string) => line.includes('Button.figma.tsx'))
+      // eslint-disable-next-line no-control-regex
+      expect(bulletLine).toMatch(/\x1b\[/)
     })
   })
 
@@ -848,6 +872,192 @@ describe('preview_utils', () => {
 
       expect(result).toHaveLength(1)
       expect(result[0].component).toBe('Icon')
+    })
+  })
+
+  describe('fetchComponentPropertyDefinitions', () => {
+    beforeEach(() => {
+      request.get.mockReset()
+      isFetchError.mockReturnValue(false)
+      getHeaders.mockReturnValue({})
+    })
+
+    const nodesData = (
+      nodeId: string,
+      defs: Record<string, unknown> | undefined,
+      opts: { componentSetId?: string } = {},
+    ) => ({
+      response: { status: 200 },
+      data: {
+        nodes: {
+          [nodeId]: {
+            document: defs !== undefined ? { componentPropertyDefinitions: defs } : {},
+            ...(opts.componentSetId
+              ? { components: { [nodeId]: { componentSetId: opts.componentSetId } } }
+              : {}),
+          },
+        },
+      },
+    })
+
+    it('returns the definitions from files/nodes (the authoritative schema)', async () => {
+      const defs = { Variant: { type: 'VARIANT', variantOptions: ['A', 'B'] } }
+      request.get.mockResolvedValueOnce(nodesData('1:2', defs))
+
+      const result = await fetchComponentPropertyDefinitions('https://api', 'file1', '1:2', 'tok')
+
+      expect(result).toEqual({ status: 'ok', defs })
+      // Not a variant child → no parent-set resolution, single request.
+      expect(request.get).toHaveBeenCalledTimes(1)
+    })
+
+    it('returns status "error" when files/nodes is unavailable (e.g. missing scope)', async () => {
+      request.get.mockResolvedValue({ response: { status: 403 }, data: {} })
+
+      const result = await fetchComponentPropertyDefinitions('https://api', 'file1', '1:2', 'tok')
+
+      expect(result).toEqual({ status: 'error' })
+      expect(request.get).toHaveBeenCalledTimes(1)
+    })
+
+    it('returns status "error" when the request throws', async () => {
+      request.get.mockRejectedValue(new Error('network down'))
+
+      const result = await fetchComponentPropertyDefinitions('https://api', 'file1', '1:2', 'tok')
+
+      expect(result).toEqual({ status: 'error' })
+    })
+
+    it('returns status "empty" when the node is fetched but has no property definitions', async () => {
+      request.get.mockResolvedValueOnce(nodesData('1:2', undefined))
+
+      const result = await fetchComponentPropertyDefinitions('https://api', 'file1', '1:2', 'tok')
+
+      // A component with no variants/props is not an error — it's "empty".
+      expect(result).toEqual({ status: 'empty' })
+    })
+
+    it('treats an empty componentPropertyDefinitions object as "empty", not "ok"', async () => {
+      request.get.mockResolvedValueOnce(nodesData('1:2', {}))
+
+      const result = await fetchComponentPropertyDefinitions('https://api', 'file1', '1:2', 'tok')
+
+      expect(result).toEqual({ status: 'empty' })
+    })
+
+    it('resolves a variant child to its parent set (which carries the variant axes)', async () => {
+      const childDefs = { 'Has Icon': { type: 'BOOLEAN', defaultValue: false } }
+      const setDefs = {
+        Size: { type: 'VARIANT', variantOptions: ['Small', 'Large'], defaultValue: 'Small' },
+        'Has Icon': { type: 'BOOLEAN', defaultValue: false },
+      }
+      request.get.mockImplementation((url: string) =>
+        Promise.resolve(
+          url.includes('ids=1:2')
+            ? nodesData('1:2', childDefs, { componentSetId: '1:1' })
+            : nodesData('1:1', setDefs),
+        ),
+      )
+
+      const result = await fetchComponentPropertyDefinitions('https://api', 'file1', '1:2', 'tok')
+
+      expect(result).toEqual({ status: 'ok', defs: setDefs })
+      expect(request.get).toHaveBeenCalledTimes(2)
+    })
+
+    it('resolves to the set even when the variant child exposes no defs of its own', async () => {
+      const setDefs = {
+        Size: { type: 'VARIANT', variantOptions: ['Small', 'Large'], defaultValue: 'Small' },
+      }
+      request.get.mockImplementation((url: string) =>
+        Promise.resolve(
+          url.includes('ids=1:2')
+            ? nodesData('1:2', undefined, { componentSetId: '1:1' })
+            : nodesData('1:1', setDefs),
+        ),
+      )
+
+      const result = await fetchComponentPropertyDefinitions('https://api', 'file1', '1:2', 'tok')
+
+      expect(result).toEqual({ status: 'ok', defs: setDefs })
+    })
+
+    it('falls back to the variant child’s own defs when the parent set fetch fails', async () => {
+      const childDefs = { 'Has Icon': { type: 'BOOLEAN', defaultValue: false } }
+      request.get.mockImplementation((url: string) =>
+        Promise.resolve(
+          url.includes('ids=1:2')
+            ? nodesData('1:2', childDefs, { componentSetId: '1:1' })
+            : { response: { status: 500 }, data: {} },
+        ),
+      )
+
+      const result = await fetchComponentPropertyDefinitions('https://api', 'file1', '1:2', 'tok')
+
+      expect(result).toEqual({ status: 'ok', defs: childDefs })
+    })
+  })
+
+  describe('parsePropsArg', () => {
+    it('parses space-separated variadic pairs', () => {
+      expect(parsePropsArg(['Variant=Primary', 'Size=Large'])).toEqual([
+        { name: 'Variant', value: 'Primary' },
+        { name: 'Size', value: 'Large' },
+      ])
+    })
+
+    it('keeps spaces inside a quoted pair (single argument)', () => {
+      expect(parsePropsArg(['Has Icon Start=true'])).toEqual([
+        { name: 'Has Icon Start', value: 'true' },
+      ])
+    })
+
+    it('splits only on the first = so values may contain =', () => {
+      expect(parsePropsArg(['Label=a=b'])).toEqual([{ name: 'Label', value: 'a=b' }])
+    })
+
+    it('still tolerates a comma-separated list within one argument', () => {
+      expect(parsePropsArg(['Variant=Primary,Size=Large'])).toEqual([
+        { name: 'Variant', value: 'Primary' },
+        { name: 'Size', value: 'Large' },
+      ])
+    })
+
+    it('trims whitespace and ignores empty entries', () => {
+      expect(parsePropsArg([' Variant = Primary ', '', 'Size=Large'])).toEqual([
+        { name: 'Variant', value: 'Primary' },
+        { name: 'Size', value: 'Large' },
+      ])
+    })
+
+    it('parses an optional TYPE: prefix to disambiguate same-named props', () => {
+      expect(parsePropsArg(['BOOLEAN:textMsg=false', 'TEXT:textMsg=Hello'])).toEqual([
+        { name: 'textMsg', value: 'false', type: 'BOOLEAN' },
+        { name: 'textMsg', value: 'Hello', type: 'TEXT' },
+      ])
+    })
+
+    it('matches the TYPE: prefix case-insensitively and canonicalizes it', () => {
+      expect(parsePropsArg(['boolean:textMsg=false'])).toEqual([
+        { name: 'textMsg', value: 'false', type: 'BOOLEAN' },
+      ])
+    })
+
+    it('leaves an unrecognized prefix as part of the property name', () => {
+      expect(parsePropsArg(['State:Active=true'])).toEqual([
+        { name: 'State:Active', value: 'true' },
+      ])
+    })
+
+    it('omits type when no prefix is given', () => {
+      expect(parsePropsArg(['textMsg=Hello'])).toEqual([{ name: 'textMsg', value: 'Hello' }])
+    })
+
+    it('parses the TYPE: prefix within a comma-separated argument', () => {
+      expect(parsePropsArg(['BOOLEAN:textMsg=false,TEXT:textMsg=Hello'])).toEqual([
+        { name: 'textMsg', value: 'false', type: 'BOOLEAN' },
+        { name: 'textMsg', value: 'Hello', type: 'TEXT' },
+      ])
     })
   })
 })

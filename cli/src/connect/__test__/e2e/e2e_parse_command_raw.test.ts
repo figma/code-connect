@@ -271,10 +271,10 @@ export default figma.code\`def python_code():
     expect(JSON.parse(result.stdout)).toEqual([])
   })
 
-  it('shows a helpful error and skips the file when a TypeScript raw template file contains module imports', async () => {
+  it('successfully parses a TypeScript raw template file with relative helper imports', async () => {
     const testPath = path.join(__dirname, 'e2e_parse_command/raw_ts_with_imports')
+    const expectedFile = path.join(testPath, 'test-component.figma.template.ts')
 
-    // Without --exit-on-unreadable-files the bad file is skipped gracefully (exit 0)
     const result = await promisify(exec)(
       `npx tsx ../../../cli connect parse --skip-update-check --dir ${testPath}`,
       {
@@ -282,17 +282,96 @@ export default figma.code\`def python_code():
       },
     )
 
-    expect(result.stderr).toContain('TypeScript template files only support importing from')
-    expect(result.stderr).toContain('import { formatLabel }')
-    expect(result.stderr).toContain(
-      'Use "const figma = require(\'figma\')" or "import figma from \'figma\'"',
+    expect(tidyStdOutput(result.stderr)).toBe(
+      `Config file found, parsing ${testPath} using specified include globs\n${expectedFile}`,
     )
-    // File was skipped, so output is an empty array
-    expect(JSON.parse(result.stdout)).toEqual([])
+
+    const json = JSON.parse(result.stdout)
+    expect(json).toHaveLength(1)
+    // The helper body is inlined into the self-contained bundle, `figma` stays
+    // external, and the entry's default export is re-exposed for the runtime.
+    expect(json[0].template).toContain('function formatLabel')
+    expect(json[0].template).toContain('__figmaRequire("figma")')
+    expect(json[0].template).toMatch(/export default \w+$/m)
+    // Bundled paths are relative, never absolute (which leak usernames).
+    expect(json[0].template).not.toContain(testPath)
   })
 
-  it('exits with code 1 when --exit-on-unreadable-files is set and a template file has a parse error', async () => {
-    const testPath = path.join(__dirname, 'e2e_parse_command/raw_ts_with_imports')
+  it('successfully parses a JavaScript raw template file with relative helper imports', async () => {
+    const testPath = path.join(__dirname, 'e2e_parse_command/raw_js_with_imports')
+    const expectedFile = path.join(testPath, 'test-component.figma.js')
+
+    const result = await promisify(exec)(
+      `npx tsx ../../../cli connect parse --skip-update-check --dir ${testPath}`,
+      {
+        cwd: __dirname,
+      },
+    )
+
+    expect(tidyStdOutput(result.stderr)).toBe(
+      `Config file found, parsing ${testPath} using specified include globs\n${expectedFile}`,
+    )
+
+    const json = JSON.parse(result.stdout)
+    expect(json).toHaveLength(1)
+    const { template } = json[0]
+    // Both helpers' definitions are inlined into the self-contained bundle,
+    // keyed by relative paths only (never absolute, which leak usernames).
+    expect(template).toContain('hello world')
+    expect(template).toMatch(/export default \w+$/m)
+    expect(template).not.toContain(testPath)
+
+    // The emitted template must run standalone under the runtime contract: a
+    // `require('figma')` binding, with the last `export default` (the entry's)
+    // becoming `return`, matching share/code-connect-snippet/get_full_template.
+    const figmaStub = {
+      code: (strings: TemplateStringsArray, ...values: unknown[]) =>
+        strings.reduce((acc, s, i) => acc + s + (i < values.length ? values[i] : ''), ''),
+    }
+    const runtimeRequire = (name: string) => {
+      if (name === 'figma') return figmaStub
+      throw new Error(`unexpected require: ${name}`)
+    }
+    const exportDefaultIndex = template.lastIndexOf('export default')
+    const runnableTemplate =
+      exportDefaultIndex === -1
+        ? template
+        : template.slice(0, exportDefaultIndex) +
+          'return' +
+          template.slice(exportDefaultIndex + 'export default'.length)
+    const run = new Function(
+      'RUNTIME_REQUIRE',
+      `const require = RUNTIME_REQUIRE
+       return (function () {
+         ${runnableTemplate}
+       })()`,
+    )
+    const data = run(runtimeRequire)
+    expect(data.id).toBe('Button')
+    expect(data.example).toBe('<Button>hello world 5</Button>')
+  })
+
+  it('exits with code 1 when --exit-on-unreadable-files is set and a template file has an unsupported external import', async () => {
+    const testPath = fs.mkdtempSync(path.join(os.tmpdir(), 'code-connect-raw-ts-external-import-'))
+
+    fs.writeFileSync(
+      path.join(testPath, 'figma.config.json'),
+      JSON.stringify({
+        codeConnect: {
+          parser: 'react',
+          include: ['*.figma.ts'],
+        },
+      }),
+    )
+
+    fs.writeFileSync(
+      path.join(testPath, 'test-component.figma.ts'),
+      `// url=https://figma.com/design/parserless?node-id=1:1
+import figma from 'figma'
+import { compact } from 'lodash'
+export default figma.code\`<Button values="\${compact(['a']).join(',')}" />\`
+`,
+    )
 
     try {
       await promisify(exec)(
@@ -305,7 +384,11 @@ export default figma.code\`def python_code():
     } catch (e: any) {
       expect(e.code).toBe(1)
       expect(e.stderr).toContain('Exiting due to unreadable files')
-      expect(e.stderr).toContain('TypeScript template files only support importing from')
+      expect(e.stderr).toContain(
+        "TypeScript template files only support importing from 'figma' and relative helper files.",
+      )
+    } finally {
+      fs.rmSync(testPath, { recursive: true, force: true })
     }
   })
 

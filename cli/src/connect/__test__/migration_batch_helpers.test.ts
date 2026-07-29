@@ -175,6 +175,10 @@ export default { ...figma.tsx\`<${name} size={${size}} />\`, metadata: { __props
         templateData: {
           imports: [`import { ${name} } from "./icons"`],
           nestable: true,
+          props: {
+            name: {} as any,
+            fn: {} as any,
+          },
         },
       })
     }

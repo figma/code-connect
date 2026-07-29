@@ -1,5 +1,5 @@
 import { exec } from 'child_process'
-import { readFileSync, rmSync, existsSync } from 'fs'
+import { readFileSync, rmSync, existsSync, writeFileSync } from 'fs'
 import path from 'path'
 import { promisify } from 'util'
 import { tidyStdOutput } from '../../../__test__/utils'
@@ -15,7 +15,9 @@ describe('e2e test for `migrate` command', () => {
 
   async function runMigrate(cwd: string, extraArgs = '') {
     return await promisify(exec)(
-      `npx tsx ../../../../../cli connect migrate --skip-update-check${extraArgs ? ' ' + extraArgs : ''}`,
+      `npx tsx ../../../../../cli connect migrate --skip-update-check${
+        extraArgs ? ' ' + extraArgs : ''
+      }`,
       {
         cwd,
       },
@@ -108,12 +110,13 @@ describe('e2e test for `migrate` command', () => {
       expect(buttonTemplate).toContain('metadata: { nestable: true }')
       // Check that __props has been removed (no longer needed for parserless templates)
       expect(buttonTemplate).not.toContain('__props')
+      expect(buttonTemplate).not.toContain('const unused')
 
       // Verify the generated .figma.ts files are valid — parseRawFile should succeed
-      const buttonParsed = parseRawFile(buttonTemplatePath, undefined)
+      const buttonParsed = await parseRawFile(buttonTemplatePath, undefined)
       expect(buttonParsed.figmaNode).toBeTruthy()
       expect(buttonParsed.template).toBeTruthy()
-      const avatarParsed = parseRawFile(avatarTemplatePath, undefined)
+      const avatarParsed = await parseRawFile(avatarTemplatePath, undefined)
       expect(avatarParsed.figmaNode).toBeTruthy()
       expect(avatarParsed.template).toBeTruthy()
 
@@ -140,12 +143,29 @@ describe('e2e test for `migrate` command', () => {
       expect(existsSync(path.join(testPath, 'Avatar.figma.ts'))).toBe(false)
 
       // Verify the generated .figma.js files are valid — parseRawFile should succeed
-      const buttonParsed = parseRawFile(buttonTemplatePath, undefined)
+      const buttonParsed = await parseRawFile(buttonTemplatePath, undefined)
       expect(buttonParsed.figmaNode).toBeTruthy()
       expect(buttonParsed.template).toBeTruthy()
 
       expect(tidyStdOutput(result.stderr)).toContain('2 migrated')
     } finally {
+      cleanupTemplateFiles(testPath)
+    }
+  })
+
+  it('deletes successfully migrated source files when --delete is passed', async () => {
+    const testPath = getTestPath('react_basic')
+    const sourcePath = path.join(testPath, 'Button.figmadoc.tsx')
+    const source = readFileSync(sourcePath, 'utf-8')
+
+    try {
+      const result = await runMigrate(testPath, '--file Button.figmadoc.tsx --delete')
+
+      expect(existsSync(path.join(testPath, 'Button.figma.ts'))).toBe(true)
+      expect(existsSync(sourcePath)).toBe(false)
+      expect(tidyStdOutput(result.stderr)).toContain(`Deleted ${sourcePath}`)
+    } finally {
+      writeFileSync(sourcePath, source)
       cleanupTemplateFiles(testPath)
     }
   })
@@ -196,7 +216,7 @@ describe('e2e test for `migrate` command', () => {
       )
 
       // Verify the file is parseable as a raw template
-      const parsed = parseRawFile(templatePath, undefined)
+      const parsed = await parseRawFile(templatePath, undefined)
       expect(parsed.figmaNode).toBe('https://figma.com/test')
       expect(parsed.template).toBeTruthy()
 
@@ -288,8 +308,8 @@ describe('e2e test for `migrate` command', () => {
         { url: 'https://figma.com/test/hero-eth', name: 'eth' },
       ])
 
-      expect(parseBatchFile(iconsBatchPath, undefined)).toHaveLength(3)
-      expect(parseBatchFile(heroBatchPath, undefined)).toHaveLength(2)
+      expect(await parseBatchFile(iconsBatchPath, undefined)).toHaveLength(3)
+      expect(await parseBatchFile(heroBatchPath, undefined)).toHaveLength(2)
       expect(tidyStdOutput(result.stderr)).toContain('5 migrated')
     } finally {
       cleanupBatchFiles(testPath)
@@ -324,7 +344,7 @@ describe('e2e test for `migrate` command', () => {
         size: 12,
       })
 
-      expect(parseBatchFile(batchPath, undefined)).toHaveLength(10)
+      expect(await parseBatchFile(batchPath, undefined)).toHaveLength(10)
       expect(tidyStdOutput(result.stderr)).toContain('10 migrated')
     } finally {
       cleanupTemplateFiles(testPath)
@@ -346,15 +366,18 @@ describe('e2e test for `migrate` command', () => {
       expect(existsSync(path.join(testPath, 'Incompatible.figma.batch.ts'))).toBe(false)
       expect(existsSync(path.join(testPath, 'Incompatible.figma.batch.json'))).toBe(false)
 
-      expect(parseRawFile(firstTemplatePath, undefined).template).toBeTruthy()
-      expect(parseRawFile(secondTemplatePath, undefined).template).toBeTruthy()
+      expect((await parseRawFile(firstTemplatePath, undefined)).template).toBeTruthy()
+      expect((await parseRawFile(secondTemplatePath, undefined)).template).toBeTruthy()
       const stderr = tidyStdOutput(result.stderr)
       const successIndex = stderr.indexOf('✓ Migrated to')
       const warningIndex = stderr.indexOf('Unable to migrate the following files to batch files:')
       expect(successIndex).toBeGreaterThan(-1)
       expect(warningIndex).toBeGreaterThan(successIndex)
       expect(stderr).toContain(
-        `- ${path.join(testPath, 'Incompatible.figmadoc.tsx')} (2 connections): Templates did not reduce to one compatible shape`,
+        `- ${path.join(
+          testPath,
+          'Incompatible.figmadoc.tsx',
+        )} (2 connections): Templates did not reduce to one compatible shape`,
       )
       expect(stderr).toContain(
         "If you'd like to create batch files for these, we recommend using a coding agent. See example prompt: https://developers.figma.com/docs/code-connect/template-files/#migration-script",

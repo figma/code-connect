@@ -23,6 +23,7 @@ declare module 'figma' {
   export type SlotSection = { type: 'SLOT'; guid?: string; propertyName: string }
   export type ErrorSection = { type: 'ERROR'; message: string; errorObject?: unknown }
   export type ResultSection = CodeSection | InstanceSection | SlotSection | ErrorSection
+  export type ResultSectionList = Array<ResultSection | ResultSectionList>
 
   export interface TemplateStringResult {
     sections: ResultSection[]
@@ -99,6 +100,7 @@ declare module 'figma' {
       name: string
     }): InstanceHandle | TextHandle | ErrorHandle | null
     __getPropertyValue__(name: string): string | boolean | ErrorHandle
+    __getPropertyValueByType__(name: string, type: string): string | boolean | ErrorHandle
     __render__(): ResultSection[]
     __getProps__(): ResultSection[] | Record<string, unknown> | undefined
     __renderWithFn__(
@@ -192,12 +194,12 @@ declare module 'figma' {
 
     helpers: {
       react: {
-        renderProp(name: string, prop: FCCValue | ResultSection[]): TemplateStringResult | string
+        renderProp(name: string, prop: FCCValue | ResultSectionList): TemplateStringResult | string
         renderChildren(
-          prop: FCCValue | ResultSection[],
+          prop: FCCValue | ResultSectionList,
         ): ResultSection[] | string | number | boolean | TemplateStringResult
         renderPropValue(
-          prop: FCCValue | ResultSection[],
+          prop: FCCValue | ResultSectionList,
         ): string | number | boolean | ResultSection[]
         stringifyObject(obj: unknown): string
         jsxElement(value: string): { $value: string; $type: 'jsx-element' }
@@ -207,17 +209,17 @@ declare module 'figma' {
         templateString(value: string): { $value: string; $type: 'template-string' }
         reactComponent(value: string): { $value: string; $type: 'react-component' }
         array(value: FCCValue[]): { $value: FCCValue[]; $type: 'array' }
-        isReactComponentArray(prop: unknown): boolean
+        isReactComponentArray(prop: unknown): prop is ResultSectionList
       }
       swift: {
         renderChildren(
-          children: ResultSection[] | string | undefined,
+          children: ResultSectionList | string | undefined,
           prefix: string,
         ): ResultSection[]
       }
       kotlin: {
         renderChildren(
-          children: ResultSection[] | string | undefined,
+          children: ResultSectionList | string | undefined,
           prefix: string,
         ): ResultSection[]
       }

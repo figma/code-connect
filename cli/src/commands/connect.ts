@@ -25,7 +25,7 @@ import { fromError } from 'zod-validation-error'
 import { ParseRequestPayload, ParseResponsePayload } from '../connect/parser_executable_types'
 import z from 'zod'
 import path from 'path'
-import { withUpdateCheck } from '../common/updates'
+import { flagParserBasedCodeConnect, withVersionWarnings } from '../common/updates'
 import { applyDocumentUrlSubstitutions, exitWithFeedbackMessage } from '../connect/helpers'
 import { filterProjectInfoByFile } from './filter_project_info'
 import { parseHtmlDoc } from '../html/parser'
@@ -68,6 +68,11 @@ export type BaseCommand = commander.Command & {
   apiUrl?: string
   includeProps?: boolean
   batch?: BatchMigrationMode
+  delete?: boolean
+  all?: boolean
+  maxCombinations?: string
+  props?: string[]
+  inspect?: boolean
 }
 
 type BatchMigrationMode = 'auto' | 'all' | 'none'
@@ -103,7 +108,7 @@ function addBaseCommand(command: commander.Command, name: string, description: s
 export function addConnectCommandToProgram(program: commander.Command) {
   // Main command, invoked with `figma connect`
   const connectCommand = addBaseCommand(program, 'connect', 'Figma Code Connect').action(
-    withUpdateCheck(runWizard),
+    withVersionWarnings(runWizard, { hideDeprecationWarning: true }),
   )
 
   // Make shared base flags work on either side of the subcommand name —
@@ -134,7 +139,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
       '--force',
       'overwrite existing UI-created Code Connect mappings if they conflict with the files being published',
     )
-    .action(withUpdateCheck(handlePublish))
+    .action(withVersionWarnings(handlePublish))
 
   addBaseCommand(
     connectCommand,
@@ -149,7 +154,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
       'specify the node to unpublish. This will unpublish for the specified label.',
     )
     .option('-l --label <label>', 'label to unpublish for')
-    .action(withUpdateCheck(handleUnpublish))
+    .action(withVersionWarnings(handleUnpublish))
 
   addBaseCommand(
     connectCommand,
@@ -161,7 +166,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
       '--include-template-files',
       '(Deprecated) No longer needed - template files are included by default. Will be removed in a future version.',
     )
-    .action(withUpdateCheck(handleParse))
+    .action(withVersionWarnings(handleParse))
 
   addBaseCommand(
     connectCommand,
@@ -169,7 +174,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
     'Generate a Code Connect file with boilerplate in the current directory for a Figma node URL',
   )
     .argument('<figma-node-url>', 'Figma node URL to create the Code Connect file from')
-    .action(withUpdateCheck(handleCreate))
+    .action(withVersionWarnings(handleCreate))
 
   addBaseCommand(
     connectCommand,
@@ -184,6 +189,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
       '--javascript',
       'output migrated templates as JavaScript (.figma.js) instead of TypeScript (.figma.ts)',
     )
+    .option('--delete', 'delete source Code Connect files after they are successfully migrated')
     .addOption(
       new commander.Option(
         '--batch <mode>',
@@ -192,7 +198,7 @@ export function addConnectCommandToProgram(program: commander.Command) {
         .choices(['auto', 'all', 'none'])
         .default('auto'),
     )
-    .action(withUpdateCheck(handleMigrate))
+    .action(withVersionWarnings(handleMigrate, { hideDeprecationWarning: true }))
 
   addBaseCommand(
     connectCommand,
@@ -204,7 +210,23 @@ export function addConnectCommandToProgram(program: commander.Command) {
       'Code Connect files to preview (e.g., Button.figma.tsx). Leave empty to preview all files.',
     )
     .option('--output <format>', 'Output format: table (default) or json', 'table')
-    .action(withUpdateCheck(handlePreview))
+    .option(
+      '--all',
+      "Render the snippet for every possible combination of the component's boolean and variant properties. Requires a single component file argument.",
+    )
+    .option(
+      '--max-combinations <number>',
+      'Maximum number of property combinations to render with --all. Defaults to 500 and cannot exceed 500.',
+    )
+    .option(
+      '--props <pairs...>',
+      'Render a single property combination with the given property values, e.g. --props Variant=Primary "Has Icon Start=true". Each pair is a separate space-separated argument (quote a pair only if its name or value contains spaces). Prefix a pair with a type (BOOLEAN/TEXT/VARIANT/INSTANCE_SWAP) to disambiguate properties that share a name but differ in type, e.g. "BOOLEAN:textMsg=false" "TEXT:textMsg=Hello". Unspecified properties use their defaults. Cannot be combined with --all.',
+    )
+    .option(
+      '--inspect',
+      "List the component's properties/variants (name, type, options, default) without rendering. Respects --output.",
+    )
+    .action(withVersionWarnings(handlePreview))
 }
 
 export function getAccessToken(cmd: BaseCommand) {
@@ -380,10 +402,19 @@ export async function getCodeConnectObjects(
         exitWithError(`Error calling parser: ${e}.`)
       } else {
         exitWithError(
-          `Error returned from parser: ${fromError(e)}. Try re-running the command with --verbose for more information.`,
+          `Error returned from parser: ${fromError(
+            e,
+          )}. Try re-running the command with --verbose for more information.`,
         )
       }
     }
+  }
+
+  // At this point `codeConnectObjects` holds only docs produced by a native
+  // parser (raw templates and batch files are appended below), so a non-empty
+  // list is proof the project still relies on the deprecated parsers.
+  if (codeConnectObjects.length > 0) {
+    flagParserBasedCodeConnect()
   }
 
   if (rawTemplateFiles.length > 0) {
@@ -393,7 +424,7 @@ export async function getCodeConnectObjects(
     const rawTemplateDocs: CodeConnectJSON[] = []
     for (const file of rawTemplateFiles) {
       try {
-        const doc = parseRawFile(file, resolvedLabel, projectInfo.config, projectInfo.absPath)
+        const doc = await parseRawFile(file, resolvedLabel, projectInfo.config, projectInfo.absPath)
         // Store the Code Connect file path for migration purposes
         doc._codeConnectFilePath = file
 
@@ -437,7 +468,12 @@ export async function getCodeConnectObjects(
 
     for (const file of batchFiles) {
       try {
-        const docs = parseBatchFile(file, resolvedLabel, projectInfo.config, projectInfo.absPath)
+        const docs = await parseBatchFile(
+          file,
+          resolvedLabel,
+          projectInfo.config,
+          projectInfo.absPath,
+        )
         docs.forEach((doc) => {
           doc._codeConnectFilePath = file
         })
@@ -807,6 +843,7 @@ async function handleMigrate(cmd: BaseCommand & { javascript?: boolean }) {
   const gitRootPath = getGitRepoAbsolutePath(dir)
   const useTypeScript = !cmd.javascript
   const batchMigratedDocs = new Set<CodeConnectJSON>()
+  const migratedDocs = new Set<CodeConnectJSON>()
   const batchDocsByPath = getBatchMigrationGroups(allCodeConnectObjects, {
     batchAll: cmd.batch === 'all',
     disabled: cmd.batch === 'none',
@@ -828,11 +865,16 @@ async function handleMigrate(cmd: BaseCommand & { javascript?: boolean }) {
       })
     } else {
       logger.info(
-        `${success('✓')} Migrated ${result.componentCount} component(s) to batch ${highlight(result.batchPath || batchPath)}`,
+        `${success('✓')} Migrated ${result.componentCount} component(s) to batch ${highlight(
+          result.batchPath || batchPath,
+        )}`,
       )
       migratedCount += result.componentCount
       batchMigratedCount += result.componentCount
-      docs.forEach((doc) => batchMigratedDocs.add(doc))
+      docs.forEach((doc) => {
+        batchMigratedDocs.add(doc)
+        migratedDocs.add(doc)
+      })
     }
   }
 
@@ -888,9 +930,13 @@ async function handleMigrate(cmd: BaseCommand & { javascript?: boolean }) {
         skippedCount++
       } else {
         logger.info(
-          `${success('✓')} Migrated${hasVariants ? ' (with variants)' : ''} to ${highlight(outputPath)}`,
+          `${success('✓')} Migrated${hasVariants ? ' (with variants)' : ''} to ${highlight(
+            outputPath,
+          )}`,
         )
         migratedCount++
+        if (group.main) migratedDocs.add(group.main)
+        group.variants.forEach((doc) => migratedDocs.add(doc))
       }
     } catch (error) {
       const errorMsg = `Failed to migrate ${figmaUrl}: ${error}`
@@ -931,13 +977,44 @@ async function handleMigrate(cmd: BaseCommand & { javascript?: boolean }) {
     logger.warn('Unable to migrate the following files to batch files:')
     batchMigrationWarnings.forEach((warning) => {
       logger.warn(
-        `- ${highlight(warning.path)} (${warning.connectionCount} connections): ${formatBatchMigrationWarningReason(warning.reason)}`,
+        `- ${highlight(warning.path)} (${
+          warning.connectionCount
+        } connections): ${formatBatchMigrationWarningReason(warning.reason)}`,
       )
     })
     console.log('')
     logger.warn(
       "If you'd like to create batch files for these, we recommend using a coding agent. See example prompt: https://developers.figma.com/docs/code-connect/template-files/#migration-script",
     )
+  }
+
+  if (cmd.delete) {
+    const projectFilePaths = new Set(projectInfo.files.map((file) => path.resolve(file)))
+    const docsBySourcePath = new Map<string, CodeConnectJSON[]>()
+
+    for (const doc of allCodeConnectObjects) {
+      if (!doc._codeConnectFilePath) continue
+
+      const sourcePath = path.resolve(doc._codeConnectFilePath)
+      if (!projectFilePaths.has(sourcePath)) continue
+
+      const sourceDocs = docsBySourcePath.get(sourcePath) ?? []
+      sourceDocs.push(doc)
+      docsBySourcePath.set(sourcePath, sourceDocs)
+    }
+
+    for (const [sourcePath, sourceDocs] of docsBySourcePath) {
+      if (!sourceDocs.every((doc) => migratedDocs.has(doc))) continue
+
+      try {
+        fs.unlinkSync(sourcePath)
+        logger.info(`${success('✓')} Deleted ${highlight(sourcePath)}`)
+      } catch (error) {
+        const errorMsg = `Failed to delete ${sourcePath}: ${error}`
+        logger.error(errorMsg)
+        errors.push(errorMsg)
+      }
+    }
   }
 
   // Summary

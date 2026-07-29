@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "1.4.9",
+  "version": "1.5.0",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -81,7 +81,6 @@
     "@babel/types": "7.28.5",
     
     
-    
     "@storybook/csf-tools": "8.5.1",
     "@types/cross-spawn": "^6.0.6",
     "@types/jest": "^29.5.13",
@@ -110,6 +109,7 @@
     "compare-versions": "^6.1.0",
     "cross-spawn": "^7.0.3",
     "dotenv": "^16.3.1",
+    "esbuild-wasm": "0.27.3",
     "fast-fuzzy": "^1.12.0",
     "find-up": "^5.0.0",
     "glob": "^11.0.4",

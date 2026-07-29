@@ -6,6 +6,7 @@ import {
   writeTemplateFile,
   removePropsDefinitionAndMetadata,
   prepareMigratedTemplate,
+  removeUnusedGeneratedPropDeclarations,
   groupCodeConnectObjectsByFigmaUrl,
   writeVariantTemplateFile,
   getFilenameFromComponentName,
@@ -618,6 +619,35 @@ const disabled = figma.selectedInstance.getBoolean('Disabled')
 export default { example: figma.tsx\`<Button />\`, metadata: {} }`
 
     expect(removePropsDefinitionAndMetadata(input)).toBe(expected)
+  })
+})
+
+describe('removeUnusedGeneratedPropDeclarations', () => {
+  it('removes only unused generated props without inspecting example code text', () => {
+    const input = `const generatedUnused = figma.selectedInstance.getString('Unused')
+const generatedUsed = figma.selectedInstance.getString('Used')
+const authoredUnused = doSomething()
+export default {
+  example: figma.code\`function Example() {
+    const generatedUnused = 'example code'
+    return <Button label={\${generatedUsed}} />
+  }\`,
+}`
+
+    const result = removeUnusedGeneratedPropDeclarations(input, {
+      generatedUnused: {} as any,
+      generatedUsed: {} as any,
+    })
+
+    expect(result).not.toMatch(/^const generatedUnused/m)
+    expect(result).toContain("const generatedUnused = 'example code'")
+    expect(result).toContain('const generatedUsed =')
+    expect(result).toContain('const authoredUnused =')
+  })
+
+  it('returns malformed templates unchanged', () => {
+    const input = 'const generatedUnused = {'
+    expect(removeUnusedGeneratedPropDeclarations(input, { generatedUnused: {} as any })).toBe(input)
   })
 })
 

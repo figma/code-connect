@@ -85,7 +85,7 @@ async function getCodeConnectObjects(
     const rawTemplateDocs: CodeConnectJSON[] = []
     for (const file of rawTemplateFiles) {
       try {
-        const doc = parseRawFile(file, resolvedLabel, projectInfo.config, projectInfo.absPath)
+        const doc = await parseRawFile(file, resolvedLabel, projectInfo.config, projectInfo.absPath)
         doc._codeConnectFilePath = file
         if (!silent || cmd.verbose) {
           logger.info(success(file))
@@ -126,7 +126,12 @@ async function getCodeConnectObjects(
 
     for (const file of batchFiles) {
       try {
-        const docs = parseBatchFile(file, resolvedLabel, projectInfo.config, projectInfo.absPath)
+        const docs = await parseBatchFile(
+          file,
+          resolvedLabel,
+          projectInfo.config,
+          projectInfo.absPath,
+        )
         docs.forEach((doc) => {
           doc._codeConnectFilePath = file
         })

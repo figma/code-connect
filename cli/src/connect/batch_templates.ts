@@ -47,12 +47,12 @@ function validateBatchTemplatePath(
  * that prepend `window['__FIGMA_BATCH'] = <data>` to the template. The figma
  * runtime exposes this as `figma.batch`.
  */
-export function parseBatchFile(
+export async function parseBatchFile(
   filePath: string,
   label: string | undefined,
   config?: CodeConnectConfig,
   dir?: string,
-): CodeConnectJSON[] {
+): Promise<CodeConnectJSON[]> {
   const raw = fs.readFileSync(filePath, 'utf-8')
   let parsed: any
   try {
@@ -85,7 +85,7 @@ export function parseBatchFile(
         throw new Error(`Missing required field "url" in entry "${entryName}" in ${filePath}`)
       }
 
-      const doc = parseRawFile(templatePath, label, config, dir, {
+      const doc = await parseRawFile(templatePath, label, config, dir, {
         url: entry.url,
         source: entry.source,
         component: entry.component,

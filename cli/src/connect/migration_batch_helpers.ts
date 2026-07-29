@@ -118,29 +118,10 @@ function applyReplacements(
     }, body)
 }
 
-function removeUnusedSimpleConsts(body: string) {
-  let previous: string
-  let next = body
-  const simpleConstRegex =
-    /^const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:"[^"\n]*"|'[^'\n]*'|figma\.helpers\.react\.identifier\(["'][^"'\n]+["']\)|[A-Za-z_$][\w$]*|true|false|-?\d+(?:\.\d+)?)\s*\n/gm
-
-  do {
-    previous = next
-    next = next.replace(simpleConstRegex, (match, name: string, offset: number) => {
-      const rest = next.slice(offset + match.length)
-      const isReferenced = new RegExp(`\\b${escapeRegExp(name)}\\b`).test(rest)
-      return isReferenced ? match : ''
-    })
-  } while (next !== previous)
-
-  return next
-}
-
 function deriveMetadata(
   docs: CodeConnectJSON[],
 ):
-  | { ok: true; comments: string[]; entries: BatchComponentEntry[] }
-  | { ok: false; reason: string } {
+  { ok: true; comments: string[]; entries: BatchComponentEntry[] } | { ok: false; reason: string } {
   const sources = docs.map((doc) => doc.source || undefined)
   const components = docs.map((doc) => doc.component || undefined)
   const entries: BatchComponentEntry[] = docs.map((doc) => ({ url: doc.figmaNode }))
@@ -517,7 +498,7 @@ export function buildBatchMigration(
 
   let candidates: Candidate[] = docs.map((doc, index) => ({
     doc,
-    body: removeUnusedSimpleConsts(prepareMigratedTemplateBody(doc, includeProps, useTypeScript)),
+    body: prepareMigratedTemplateBody(doc, includeProps, useTypeScript),
     params: metadata.entries[index],
   }))
 

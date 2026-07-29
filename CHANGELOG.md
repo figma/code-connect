@@ -1,3 +1,30 @@
+# Code Connect v1.5.0 (29 July 2026)
+
+> [!WARNING]
+> Previously, Code Connect required framework-specific parsers for React, iOS, Android and Web Components. Late in 2025, we introduced a new [template API](https://developers.figma.com/docs/code-connect/template-api/) that removed framework requirements and allows users to more flexibly control how code snippets are rendered inside of Figma. Going forward, new users should opt for this template format and we recommend existing users to follow our [migration guide](https://developers.figma.com/docs/code-connect/templates-migration-guide/) to move to the new format. Following August 17th, 2026, we will no longer be updating or actively maintaining the legacy parsers.
+
+
+## Fixed
+
+### Template files
+
+- Fixed nested rendered examples being dropped or formatted incorrectly when interpolated directly or passed to the React, Swift, and Kotlin child-rendering helpers.
+- Migrated template files no longer include unused generated prop constants.
+
+## Features
+
+### Template files
+
+- Added a `--delete` option to `figma connect migrate` that deletes source Code Connect files after they are successfully migrated.
+- Template files (TypeScript and JavaScript) now support importing local helper modules via relative paths (for example, `./shared-helpers`) to promote reuse of shared formatting and utility logic. Helper code is bundled into the published template so it can run standalone, and helpers may import other local helpers to organize shared logic across multiple files. Only relative imports within the project are supported (external packages are not), and helpers must be brought in with `import` syntax — `require` remains available for the Figma API itself. Helper code you don't actually use is left out of the published template, and if the bundled output exceeds the maximum template size, the CLI fails before publishing.
+
+### General
+
+- `figma connect preview` can now render a component in states beyond its default, and inspect its properties:
+  - `figma connect preview <file> --inspect` prints the component's properties and variants — name, type, variant options, and default — without rendering a snippet.
+  - `figma connect preview <file> --props Name=Value …` renders a single specific property combination. Pairs are space-separated arguments (quote a pair only when its name or value contains spaces, e.g. `"Has Icon Start=true"`). Property names and variant values are matched case-insensitively, unspecified properties keep their defaults, and an invalid variant value is reported along with the valid options. To target a property when two properties share a name but differ in type, prefix the pair with the type, e.g. `"BOOLEAN:textMsg=false" "TEXT:textMsg=Hello"`; the prefix is optional and only needed to disambiguate.
+  - `figma connect preview <file> --all` renders every property combination of the component — the cartesian product of its variant and boolean properties. Requires a specific component file argument. Use `--max-combinations <number>` to render fewer combinations when the full set is large.
+
 # Code Connect v1.4.9 (6 July 2026)
 
 ## Fixed
@@ -25,6 +52,7 @@
 - Augmented the `getSlot` API: `getSlot('SlotName')` still renders the same way, and the returned value now also exposes `connectedInstances` (the connected instances directly in the slot). This lets you render a slot's connected children inline. For example `getSlot('body').connectedInstances.map((c) => c.executeTemplate().example)`.
 
 ### React & HTML
+
 - Augmented the `figma.slot` API: `figma.slot('SlotName')` still maps the slot the same way, and you can now also write `figma.slot('SlotName').connectedInstances` in a `props` object to render the slot's code-connected instances inline. For example `props: { content: figma.slot('Content').connectedInstances }`.
 
 # Code Connect v1.4.8 (8 June 2026)

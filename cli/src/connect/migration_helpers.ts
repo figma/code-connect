@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import * as prettier from 'prettier'
+import { ModuleKind, Node, Project, ScriptTarget, VariableDeclarationKind } from 'ts-morph'
 import { CodeConnectJSON } from '../connect/figma_connect'
 
 /** Prettier configuration used for all generated template files */
@@ -14,6 +15,86 @@ const PRETTIER_OPTIONS = {
 /** Formats template code with consistent prettier configuration */
 export function formatTemplate(code: string): string {
   return prettier.format(code, PRETTIER_OPTIONS)
+}
+
+let unusedPropCleanupProject: Project | undefined
+let unusedPropCleanupFileId = 0
+
+function getUnusedPropCleanupProject() {
+  unusedPropCleanupProject ??= new Project({
+    useInMemoryFileSystem: true,
+    skipAddingFilesFromTsConfig: true,
+    compilerOptions: {
+      module: ModuleKind.ESNext,
+      target: ScriptTarget.ESNext,
+    },
+  })
+  return unusedPropCleanupProject
+}
+
+/**
+ * Removes unused top-level const declarations generated from parser prop mappings.
+ * If the template cannot be safely analyzed, leave it unchanged so cleanup never
+ * prevents an otherwise valid migration.
+ */
+export function removeUnusedGeneratedPropDeclarations(
+  template: string,
+  props: CodeConnectJSON['templateData']['props'],
+): string {
+  const generatedPropNames = new Set(Object.keys(props || {}))
+  if (generatedPropNames.size === 0) {
+    return template
+  }
+
+  let project: Project | undefined
+  let sourceFile
+
+  try {
+    project = getUnusedPropCleanupProject()
+    sourceFile = project.createSourceFile(
+      `migration-template-${unusedPropCleanupFileId++}.ts`,
+      template,
+    )
+
+    if (project.getProgram().getSyntacticDiagnostics(sourceFile).length > 0) {
+      return template
+    }
+
+    // Repeat so a generated declaration referenced only by another unused
+    // generated declaration can also be removed.
+    while (true) {
+      const unusedStatement = sourceFile.getVariableStatements().find((statement) => {
+        if (statement.getDeclarationKind() !== VariableDeclarationKind.Const) {
+          return false
+        }
+
+        const declarations = statement.getDeclarations()
+        if (declarations.length !== 1) {
+          return false
+        }
+
+        const name = declarations[0].getNameNode()
+        return (
+          Node.isIdentifier(name) &&
+          generatedPropNames.has(name.getText()) &&
+          name.findReferencesAsNodes().length === 0
+        )
+      })
+
+      if (!unusedStatement) {
+        break
+      }
+      unusedStatement.remove()
+    }
+
+    return sourceFile.getFullText()
+  } catch {
+    return template
+  } finally {
+    if (project && sourceFile) {
+      project.removeSourceFile(sourceFile)
+    }
+  }
 }
 
 /**
@@ -169,6 +250,7 @@ export function prepareMigratedTemplateBody(
   if (useTypeScript) {
     template = convertSyntaxToTypeScript(template)
   }
+  template = removeUnusedGeneratedPropDeclarations(template, doc.templateData?.props)
   return template
 }
 

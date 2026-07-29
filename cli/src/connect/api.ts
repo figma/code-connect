@@ -1,12 +1,5 @@
 export type EnumValue =
-  | string
-  | boolean
-  | number
-  | symbol
-  | undefined
-  | React.ReactElement
-  | Function
-  | Object
+  string | boolean | number | symbol | undefined | React.ReactElement | Function | Object
 
 /**
  * These types are intended to be returned by figma helper functions for exposing the

@@ -463,9 +463,7 @@ export function parseRenderFunctionExpression(
           return ts.visitEachChild(node, visit, context)
         }
         return ts.visitNode(rootNode, visit) as
-          | ts.ArrowFunction
-          | ts.FunctionExpression
-          | ts.FunctionDeclaration
+          ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration
       },
     ]).transformed[0] as typeof exp
   }
