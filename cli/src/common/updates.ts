@@ -103,12 +103,9 @@ function getUpdateCommand() {
   return 'npm update -g @figma/code-connect'
 }
 
-// Keep in sync with the deprecation notices in figmadoc/README.md and
-// figmadoc/CHANGELOG.md, which repeat this date.
-const PARSER_DEPRECATION_DATE = 'August 17th, 2026'
-
 const DEPRECATION_NOTICE = `
-${chalk.yellow('⚠')}  ${chalk.bold(`We've detected framework-specific Code Connect in your project. Starting ${PARSER_DEPRECATION_DATE} Code Connect users should use the new templates format for Code Connect.`)} You may continue publishing, but we recommend following our migration guide to update your Code Connect: https://developers.figma.com/docs/code-connect/templates-migration-guide/`
+Framework-specific parsers will no longer receive updates or support from August 17th, 2026. Template files will be the only actively maintained way of using Code Connect. See our migration guide for more information and instructions on migrating parser-based Code Connect:
+https://developers.figma.com/docs/code-connect/templates-migration-guide/`
 
 function maybeShowUpdateMessage() {
   if (parserBasedCodeConnectFound && !deprecationWarningHidden) {

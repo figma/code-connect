@@ -2,7 +2,8 @@ import { promisify } from 'util'
 import { exec } from 'child_process'
 import path from 'path'
 
-const DEPRECATION_NOTICE_FRAGMENT = "We've detected framework-specific Code Connect in your project"
+const DEPRECATION_NOTICE_FRAGMENT =
+  'Framework-specific parsers will no longer receive updates or support from August 17th, 2026'
 
 function runParse(fixture: string) {
   return promisify(exec)(

@@ -1,7 +1,12 @@
+# Code Connect v1.5.1 (29 July 2026)
+
+- Copy tweaks for CLI support notice
+
 # Code Connect v1.5.0 (29 July 2026)
 
 > [!WARNING]
-> Previously, Code Connect required framework-specific parsers for React, iOS, Android and Web Components. Late in 2025, we introduced a new [template API](https://developers.figma.com/docs/code-connect/template-api/) that removed framework requirements and allows users to more flexibly control how code snippets are rendered inside of Figma. Going forward, new users should opt for this template format and we recommend existing users to follow our [migration guide](https://developers.figma.com/docs/code-connect/templates-migration-guide/) to move to the new format. Following August 17th, 2026, we will no longer be updating or actively maintaining the legacy parsers.
+> Framework-specific parsers will no longer receive updates or support from August 17th, 2026. Template files will be the only actively maintained way of using Code Connect. See our migration guide for more information and instructions on migrating parser-based Code Connect:
+> https://developers.figma.com/docs/code-connect/templates-migration-guide/
 
 
 ## Fixed
