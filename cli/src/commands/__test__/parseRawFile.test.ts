@@ -310,8 +310,8 @@ export default figma.code\`<Button text="\${text}" />\``
     fs.writeFileSync(tempFilePath, fileContent)
     const result = await parseRawFile(tempFilePath, undefined)
 
-    // The template should have the converted require syntax
     expect(result.template).toContain("const figma = require('figma')")
+    expect(result.template).not.toContain('__figmaRequire')
     expect(result.template).not.toContain("import figma from 'figma'")
   })
 
@@ -346,6 +346,52 @@ export default figma.code\`<Button />\``
     const result = await parseRawFile(tempFilePath, undefined)
 
     expect(result.template).toContain("const figma = require('figma')")
+  })
+
+  it('converts ESM import with a trailing comment', async () => {
+    const fileContent = `// url=https://figma.com/design/abc123?node-id=1:1
+import figma from 'figma' // runtime API
+export default figma.code\`<Button />\``
+
+    fs.writeFileSync(tempFilePath, fileContent)
+    const result = await parseRawFile(tempFilePath, undefined)
+
+    expect(result.template).toContain("const figma = require('figma')")
+    expect(result.template).not.toContain("import figma from 'figma'")
+    expect(result.template).not.toContain('// runtime API')
+  })
+
+  // The trailing whitespace is escaped so formatters can't silently strip it.
+  it('converts ESM import with trailing whitespace after the semicolon', async () => {
+    const fileContent = `// url=https://figma.com/design/abc123?node-id=1:1
+import figma from 'figma';\x20\t
+export default figma.code\`<Button />\``
+
+    fs.writeFileSync(tempFilePath, fileContent)
+    const result = await parseRawFile(tempFilePath, undefined)
+
+    expect(result.template).toContain("const figma = require('figma')")
+    expect(result.template).not.toContain("import figma from 'figma'")
+  })
+
+  it('converts a JavaScript figma import without helpers to require', async () => {
+    const jsFilePath = path.join(tempDir, 'test.figma.js')
+    const fileContent = `// url=https://figma.com/design/abc123?node-id=1:1
+import figma from 'figma'
+
+export default {
+  example: figma.code\`<CC-1>my component</CC-1>\`,
+  id: 'CC-1',
+  metadata: { nestable: true },
+}`
+
+    fs.writeFileSync(jsFilePath, fileContent)
+    const result = await parseRawFile(jsFilePath, undefined)
+
+    expect(result.template).toContain("const figma = require('figma')")
+    expect(result.template).not.toContain('__figmaRequire')
+    expect(result.template).not.toContain("import figma from 'figma'")
+    expect(result.template).toContain('export default {')
   })
 
   it('still allows type imports', async () => {

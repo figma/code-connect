@@ -1,3 +1,9 @@
+# Code Connect v1.5.2 (3 August 2026)
+
+## Fixed
+
+- Fixed JavaScript template files authored with `import figma from 'figma'` publishing an unexecutable import.
+
 # Code Connect v1.5.1 (29 July 2026)
 
 - Copy tweaks for CLI support notice

@@ -44,7 +44,7 @@ describe('e2e test for `parse` command (batch)', () => {
     expect(json[0].source).toBe('./src/icons/Icon24Arrow.tsx')
     expect(json[2].source).toBe('')
 
-    // ESM import should be transpiled
+    // ESM import should be rewritten directly to require
     expect(json[0].template).toContain("const figma = require('figma')")
     expect(json[0].template).not.toContain("import figma from 'figma'")
 

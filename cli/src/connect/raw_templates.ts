@@ -49,8 +49,10 @@ export function isRawTemplate(content: string): boolean {
   return false
 }
 
-// Convert ESM import of 'figma' to require syntax. Supports: import figma from 'figma'
-const figmaImportRegex = /^import\s+figma\s+from\s+['"]figma['"]\s*;?\s*$/m
+// Convert the supported ESM Figma import to the runtime's require syntax when
+// the template does not otherwise need bundling.
+const figmaImportRegex =
+  /^import[ \t]+figma[ \t]+from[ \t]+['"]figma['"][ \t]*;?[ \t]*(?:\/\/[^\r\n]*)?$/m
 
 // Matches the backend's max template size; we fail here rather than let the
 // server reject the publish request.
@@ -67,7 +69,7 @@ function assertTemplateWithinSizeLimit(filePath: string, template: string): void
   }
 }
 
-interface TypeScriptImportValidationResult {
+interface TemplateImportValidationResult {
   hasRelativeHelperImports: boolean
 }
 
@@ -79,12 +81,12 @@ function isRawTemplateSourceFile(filePath: string): boolean {
 /**
  * Validates a template entry's imports: only the default `figma` import,
  * type-only imports and relative helper imports are allowed. Returns whether
- * the entry imports helpers, so the caller knows whether to bundle.
+ * the entry imports helpers, so the caller knows whether to bundle it.
  */
-function validateTypeScriptTemplateImports(
+function validateTemplateImports(
   filePath: string,
   fileContent: string,
-): TypeScriptImportValidationResult {
+): TemplateImportValidationResult {
   const sourceFile = ts.createSourceFile(filePath, fileContent, ts.ScriptTarget.Latest, true)
   let hasRelativeHelperImports = false
 
@@ -145,11 +147,11 @@ function validateTypeScriptTemplateImports(
   return { hasRelativeHelperImports }
 }
 
-function transpileTypeScriptTemplate(filePath: string, fileContent: string): string {
-  if (figmaImportRegex.test(fileContent)) {
-    fileContent = fileContent.replace(figmaImportRegex, "const figma = require('figma')")
-  }
+function rewriteFigmaImport(fileContent: string): string {
+  return fileContent.replace(figmaImportRegex, "const figma = require('figma')")
+}
 
+function transpileTypeScriptTemplate(fileContent: string): string {
   const result = ts.transpileModule(fileContent, {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,
@@ -218,7 +220,7 @@ export async function parseRawFile(
   batchOverrides?: BatchOverrides,
 ): Promise<CodeConnectJSON> {
   let fileContent = fs.readFileSync(filePath, 'utf-8')
-  let shouldBundleTypeScriptTemplate = false
+  let shouldBundleTemplate = false
 
   // Extract metadata fields BEFORE transpilation to avoid losing comments
   // that appear before type-only imports (which TypeScript erases)
@@ -229,10 +231,7 @@ export async function parseRawFile(
   // Validate imports first, before the `codeProperties` skip guard below, so an
   // unsupported import is always a hard error rather than silently swallowed.
   if (isRawTemplateSourceFile(filePath)) {
-    shouldBundleTypeScriptTemplate = validateTypeScriptTemplateImports(
-      filePath,
-      fileContent,
-    ).hasRelativeHelperImports
+    shouldBundleTemplate = validateTemplateImports(filePath, fileContent).hasRelativeHelperImports
   }
 
   // A file with no // url= directive that contains the string `codeProperties`
@@ -245,14 +244,17 @@ export async function parseRawFile(
     )
   }
 
-  // Bundle when helpers are present; otherwise transpile TS and emit JS verbatim.
-  // Bundling takes some extra time.
-  if (shouldBundleTypeScriptTemplate) {
+  // Bundle templates with helper imports. Helper-free templates stay on the
+  // faster path and rewrite the Figma import directly to require syntax.
+  if (shouldBundleTemplate) {
     // Confining resolution to the project dir
     const projectRoot = dir ? path.resolve(dir) : path.dirname(path.resolve(filePath))
     fileContent = await bundleTemplateWithHelpers(filePath, projectRoot)
-  } else if (filePath.endsWith('.ts')) {
-    fileContent = transpileTypeScriptTemplate(filePath, fileContent)
+  } else {
+    fileContent = rewriteFigmaImport(fileContent)
+    if (filePath.endsWith('.ts')) {
+      fileContent = transpileTypeScriptTemplate(fileContent)
+    }
   }
 
   // For batch templates, metadata comes from the batch entry instead of comments

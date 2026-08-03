@@ -217,11 +217,12 @@ export default figma.code\`def python_code():
       },
     ])
 
-    // ESM import should be converted to require, type annotation should be stripped
+    // ESM import should be rewritten directly to require, type annotation should be stripped
     const template: string = json[0].template
     expect(template).not.toContain(': string')
     expect(template).not.toContain("import figma from 'figma'")
     expect(template).toContain("const figma = require('figma')")
+    expect(template).not.toContain('__figmaRequire')
     expect(template).toContain('export default figma.code')
   })
 
