@@ -1,15 +1,11 @@
 name: Finalize Release
 
-# Tags a release and publishes its GitHub release, after the staged npm publish
-# has been approved.
+# Tags a release and publishes its GitHub release, once the version is live on
+# npm.
 #
-# This is deliberately separate from release.yml. Tagging at staging time would
-# leave a tag and a GitHub release behind for a version that never shipped if a
-# maintainer rejected the staged tarball, and a corrected re-run would then
-# silently keep the stale tag while staging a different commit. Here, npm is the
-# source of truth: nothing is written until the version is actually live.
-#
-# Run this after `npm stage approve` (see release.yml's job summary).
+# Separate from release.yml on purpose: npm is the source of truth here, so a
+# staged publish that was never approved cannot leave a tag or a release behind
+# for a version that does not exist.
 
 on:
   workflow_dispatch:
@@ -47,8 +43,7 @@ jobs:
         with:
           node-version: '22.22.0'
 
-      # The whole point of this workflow: refuse to record a release that npm
-      # does not have. A rejected or still-pending staged publish stops here.
+      # Refuse to record a release that npm does not have.
       - name: Check the version is live on npm
         env:
           VERSION: ${{ inputs.version }}
@@ -56,21 +51,36 @@ jobs:
           if ! OUTPUT=$(npm view "@figma/code-connect@${VERSION}" version 2>&1); then
             echo "::error::@figma/code-connect@${VERSION} is not on npm."
             grep -v '^npm warn' <<<"${OUTPUT}" | head -n 5
-            echo "If it is still staged, approve it first: npm stage approve <stage-id>"
+            echo "If it is still awaiting approval, approve it first."
             exit 1
           fi
           echo "@figma/code-connect@${VERSION} is live on npm."
 
-      # Guard against finalizing a commit that is not the one released: if main
-      # has since moved to a different version, the checkout is the wrong tree to
-      # tag and the notes would not match.
+      # A version match alone is not enough: main can move on without a version
+      # bump (a docs or workflow-only change, or a corrected same-version sync),
+      # and we would then tag the wrong tree and publish its notes. npm records
+      # the exact commit the tarball was built from, so compare against that.
       - name: Check this commit is the released one
         env:
           VERSION: ${{ inputs.version }}
         run: |
+          HEAD_SHA=$(git rev-parse HEAD)
+          GIT_HEAD=$(npm view "@figma/code-connect@${VERSION}" gitHead 2>/dev/null || true)
+
+          if [ -n "${GIT_HEAD}" ]; then
+            if [ "${GIT_HEAD}" != "${HEAD_SHA}" ]; then
+              echo "::error::@figma/code-connect@${VERSION} was published from ${GIT_HEAD}, but HEAD is ${HEAD_SHA}. Re-run this workflow against ${GIT_HEAD}."
+              exit 1
+            fi
+            echo "HEAD matches the published commit."
+            exit 0
+          fi
+
+          # No gitHead recorded; fall back to the weaker version check and say so.
+          echo "::warning::No gitHead recorded for this version; falling back to a version comparison."
           COMMITTED=$(node -p "require('./cli/package.json').version")
           if [ "${COMMITTED}" != "${VERSION}" ]; then
-            echo "::error::main is at ${COMMITTED}, not ${VERSION}. Finalize before syncing the next release, or tag the correct commit by hand."
+            echo "::error::This tree is at ${COMMITTED}, not ${VERSION}."
             exit 1
           fi
 

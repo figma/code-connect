@@ -1,24 +1,15 @@
 name: Release
 
-# Stages a release of @figma/code-connect to npm.
+# Stages a release of @figma/code-connect to npm, for a maintainer to approve.
 #
-# Tagging and the GitHub release deliberately do NOT happen here — they live in
-# finalize.yml, which runs after the staged publish has been approved. Doing
-# them here would leave a tag and a release behind for a version that was never
-# published if the approval is rejected.
+# Tagging and the GitHub release happen separately, in finalize.yml, once the
+# staged publish has been approved.
 #
-# Deliberately manual: the commit being released is already on main by the time
-# this runs, and cutting a release is a decision rather than a consequence of a
-# push.
-#
-# This workflow only ever *stages* the npm publish. Its trusted publisher is
-# configured stage-only, so `npm publish` from CI is rejected by the registry; a
-# maintainer completes the release with `npm stage approve`, which requires 2FA
-# and cannot be done with a CI token.
-#
-# Do not move the staging step into a reusable workflow: npm validates the
-# *calling* workflow's filename against the trusted publisher, so `workflow_call`
-# indirection breaks authentication. Renaming this file also breaks it.
+# Two constraints to preserve when editing:
+#   - Do not rename this file, and do not move the staging step into a reusable
+#     workflow. npm resolves trusted publishing against this workflow's own
+#     filename, so either change breaks authentication.
+#   - Keep the staging job's `environment` as it is; npm checks it too.
 
 on:
   workflow_dispatch:
@@ -64,26 +55,19 @@ jobs:
           echo "::error::Releases must be dispatched from main, got ${REF}."
           exit 1
 
-      # Defence in depth. Triggering workflow_dispatch already requires write
-      # access, and the npm-release environment's required reviewers are the real
-      # gate — this just fails fast for someone who is not a release maintainer,
-      # rather than leaving a run queued for approval. Set the
-      # RELEASE_DISPATCHERS repo variable to a comma-separated list of GitHub
-      # usernames to enable it.
+      # Optional early check against the RELEASE_DISPATCHERS repo variable, so an
+      # unauthorized dispatch fails immediately rather than queueing. Logs here
+      # are public, so this reports nothing about how it is configured.
       - name: Check actor
         env:
           DISPATCHERS: ${{ vars.RELEASE_DISPATCHERS }}
           ACTOR: ${{ github.actor }}
         run: |
-          if [ -z "${DISPATCHERS}" ]; then
-            echo "RELEASE_DISPATCHERS is not set; relying on the npm-release environment reviewers."
-            exit 0
-          fi
-          if ! printf '%s' "${DISPATCHERS}" | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -qxF "${ACTOR}"; then
-            echo "::error::${ACTOR} is not in RELEASE_DISPATCHERS."
+          if [ -n "${DISPATCHERS}" ] &&
+            ! printf '%s' "${DISPATCHERS}" | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -qxF "${ACTOR}"; then
+            echo "::error::${ACTOR} is not authorized to dispatch a release."
             exit 1
           fi
-          echo "${ACTOR} is an authorized release dispatcher."
 
       - name: Checkout
         uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
@@ -159,14 +143,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    # 18.x is advisory, not required. package.json advertises engines.node
-    # ">=18", but undici@^7 needs >=20.18.1, so Node 18 may fail for reasons
-    # that predate any given release. Running it non-blocking gives us the real
-    # signal without a known-broken job gating every publish.
-    #
-    # Once the undici/engines question is settled: if we keep Node 18 support
-    # (pin undici back to ^6), set required to true here. If we drop it, raise
-    # engines.node and the quickstart guide, and delete this entry.
+    # 18.x runs for signal but does not gate a release: a dependency in the
+    # tree currently needs a newer Node than package.json's engines field
+    # advertises, so 18 can fail for reasons unrelated to the release being cut.
+    # Set its `required` to true once that is reconciled.
     continue-on-error: ${{ !matrix.required }}
     strategy:
       fail-fast: false
@@ -264,10 +244,7 @@ jobs:
     needs: [authorize, verify, test]
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
-    # Required reviewers on this environment are what authorize a release. npm's
-    # trusted publisher is pinned to this environment name too, so its OIDC
-    # token claim is checked registry-side — a run that bypassed this gate
-    # cannot stage.
+    # Gated environment; npm checks this name too. See the internal runbook.
     environment: npm-release
     permissions:
       contents: read
@@ -319,34 +296,33 @@ jobs:
         id: stage
         env:
           NPM_CONFIG_TAG: ${{ inputs.dist_tag }}
+          VERSION: ${{ needs.authorize.outputs.version }}
         run: |
           npm stage publish --access public --provenance
           echo "staged=true" >> "$GITHUB_OUTPUT"
+
+          # Written here, not in a later step: if cleanup below fails, the job
+          # goes red but the version IS staged, and whoever picks it up needs to
+          # know that before re-running.
+          {
+            echo "### Staged @figma/code-connect@${VERSION}"
+            echo ""
+            echo "Awaiting maintainer approval. It is not published yet."
+            echo ""
+            echo '```sh'
+            echo "npm stage list @figma/code-connect"
+            echo "npm stage download <stage-id>   # optional, inspect the tarball"
+            echo "npm stage approve <stage-id>"
+            echo '```'
+            echo ""
+            echo "If a later step in this job failed, the version is still staged:"
+            echo "approve or reject the existing entry rather than re-running."
+            echo ""
+            echo "Once it is live, run the Finalize Release workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
         working-directory: cli
 
       - name: Restore the repo README
         if: always()
         run: npm run bundle:npm-readme:restore
         working-directory: cli
-
-      - name: Summarise
-        env:
-          VERSION: ${{ needs.authorize.outputs.version }}
-        run: |
-          {
-            echo "### Staged @figma/code-connect@${VERSION}"
-            echo ""
-            echo "Not published yet. A maintainer must approve it with 2FA:"
-            echo ""
-            echo '```sh'
-            echo "npm stage list @figma/code-connect"
-            echo "npm stage download <stage-id>   # optional, inspect the tarball"
-            echo "npm stage approve <stage-id>    # prompts for 2FA"
-            echo '```'
-            echo ""
-            echo "Or use the **Staged Packages** tab on"
-            echo "<https://www.npmjs.com/package/@figma/code-connect>."
-            echo ""
-            echo "Once it is live, run the Finalize Release workflow to tag"
-            echo "v${VERSION} and publish its GitHub release."
-          } >> "$GITHUB_STEP_SUMMARY"
