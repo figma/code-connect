@@ -35,54 +35,64 @@ jobs:
           echo "::error::Releases must be finalized from main, got ${REF}."
           exit 1
 
-      - name: Checkout
-        uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
-
       - name: Setup node
         uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: '22.22.0'
 
-      # Refuse to record a release that npm does not have.
-      - name: Check the version is live on npm
+      - name: Validate the version
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          if ! OUTPUT=$(npm view "@figma/code-connect@${VERSION}" version 2>&1); then
-            echo "::error::@figma/code-connect@${VERSION} is not on npm."
-            grep -v '^npm warn' <<<"${OUTPUT}" | head -n 5
-            echo "If it is still awaiting approval, approve it first."
+          # Dist-tags and ranges must not reach the registry lookup: "latest"
+          # resolves to a real version whose checks then pass, and we would push
+          # a tag literally named vlatest before the notes lookup failed.
+          if ! printf '%s' "${VERSION}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'${VERSION}' is not an exact X.Y.Z version."
             exit 1
           fi
-          echo "@figma/code-connect@${VERSION} is live on npm."
 
-      # A version match alone is not enough: main can move on without a version
-      # bump (a docs or workflow-only change, or a corrected same-version sync),
-      # and we would then tag the wrong tree and publish its notes. npm records
-      # the exact commit the tarball was built from, so compare against that.
-      - name: Check this commit is the released one
+      - name: Resolve the published commit
+        id: published
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          HEAD_SHA=$(git rev-parse HEAD)
-          GIT_HEAD=$(npm view "@figma/code-connect@${VERSION}" gitHead 2>/dev/null || true)
-
-          if [ -n "${GIT_HEAD}" ]; then
-            if [ "${GIT_HEAD}" != "${HEAD_SHA}" ]; then
-              echo "::error::@figma/code-connect@${VERSION} was published from ${GIT_HEAD}, but HEAD is ${HEAD_SHA}. Re-run this workflow against ${GIT_HEAD}."
-              exit 1
-            fi
-            echo "HEAD matches the published commit."
-            exit 0
-          fi
-
-          # No gitHead recorded; fall back to the weaker version check and say so.
-          echo "::warning::No gitHead recorded for this version; falling back to a version comparison."
-          COMMITTED=$(node -p "require('./cli/package.json').version")
-          if [ "${COMMITTED}" != "${VERSION}" ]; then
-            echo "::error::This tree is at ${COMMITTED}, not ${VERSION}."
+          if ! RESOLVED=$(npm view "@figma/code-connect@${VERSION}" version 2>&1); then
+            echo "::error::@figma/code-connect@${VERSION} is not on npm, or the registry is unreachable."
+            grep -v '^npm warn' <<<"${RESOLVED}" | head -n 5
             exit 1
           fi
+
+          if [ "${RESOLVED}" != "${VERSION}" ]; then
+            echo "::error::Asked for ${VERSION} but npm resolved ${RESOLVED}."
+            exit 1
+          fi
+
+          # Fail closed. Swallowing an error here and falling back to a version
+          # comparison is how a transient registry failure could let the wrong
+          # commit be tagged.
+          if ! GIT_HEAD=$(npm view "@figma/code-connect@${VERSION}" gitHead 2>&1); then
+            echo "::error::Could not read the published commit for ${VERSION}."
+            grep -v '^npm warn' <<<"${GIT_HEAD}" | head -n 5
+            exit 1
+          fi
+
+          if ! printf '%s' "${GIT_HEAD}" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error::No usable commit recorded for ${VERSION}; tag it by hand."
+            exit 1
+          fi
+
+          echo "commit=${GIT_HEAD}" >> "$GITHUB_OUTPUT"
+          echo "@figma/code-connect@${VERSION} was published from ${GIT_HEAD}."
+
+      # Check out what npm actually published, rather than requiring main to
+      # still point at it. main can advance after a release, and demanding a
+      # match there left no way to finish the release at all.
+      - name: Check out the published commit
+        uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+        with:
+          ref: ${{ steps.published.outputs.commit }}
+          fetch-depth: 0
 
       - name: Tag the release
         env:
