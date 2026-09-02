@@ -159,12 +159,25 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # 18.x is advisory, not required. package.json advertises engines.node
+    # ">=18", but undici@^7 needs >=20.18.1, so Node 18 may fail for reasons
+    # that predate any given release. Running it non-blocking gives us the real
+    # signal without a known-broken job gating every publish.
+    #
+    # Once the undici/engines question is settled: if we keep Node 18 support
+    # (pin undici back to ^6), set required to true here. If we drop it, raise
+    # engines.node and the quickstart guide, and delete this entry.
+    continue-on-error: ${{ !matrix.required }}
     strategy:
       fail-fast: false
       matrix:
-        # 20.18.1 is the real floor: undici@^7 requires it, even though
-        # package.json still advertises engines.node ">=18".
-        node-version: ['20.18.1', '22.22.0']
+        include:
+          - node-version: '18.x'
+            required: false
+          - node-version: '20.18.1'
+            required: true
+          - node-version: '22.22.0'
+            required: true
     steps:
       - name: Checkout
         uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
