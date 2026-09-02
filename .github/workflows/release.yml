@@ -1,7 +1,11 @@
 name: Release
 
-# Stages a release of @figma/code-connect to npm, then tags it and drafts a
-# GitHub release.
+# Stages a release of @figma/code-connect to npm.
+#
+# Tagging and the GitHub release deliberately do NOT happen here — they live in
+# finalize.yml, which runs after the staged publish has been approved. Doing
+# them here would leave a tag and a release behind for a version that was never
+# published if the approval is rejected.
 #
 # Deliberately manual: the commit being released is already on main by the time
 # this runs, and cutting a release is a decision rather than a consequence of a
@@ -29,7 +33,7 @@ on:
         default: 'latest'
         type: string
       dry_run:
-        description: 'Run every check and pack the tarball, but do not stage, tag or draft a release.'
+        description: 'Run every check and pack the tarball, but do not stage anything.'
         required: false
         default: false
         type: boolean
@@ -117,8 +121,14 @@ jobs:
         env:
           VERSION: ${{ needs.authorize.outputs.version }}
         run: |
-          if npm view "@figma/code-connect@${VERSION}" version >/dev/null 2>&1; then
+          # Only a 404 means "not published". Treating any npm failure that way
+          # would let a registry outage wave a duplicate version through.
+          if OUTPUT=$(npm view "@figma/code-connect@${VERSION}" version 2>&1); then
             echo "::error::@figma/code-connect@${VERSION} is already on npm. Bump the version and re-run the release."
+            exit 1
+          elif ! grep -q 'E404' <<<"${OUTPUT}"; then
+            echo "::error::Could not reach the npm registry to check @figma/code-connect@${VERSION}."
+            grep -v '^npm warn' <<<"${OUTPUT}" | head -n 5
             exit 1
           fi
           echo "@figma/code-connect@${VERSION} is not yet published."
@@ -177,12 +187,69 @@ jobs:
         run: npm run test:ci
         working-directory: cli
 
-      - name: Check the package builds and packs
-        run: npm run bundle:npm
+      # Not `npm run bundle:npm`: that script chains the README restore with `;`,
+      # so its exit code is the restore's and a failed build or pack passes. Same
+      # trap as `publish:npm`. Explicit steps, restore under always().
+      - name: Build
+        run: npm run build
+        working-directory: cli
+
+      - name: Swap in the npm README
+        run: npm run bundle:npm-readme:prepare
+        working-directory: cli
+
+      - name: Pack
+        run: npm pack --dry-run
+        working-directory: cli
+
+      - name: Restore the repo README
+        if: always()
+        run: npm run bundle:npm-readme:restore
+        working-directory: cli
+
+  # Rehearsal path. Deliberately outside the npm-release environment: a dry run
+  # only packs a tarball, and should not consume a required reviewer's approval.
+  pack-dry-run:
+    needs: [authorize, verify, test]
+    if: ${{ inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+
+      - name: Setup node
+        uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '22.22.0'
+
+      - name: Install
+        run: npm install
+        working-directory: cli
+
+      - name: Build
+        run: npm run build
+        working-directory: cli
+
+      - name: Swap in the npm README
+        run: npm run bundle:npm-readme:prepare
+        working-directory: cli
+
+      - name: Pack
+        run: |
+          npm pack --dry-run
+          echo "Dry run: nothing was staged." >> "$GITHUB_STEP_SUMMARY"
+        working-directory: cli
+
+      - name: Restore the repo README
+        if: always()
+        run: npm run bundle:npm-readme:restore
         working-directory: cli
 
   stage:
     needs: [authorize, verify, test]
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     # Required reviewers on this environment are what authorize a release. npm's
     # trusted publisher is pinned to this environment name too, so its OIDC
@@ -232,19 +299,11 @@ jobs:
         run: npm run bundle:npm-readme:prepare
         working-directory: cli
 
-      - name: Pack (dry run)
-        if: inputs.dry_run
-        run: |
-          npm pack --dry-run
-          echo "Dry run: nothing was staged." >> "$GITHUB_STEP_SUMMARY"
-        working-directory: cli
-
       # Not routed through an npm script: `publish:npm` chains the README
       # restore with `;`, which masks a failing publish behind the restore's exit
       # code. Here a failure has to fail the job.
       - name: Stage the publish
         id: stage
-        if: ${{ !inputs.dry_run }}
         env:
           NPM_CONFIG_TAG: ${{ inputs.dist_tag }}
         run: |
@@ -258,7 +317,6 @@ jobs:
         working-directory: cli
 
       - name: Summarise
-        if: ${{ !inputs.dry_run }}
         env:
           VERSION: ${{ needs.authorize.outputs.version }}
         run: |
@@ -276,56 +334,6 @@ jobs:
             echo "Or use the **Staged Packages** tab on"
             echo "<https://www.npmjs.com/package/@figma/code-connect>."
             echo ""
-            echo "Then publish the draft GitHub release."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  tag-and-release:
-    needs: [authorize, stage]
-    if: ${{ !inputs.dry_run }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # push the tag, create the release
-    steps:
-      - name: Checkout
-        uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
-
-      - name: Tag the release
-        env:
-          VERSION: ${{ needs.authorize.outputs.version }}
-          GIT_AUTHOR_NAME: figma-bot
-          GIT_AUTHOR_EMAIL: security@figma.com
-          GIT_COMMITTER_NAME: figma-bot
-          GIT_COMMITTER_EMAIL: security@figma.com
-        run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null 2>&1; then
-            echo "Tag v${VERSION} already exists, leaving it alone."
-            exit 0
-          fi
-          git tag -a "v${VERSION}" -m "Code Connect v${VERSION}"
-          git push origin "v${VERSION}"
-
-      # Draft, not published: the release is only real once the staged npm
-      # publish has been approved, and that is a separate human action.
-      - name: Draft the GitHub release
-        env:
-          VERSION: ${{ needs.authorize.outputs.version }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release view "v${VERSION}" >/dev/null 2>&1; then
-            echo "Release v${VERSION} already exists, leaving it alone."
-            exit 0
-          fi
-
-          bash scripts/changelog-section.sh CHANGELOG.md "${VERSION}" > /tmp/release-notes.md
-
-          gh release create "v${VERSION}" \
-            --draft \
-            --title "Code Connect ${VERSION}" \
-            --notes-file /tmp/release-notes.md
-
-          {
-            echo "### Drafted release v${VERSION}"
-            echo ""
-            echo "Publish it once the npm publish is approved:"
-            echo "<${{ github.server_url }}/${{ github.repository }}/releases>"
+            echo "Once it is live, run the Finalize Release workflow to tag"
+            echo "v${VERSION} and publish its GitHub release."
           } >> "$GITHUB_STEP_SUMMARY"

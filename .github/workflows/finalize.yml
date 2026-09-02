@@ -1,0 +1,127 @@
+name: Finalize Release
+
+# Tags a release and publishes its GitHub release, after the staged npm publish
+# has been approved.
+#
+# This is deliberately separate from release.yml. Tagging at staging time would
+# leave a tag and a GitHub release behind for a version that never shipped if a
+# maintainer rejected the staged tarball, and a corrected re-run would then
+# silently keep the stale tag while staging a different commit. Here, npm is the
+# source of truth: nothing is written until the version is actually live.
+#
+# Run this after `npm stage approve` (see release.yml's job summary).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to finalize, e.g. 2.0.1. Must already be live on npm.'
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the tag, create the release
+    steps:
+      - name: Check ref
+        if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::Releases must be finalized from main, got ${REF}."
+          exit 1
+
+      - name: Checkout
+        uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+
+      - name: Setup node
+        uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '22.22.0'
+
+      # The whole point of this workflow: refuse to record a release that npm
+      # does not have. A rejected or still-pending staged publish stops here.
+      - name: Check the version is live on npm
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! OUTPUT=$(npm view "@figma/code-connect@${VERSION}" version 2>&1); then
+            echo "::error::@figma/code-connect@${VERSION} is not on npm."
+            grep -v '^npm warn' <<<"${OUTPUT}" | head -n 5
+            echo "If it is still staged, approve it first: npm stage approve <stage-id>"
+            exit 1
+          fi
+          echo "@figma/code-connect@${VERSION} is live on npm."
+
+      # Guard against finalizing a commit that is not the one released: if main
+      # has since moved to a different version, the checkout is the wrong tree to
+      # tag and the notes would not match.
+      - name: Check this commit is the released one
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          COMMITTED=$(node -p "require('./cli/package.json').version")
+          if [ "${COMMITTED}" != "${VERSION}" ]; then
+            echo "::error::main is at ${COMMITTED}, not ${VERSION}. Finalize before syncing the next release, or tag the correct commit by hand."
+            exit 1
+          fi
+
+      - name: Tag the release
+        env:
+          VERSION: ${{ inputs.version }}
+          GIT_AUTHOR_NAME: figma-bot
+          GIT_AUTHOR_EMAIL: security@figma.com
+          GIT_COMMITTER_NAME: figma-bot
+          GIT_COMMITTER_EMAIL: security@figma.com
+        run: |
+          HEAD_SHA=$(git rev-parse HEAD)
+
+          if EXISTING=$(git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" 2>/dev/null); then
+            EXISTING_SHA=$(cut -f1 <<<"${EXISTING}")
+            # Annotated tags resolve to their own object, so compare what the tag
+            # points at rather than the tag object itself.
+            git fetch --quiet origin "refs/tags/v${VERSION}:refs/tags/v${VERSION}"
+            TARGET_SHA=$(git rev-parse "v${VERSION}^{commit}")
+            if [ "${TARGET_SHA}" = "${HEAD_SHA}" ]; then
+              echo "Tag v${VERSION} already points at ${HEAD_SHA}; nothing to do."
+              exit 0
+            fi
+            echo "::error::Tag v${VERSION} already exists (${EXISTING_SHA}) but points at ${TARGET_SHA}, not ${HEAD_SHA}."
+            echo "Resolve by hand — do not silently retag a published version."
+            exit 1
+          fi
+
+          git tag -a "v${VERSION}" -m "Code Connect v${VERSION}"
+          git push origin "v${VERSION}"
+          echo "Tagged v${VERSION} at ${HEAD_SHA}."
+
+      # Published, not draft: npm already has the version, so the release is real.
+      - name: Create the GitHub release
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "Release v${VERSION} already exists, leaving it alone."
+            exit 0
+          fi
+
+          bash scripts/changelog-section.sh CHANGELOG.md "${VERSION}" > /tmp/release-notes.md
+
+          gh release create "v${VERSION}" \
+            --title "Code Connect ${VERSION}" \
+            --notes-file /tmp/release-notes.md
+
+          {
+            echo "### Released v${VERSION}"
+            echo ""
+            echo "<${{ github.server_url }}/${{ github.repository }}/releases/tag/v${VERSION}>"
+          } >> "$GITHUB_STEP_SUMMARY"
