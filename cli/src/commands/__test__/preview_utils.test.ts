@@ -188,6 +188,115 @@ describe('preview_utils', () => {
       expect(mockLogger.info).toHaveBeenCalledWith('Found 2 component definition(s) in 2 files:')
     })
 
+    it('should match a batch component by the template file it was generated from', async () => {
+      const mockDoc: CodeConnectJSON = {
+        figmaNode: 'https://figma.com/file/ABC123/test?node-id=1-1',
+        _codeConnectFilePath: '/test/dir/components.figma.batch.json',
+        _batchTemplateFilePath: '/test/dir/dist/Notification.figma.batch.js',
+      } as CodeConnectJSON
+
+      mockFs.existsSync.mockReturnValue(true)
+      mockFs.statSync.mockReturnValue({ isFile: () => true })
+      mockParseFigmaNode.mockReturnValue({ fileKey: 'ABC123', nodeId: '1:1' })
+
+      const result = await collectNodesToPreview(
+        ['dist/Notification.figma.batch.js'],
+        [mockDoc],
+        mockDir,
+        mockCmd,
+      )
+
+      expect(result).toHaveLength(1)
+      expect(result[0]).toMatchObject({
+        fileKey: 'ABC123',
+        nodeId: '1:1',
+        filePath: 'components.figma.batch.json',
+      })
+      expect(mockLogger.error).not.toHaveBeenCalled()
+    })
+
+    it('should select only the batch group whose template file was requested', async () => {
+      const mockDocs: CodeConnectJSON[] = [
+        {
+          figmaNode: 'https://figma.com/file/ABC123/test?node-id=1-1',
+          _codeConnectFilePath: '/test/dir/components.figma.batch.json',
+          _batchTemplateFilePath: '/test/dir/dist/Notification.figma.batch.js',
+        } as CodeConnectJSON,
+        {
+          figmaNode: 'https://figma.com/file/ABC123/test?node-id=2-2',
+          _codeConnectFilePath: '/test/dir/components.figma.batch.json',
+          _batchTemplateFilePath: '/test/dir/dist/Button.figma.batch.js',
+        } as CodeConnectJSON,
+      ]
+
+      mockFs.existsSync.mockReturnValue(true)
+      mockFs.statSync.mockReturnValue({ isFile: () => true })
+      mockParseFigmaNode.mockReturnValue({ fileKey: 'ABC123', nodeId: '1:1' })
+
+      const result = await collectNodesToPreview(
+        ['dist/Notification.figma.batch.js'],
+        mockDocs,
+        mockDir,
+        mockCmd,
+      )
+
+      expect(result).toHaveLength(1)
+      expect(result[0].nodeId).toBe('1:1')
+    })
+
+    it('should match a batch component by the template file basename', async () => {
+      const mockDoc: CodeConnectJSON = {
+        figmaNode: 'https://figma.com/file/ABC123/test?node-id=1-1',
+        _codeConnectFilePath: '/test/dir/components.figma.batch.json',
+        _batchTemplateFilePath: '/test/dir/dist/Notification.figma.batch.js',
+      } as CodeConnectJSON
+
+      mockFs.existsSync.mockReturnValue(false)
+      mockParseFigmaNode.mockReturnValue({ fileKey: 'ABC123', nodeId: '1:1' })
+
+      const result = await collectNodesToPreview(
+        ['Notification.figma.batch.js'],
+        [mockDoc],
+        mockDir,
+        mockCmd,
+      )
+
+      expect(result).toHaveLength(1)
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        'Found: /test/dir/dist/Notification.figma.batch.js',
+      )
+    })
+
+    it('should still match a batch component by the batch file itself', async () => {
+      const mockDocs: CodeConnectJSON[] = [
+        {
+          figmaNode: 'https://figma.com/file/ABC123/test?node-id=1-1',
+          _codeConnectFilePath: '/test/dir/components.figma.batch.json',
+          _batchTemplateFilePath: '/test/dir/dist/Notification.figma.batch.js',
+        } as CodeConnectJSON,
+        {
+          figmaNode: 'https://figma.com/file/ABC123/test?node-id=2-2',
+          _codeConnectFilePath: '/test/dir/components.figma.batch.json',
+          _batchTemplateFilePath: '/test/dir/dist/Button.figma.batch.js',
+        } as CodeConnectJSON,
+      ]
+
+      mockFs.existsSync.mockReturnValue(true)
+      mockFs.statSync.mockReturnValue({ isFile: () => true })
+      mockParseFigmaNode
+        .mockReturnValueOnce({ fileKey: 'ABC123', nodeId: '1:1' })
+        .mockReturnValueOnce({ fileKey: 'ABC123', nodeId: '2:2' })
+
+      const result = await collectNodesToPreview(
+        ['components.figma.batch.json'],
+        mockDocs,
+        mockDir,
+        mockCmd,
+      )
+
+      expect(result).toHaveLength(2)
+    })
+
     it('should handle no matching files', async () => {
       mockFs.existsSync.mockReturnValue(false)
 
@@ -531,6 +640,64 @@ describe('preview_utils', () => {
       const body = postCall[1]
       expect(body.figmaDocs.all).toHaveLength(1)
       expect(body.figmaDocs.all[0].component).toBe('Button')
+    })
+
+    it('should send only the requested batch group when groups in one batch file share a node ID', async () => {
+      const mockDocs: CodeConnectJSON[] = [
+        {
+          figmaNode: 'https://figma.com/file/ABC123/test?node-id=1-2',
+          _codeConnectFilePath: '/test/dir/components.figma.batch.json',
+          _batchTemplateFilePath: '/test/dir/dist/Notification.figma.batch.js',
+          component: 'Notification',
+          template: '<Notification />',
+          templateData: {},
+          language: 'typescript',
+          label: 'typescript',
+          metadata: { cliVersion: '1.0.0' },
+        } as CodeConnectJSON,
+        {
+          figmaNode: 'https://figma.com/file/ABC123/test?node-id=1-2',
+          _codeConnectFilePath: '/test/dir/components.figma.batch.json',
+          _batchTemplateFilePath: '/test/dir/dist/Button.figma.batch.js',
+          component: 'Button',
+          template: '<Button />',
+          templateData: {},
+          language: 'typescript',
+          label: 'typescript',
+          metadata: { cliVersion: '1.0.0' },
+        } as CodeConnectJSON,
+      ]
+
+      mockFs.existsSync.mockReturnValue(true)
+      mockFs.statSync.mockReturnValue({ isFile: () => true })
+      getCodeConnectObjects.mockResolvedValue(mockDocs)
+      parseFigmaNode.mockReturnValue({ fileKey: 'ABC123', nodeId: '1:2' })
+
+      request.post.mockResolvedValue({
+        response: { status: 200 },
+        data: {
+          status: 200,
+          error: false,
+          meta: {
+            results: [
+              {
+                nodeId: '1:2',
+                nodeUrl: 'https://figma.com/file/ABC123?node-id=1-2',
+                snippet: '<Notification />',
+                language: 'typescript',
+                component: 'Notification',
+              },
+            ],
+          },
+        },
+      })
+
+      const cmd = { dir: '/test/dir', output: 'json' } as any
+      await handlePreview(['dist/Notification.figma.batch.js'], cmd)
+
+      const body = request.post.mock.calls[0][1]
+      expect(body.figmaDocs.all).toHaveLength(1)
+      expect(body.figmaDocs.all[0].component).toBe('Notification')
     })
 
     it('should attribute results to correct files when multiple files share same node ID', async () => {

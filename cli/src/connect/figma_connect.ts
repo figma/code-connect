@@ -27,4 +27,5 @@ export type CodeConnectJSON = BaseCodeConnectObject & {
   // INTERNAL ONLY: Path to the Code Connect file itself, used for parserless migration
   // Should be stripped out before publishing
   _codeConnectFilePath?: string
+  _batchTemplateFilePath?: string
 }

@@ -26,6 +26,7 @@ export interface NodeToPreview {
   nodeId: string
   url: string
   filePath: string
+  batchTemplateFilePath?: string
 }
 
 export interface PreviewResult {
@@ -59,6 +60,38 @@ export interface PreviewResult {
 
 type NodesByFileKey = Record<string, NodeToPreview[]>
 
+function requestableFilePaths(doc: CodeConnectJSON): string[] {
+  return [doc._codeConnectFilePath, doc._batchTemplateFilePath].filter(
+    (filePath): filePath is string => !!filePath,
+  )
+}
+
+function matchedFilePath(doc: CodeConnectJSON, fileName: string): string {
+  return (
+    requestableFilePaths(doc).find((filePath) => path.basename(filePath) === fileName) ??
+    doc._codeConnectFilePath ??
+    ''
+  )
+}
+
+function templateKey(codeConnectFilePath: string, batchTemplateFilePath?: string): string {
+  return `${codeConnectFilePath}::${batchTemplateFilePath ? path.resolve(batchTemplateFilePath) : ''}`
+}
+
+function toNodeToPreview(
+  doc: CodeConnectJSON,
+  parsed: { fileKey: string; nodeId: string },
+  dir: string,
+): NodeToPreview {
+  return {
+    fileKey: parsed.fileKey,
+    nodeId: parsed.nodeId,
+    url: doc.figmaNode,
+    filePath: path.relative(dir, doc._codeConnectFilePath || ''),
+    batchTemplateFilePath: doc._batchTemplateFilePath,
+  }
+}
+
 /**
  * Collect nodes to preview from file arguments.
  * Matches by exact path first, then by basename.
@@ -76,8 +109,8 @@ export async function collectNodesToPreview(
 
     // Try exact path first
     if (fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isFile()) {
-      const docs = allCodeConnectObjects.filter(
-        (d) => path.resolve(d._codeConnectFilePath || '') === resolvedPath,
+      const docs = allCodeConnectObjects.filter((d) =>
+        requestableFilePaths(d).some((candidate) => path.resolve(candidate) === resolvedPath),
       )
       if (docs.length > 0) {
         if (docs.length === 1) {
@@ -88,12 +121,7 @@ export async function collectNodesToPreview(
         for (const doc of docs) {
           const parsed = parseFigmaNode(cmd.verbose, doc, true)
           if (parsed) {
-            nodesToPreview.push({
-              fileKey: parsed.fileKey,
-              nodeId: parsed.nodeId,
-              url: doc.figmaNode,
-              filePath: path.relative(dir, doc._codeConnectFilePath || ''),
-            })
+            nodesToPreview.push(toNodeToPreview(doc, parsed, dir))
           } else {
             logger.error(`Failed to parse figmaNode from file: ${filePath}`)
           }
@@ -111,8 +139,8 @@ export async function collectNodesToPreview(
       logger.debug(`Total Code Connect objects: ${allCodeConnectObjects.length}`)
     }
 
-    const matches = allCodeConnectObjects.filter(
-      (d) => path.basename(d._codeConnectFilePath || '') === fileName,
+    const matches = allCodeConnectObjects.filter((d) =>
+      requestableFilePaths(d).some((candidate) => path.basename(candidate) === fileName),
     )
 
     if (matches.length === 0) {
@@ -121,9 +149,9 @@ export async function collectNodesToPreview(
     }
 
     if (matches.length === 1) {
-      logger.info(`Found: ${matches[0]._codeConnectFilePath}`)
+      logger.info(`Found: ${matchedFilePath(matches[0], fileName)}`)
     } else {
-      const uniqueFiles = new Set(matches.map((d) => d._codeConnectFilePath))
+      const uniqueFiles = new Set(matches.map((d) => matchedFilePath(d, fileName)))
       if (uniqueFiles.size === 1) {
         logger.info(
           `Found ${matches.length} component definition(s) in ${path.relative(dir, Array.from(uniqueFiles)[0] || '')}`,
@@ -131,7 +159,7 @@ export async function collectNodesToPreview(
       } else {
         logger.info(`Found ${matches.length} component definition(s) in ${uniqueFiles.size} files:`)
         for (const fp of uniqueFiles) {
-          const count = matches.filter((d) => d._codeConnectFilePath === fp).length
+          const count = matches.filter((d) => matchedFilePath(d, fileName) === fp).length
           logger.info(
             `  - ${path.relative(dir, fp || '')} (${count} definition${count > 1 ? 's' : ''})`,
           )
@@ -142,12 +170,7 @@ export async function collectNodesToPreview(
     for (const doc of matches) {
       const parsed = parseFigmaNode(cmd.verbose, doc, true)
       if (parsed) {
-        nodesToPreview.push({
-          fileKey: parsed.fileKey,
-          nodeId: parsed.nodeId,
-          url: doc.figmaNode,
-          filePath: path.relative(dir, doc._codeConnectFilePath || ''),
-        })
+        nodesToPreview.push(toNodeToPreview(doc, parsed, dir))
       }
     }
   }
@@ -842,9 +865,13 @@ async function previewFile({
 
   // Only send templates from the requested files — other files' templates
   // for the same nodeId exist on the server and shouldn't be rendered individually.
-  const requestedFilePaths = new Set(nodes.map((n) => path.resolve(dir, n.filePath)))
+  const requestedTemplates = new Set(
+    nodes.map((n) => templateKey(path.resolve(dir, n.filePath), n.batchTemplateFilePath)),
+  )
   const requiredTemplates = filterTemplatesForNodes(allNodeIds, allCodeConnectObjects).filter((t) =>
-    requestedFilePaths.has(path.resolve(t._codeConnectFilePath || '')),
+    requestedTemplates.has(
+      templateKey(path.resolve(t._codeConnectFilePath || ''), t._batchTemplateFilePath),
+    ),
   )
 
   const chunks = chunkNodeIdsForPreview(nodeIds, propertyCombinationsByNodeId)
@@ -876,12 +903,7 @@ function collectAllLocalNodesToPreview(
   for (const doc of allCodeConnectObjects) {
     const parsed = parseFigmaNode(cmd.verbose, doc, true)
     if (parsed) {
-      nodesToCheck.push({
-        fileKey: parsed.fileKey,
-        nodeId: parsed.nodeId,
-        url: doc.figmaNode,
-        filePath: path.relative(dir, doc._codeConnectFilePath || ''),
-      })
+      nodesToCheck.push(toNodeToPreview(doc, parsed, dir))
     }
   }
   return nodesToCheck

@@ -1,0 +1,328 @@
+name: Release
+
+# Stages a release of @figma/code-connect to npm, for a maintainer to approve.
+#
+# Tagging and the GitHub release happen separately, in finalize.yml, once the
+# staged publish has been approved.
+#
+# Two constraints to preserve when editing:
+#   - Do not rename this file, and do not move the staging step into a reusable
+#     workflow. npm resolves trusted publishing against this workflow's own
+#     filename, so either change breaks authentication.
+#   - Keep the staging job's `environment` as it is; npm checks it too.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 2.0.1. Asserted against cli/package.json; leave blank to use whatever is committed.'
+        required: false
+        type: string
+      dist_tag:
+        description: 'npm dist-tag to stage under.'
+        required: false
+        default: 'latest'
+        type: string
+      dry_run:
+        description: 'Run every check and pack the tarball, but do not stage anything.'
+        required: false
+        default: false
+        type: boolean
+
+# Least privilege by default; each job opts in to what it needs.
+permissions: {}
+
+# Never let two releases interleave.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      # The npm-release environment restricts deployments to main as well, but
+      # failing here gives a clearer error than a rejected deployment.
+      - name: Check ref
+        if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::Releases must be dispatched from main, got ${REF}."
+          exit 1
+
+      # Optional early check against the RELEASE_DISPATCHERS repo variable, so an
+      # unauthorized dispatch fails immediately rather than queueing. Logs here
+      # are public, so this reports nothing about how it is configured.
+      - name: Check actor
+        env:
+          DISPATCHERS: ${{ vars.RELEASE_DISPATCHERS }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          if [ -n "${DISPATCHERS}" ] &&
+            ! printf '%s' "${DISPATCHERS}" | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -qxF "${ACTOR}"; then
+            echo "::error::${ACTOR} is not authorized to dispatch a release."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+
+      - name: Resolve version
+        id: version
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION=$(node -p "require('./cli/package.json').version")
+
+          if [ -n "${REQUESTED_VERSION}" ] && [ "${REQUESTED_VERSION}" != "${VERSION}" ]; then
+            echo "::error::Requested ${REQUESTED_VERSION} but cli/package.json is ${VERSION}."
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Releasing @figma/code-connect@${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+
+  verify:
+    needs: authorize
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+
+      - name: Setup node
+        uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '22.22.0'
+
+      - name: Check the version is not already published
+        env:
+          VERSION: ${{ needs.authorize.outputs.version }}
+        run: |
+          # Only a 404 means "not published". Treating any npm failure that way
+          # would let a registry outage wave a duplicate version through.
+          if OUTPUT=$(npm view "@figma/code-connect@${VERSION}" version 2>&1); then
+            echo "::error::@figma/code-connect@${VERSION} is already on npm. Bump the version and re-run the release."
+            exit 1
+          elif ! grep -q 'E404' <<<"${OUTPUT}"; then
+            echo "::error::Could not reach the npm registry to check @figma/code-connect@${VERSION}."
+            grep -v '^npm warn' <<<"${OUTPUT}" | head -n 5
+            exit 1
+          fi
+          echo "@figma/code-connect@${VERSION} is not yet published."
+
+      - name: Check the CHANGELOG
+        env:
+          VERSION: ${{ needs.authorize.outputs.version }}
+        run: |
+          if [ ! -f scripts/changelog-section.sh ]; then
+            echo "::error::scripts/changelog-section.sh is missing; cannot build the release notes."
+            exit 1
+          fi
+
+          NOTES=$(bash scripts/changelog-section.sh CHANGELOG.md "${VERSION}")
+          if [ -z "${NOTES}" ]; then
+            echo "::error::The CHANGELOG section for v${VERSION} is empty."
+            exit 1
+          fi
+
+          {
+            echo "### Release notes for v${VERSION}"
+            echo ""
+            printf '%s\n' "${NOTES}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    needs: authorize
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # 18.x runs for signal but does not gate a release: a dependency in the
+    # tree currently needs a newer Node than package.json's engines field
+    # advertises, so 18 can fail for reasons unrelated to the release being cut.
+    # Set its `required` to true once that is reconciled.
+    continue-on-error: ${{ !matrix.required }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - node-version: '18.x'
+            required: false
+          - node-version: '20.18.1'
+            required: true
+          - node-version: '22.22.0'
+            required: true
+    steps:
+      - name: Checkout
+        uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+
+      - name: Setup node ${{ matrix.node-version }}
+        uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # There is no committed lockfile, so `npm install` rather than `npm ci`.
+      - name: Install
+        run: npm install
+        working-directory: cli
+
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: cli
+
+      - name: Test
+        run: npm run test:ci
+        working-directory: cli
+
+      # Not `npm run bundle:npm`: that script chains the README restore with `;`,
+      # so its exit code is the restore's and a failed build or pack passes. Same
+      # trap as `publish:npm`. Explicit steps, restore under always().
+      - name: Build
+        run: npm run build
+        working-directory: cli
+
+      - name: Swap in the npm README
+        run: npm run bundle:npm-readme:prepare
+        working-directory: cli
+
+      - name: Pack
+        run: npm pack --dry-run
+        working-directory: cli
+
+      - name: Restore the repo README
+        if: always()
+        run: npm run bundle:npm-readme:restore
+        working-directory: cli
+
+  # Rehearsal path. Deliberately outside the npm-release environment: a dry run
+  # only packs a tarball, and should not consume a required reviewer's approval.
+  pack-dry-run:
+    needs: [authorize, verify, test]
+    if: ${{ inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+
+      - name: Setup node
+        uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '22.22.0'
+
+      - name: Install
+        run: npm install
+        working-directory: cli
+
+      - name: Build
+        run: npm run build
+        working-directory: cli
+
+      - name: Swap in the npm README
+        run: npm run bundle:npm-readme:prepare
+        working-directory: cli
+
+      - name: Pack
+        run: |
+          npm pack --dry-run
+          echo "Dry run: nothing was staged." >> "$GITHUB_STEP_SUMMARY"
+        working-directory: cli
+
+      - name: Restore the repo README
+        if: always()
+        run: npm run bundle:npm-readme:restore
+        working-directory: cli
+
+  stage:
+    needs: [authorize, verify, test]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    # Gated environment; npm checks this name too. See the internal runbook.
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write # REQUIRED for trusted publishing
+    outputs:
+      staged: ${{ steps.stage.outputs.staged }}
+    steps:
+      - name: Checkout
+        uses: figma/actions-checkout@d632683dd7b4114ad314bca15554477dd762a938 # v4.2.0
+
+      - name: Setup node
+        uses: figma/actions-setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: '22.22.0'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Staged publishing needs npm >= 11.15.0, which is newer than the npm
+      # bundled with Node 22.
+      - name: Setup npm
+        run: |
+          REQUIRED=11.15.0
+          npm install -g "npm@^${REQUIRED}"
+          NPM_VERSION="$(npm --version)"
+          echo "npm ${NPM_VERSION}"
+          if [ "$(printf '%s\n%s\n' "${REQUIRED}" "${NPM_VERSION}" | sort -V | head -1)" != "${REQUIRED}" ]; then
+            echo "::error::npm ${NPM_VERSION} is too old for staged publishing; need >= ${REQUIRED}."
+            exit 1
+          fi
+
+      - name: Install
+        run: npm install
+        working-directory: cli
+
+      - name: Build
+        run: npm run build
+        working-directory: cli
+
+      # The published README is the repo root one, not cli/README.md. Swapping it
+      # in has to happen before packing, and has to be undone afterwards even on
+      # failure, hence the separate always() step below.
+      - name: Swap in the npm README
+        run: npm run bundle:npm-readme:prepare
+        working-directory: cli
+
+      # Not routed through an npm script: `publish:npm` chains the README
+      # restore with `;`, which masks a failing publish behind the restore's exit
+      # code. Here a failure has to fail the job.
+      - name: Stage the publish
+        id: stage
+        env:
+          NPM_CONFIG_TAG: ${{ inputs.dist_tag }}
+          VERSION: ${{ needs.authorize.outputs.version }}
+        run: |
+          npm stage publish --access public --provenance
+          echo "staged=true" >> "$GITHUB_OUTPUT"
+
+          # Written here, not in a later step: if cleanup below fails, the job
+          # goes red but the version IS staged, and whoever picks it up needs to
+          # know that before re-running.
+          {
+            echo "### Staged @figma/code-connect@${VERSION}"
+            echo ""
+            echo "Awaiting maintainer approval. It is not published yet."
+            echo ""
+            echo '```sh'
+            echo "npm stage list @figma/code-connect"
+            echo "npm stage download <stage-id>   # optional, inspect the tarball"
+            echo "npm stage approve <stage-id>"
+            echo '```'
+            echo ""
+            echo "If a later step in this job failed, the version is still staged:"
+            echo "approve or reject the existing entry rather than re-running."
+            echo ""
+            echo "Once it is live, run the Finalize Release workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
+        working-directory: cli
+
+      - name: Restore the repo README
+        if: always()
+        run: npm run bundle:npm-readme:restore
+        working-directory: cli

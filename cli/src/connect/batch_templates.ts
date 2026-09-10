@@ -93,6 +93,8 @@ export async function parseBatchFile(
         batchFilePath: filePath,
       })
 
+      doc._batchTemplateFilePath = templatePath
+
       results.push(doc)
     }
   }

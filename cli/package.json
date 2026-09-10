@@ -1,6 +1,6 @@
 {
   "name": "@figma/code-connect",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A tool for connecting your design system components in code with your design system in Figma",
   "keywords": [],
   "author": "Figma",
@@ -32,7 +32,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/figma/code-connect.git"
+    "url": "git+https://github.com/figma/code-connect.git"
   },
   "homepage": "https://github.com/figma/code-connect#readme",
   "bin": {
@@ -109,7 +109,7 @@
     "compare-versions": "^6.1.0",
     "cross-spawn": "^7.0.3",
     "dotenv": "^16.3.1",
-    "esbuild-wasm": "0.27.3",
+    "esbuild-wasm": "0.27.5",
     "fast-fuzzy": "^1.12.0",
     "find-up": "^5.0.0",
     "glob": "^11.0.4",

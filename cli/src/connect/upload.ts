@@ -147,7 +147,7 @@ export async function upload({
 
   // Strip internal fields before uploading to Figma
   const cleanedDocs = docs.map((doc) => {
-    const { _codeConnectFilePath, ...cleanDoc } = doc
+    const { _codeConnectFilePath, _batchTemplateFilePath, ...cleanDoc } = doc
     return cleanDoc as CodeConnectJSON
   })
 

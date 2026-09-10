@@ -321,7 +321,7 @@ export async function getCodeConnectObjects(
       const docsFromJson = JSON.parse(fs.readFileSync(cmd.jsonFile, 'utf8'))
       // Strip internal fields from JSON input
       return docsFromJson.map((doc: CodeConnectJSON) => {
-        const { _codeConnectFilePath, ...cleanDoc } = doc
+        const { _codeConnectFilePath, _batchTemplateFilePath, ...cleanDoc } = doc
         return cleanDoc as CodeConnectJSON
       })
     } catch (e) {

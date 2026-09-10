@@ -1,3 +1,11 @@
+# Code Connect v2.0.1 (10 September 2026)
+
+## Fixed
+
+### General
+
+- `figma connect preview` now accepts the template file of a component declared in a `.figma.batch.json` file. Previously it rejected the template path with "Not a valid Code Connect file", so the only way to preview a batch component was to preview every component in the batch file at once.
+
 # Code Connect v2.0.0 (18 August 2026)
 
 > [!WARNING]

@@ -55,6 +55,45 @@ export default {
     expect(results).toHaveLength(3)
   })
 
+  it('records the template file each component was generated from', async () => {
+    writeTemplate('template.figma.batch.js', jsTemplate)
+    const batchPath = writeBatch({
+      templateFile: './template.figma.batch.js',
+      components: [
+        { url: 'https://figma.com/file/ABC?node-id=1-1', name: 'Icon24Arrow', id: 'arrow' },
+        { url: 'https://figma.com/file/ABC?node-id=1-2', name: 'Icon24Check', id: 'check' },
+      ],
+    })
+
+    const results = await parseBatchFile(batchPath, undefined)
+
+    for (const result of results) {
+      expect(result._batchTemplateFilePath).toBe(path.join(tempDir, 'template.figma.batch.js'))
+    }
+  })
+
+  it('records the template file per group when a batch file has several groups', async () => {
+    writeTemplate('arrow.figma.batch.js', jsTemplate)
+    writeTemplate('check.figma.batch.js', jsTemplate)
+    const batchPath = writeBatch([
+      {
+        templateFile: './arrow.figma.batch.js',
+        components: [{ url: 'https://figma.com/file/ABC?node-id=1-1', name: 'Icon24Arrow' }],
+      },
+      {
+        templateFile: './check.figma.batch.js',
+        components: [{ url: 'https://figma.com/file/ABC?node-id=1-2', name: 'Icon24Check' }],
+      },
+    ])
+
+    const results = await parseBatchFile(batchPath, undefined)
+
+    expect(results.map((r) => r._batchTemplateFilePath)).toEqual([
+      path.join(tempDir, 'arrow.figma.batch.js'),
+      path.join(tempDir, 'check.figma.batch.js'),
+    ])
+  })
+
   it('prepends __FIGMA_BATCH with entry data to each template', async () => {
     writeTemplate('template.figma.batch.js', jsTemplate)
     const batchPath = writeBatch({
