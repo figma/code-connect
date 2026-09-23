@@ -26,6 +26,7 @@ export interface NodeToPreview {
   nodeId: string
   url: string
   filePath: string
+  source?: string
   batchTemplateFilePath?: string
 }
 
@@ -33,6 +34,7 @@ export interface PreviewResult {
   url: string
   nodeId: string
   filePath: string
+  source?: string
   success: boolean
   snippet?: string
   language?: string
@@ -88,6 +90,7 @@ function toNodeToPreview(
     nodeId: parsed.nodeId,
     url: doc.figmaNode,
     filePath: path.relative(dir, doc._codeConnectFilePath || ''),
+    source: doc.source,
     batchTemplateFilePath: doc._batchTemplateFilePath,
   }
 }
@@ -764,6 +767,7 @@ export function chunkOutcomeToResults(
             url: node.url,
             nodeId: node.nodeId,
             filePath: node.filePath,
+            source: node.source,
             success: false,
             error: errorMsg,
             // Chunk-level failure is a server/network error, not a template problem.
@@ -797,6 +801,7 @@ export function chunkOutcomeToResults(
         url: node?.url || result.nodeUrl,
         nodeId: result.nodeId,
         filePath: node?.filePath || '',
+        source: node?.source,
         success,
         snippet: result.snippet,
         language: result.language,
@@ -829,6 +834,7 @@ export function chunkOutcomeToResults(
         url: node.url,
         nodeId: node.nodeId,
         filePath: node.filePath,
+        source: node.source,
         success: false,
         error,
         // Non-2xx from the endpoint is a transport-level failure, not a template problem.

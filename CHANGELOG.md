@@ -1,3 +1,11 @@
+# Unreleased
+
+## Fixed
+
+### General
+
+- JSON output from `figma connect preview` now includes each connection's `source`.
+
 # Code Connect v2.0.1 (10 September 2026)
 
 ## Fixed
