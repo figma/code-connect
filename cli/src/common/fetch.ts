@@ -1,4 +1,3 @@
-
 import { ProxyAgent, setGlobalDispatcher } from 'undici'
 
 type Method = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'post' | 'get' | 'put' | 'delete'
@@ -8,12 +7,26 @@ type Options<OptionsT extends RequestInit = RequestInit> = OptionsT & {
   query?: Record<string, any>
 }
 
-class FetchError extends Error {
+export class FetchError extends Error {
   constructor(
-    public response: Response,
-    public data: Record<any, any> | undefined,
+    public response?: Response,
+    public data?: Record<any, any> | undefined,
+    public cause?: unknown,
   ) {
-    super()
+    let message = 'Fetch error'
+    if (response) {
+      message = `Request failed with status ${response.status}`
+    } else if (cause) {
+      const causeMsg = cause instanceof Error ? cause.message : String(cause)
+      const code = (cause as any)?.code
+      const codeSuffix = code && !causeMsg.includes(code) ? ` (${code})` : ''
+      message = `fetch failed: ${causeMsg}${codeSuffix}`
+    }
+    super(message)
+    this.name = 'FetchError'
+    if (cause !== undefined) {
+      this.cause = cause
+    }
   }
 }
 
@@ -64,7 +77,13 @@ async function makeRequestInternal<ResponseT = unknown>(
     options.body = JSON.stringify(body)
   }
 
-  const response = await fetch(url, { ...options, method })
+  let response: Response
+  try {
+    response = await fetch(url, { ...options, method })
+  } catch (err: any) {
+    throw new FetchError(undefined, undefined, err?.cause ?? err)
+  }
+
   if (!response.ok) {
     let data
     try {

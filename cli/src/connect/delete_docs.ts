@@ -94,6 +94,9 @@ export async function delete_docs({
         logger.error(`Failed to unpublish from Figma: ${err.message}`)
       }
       logger.debug(JSON.stringify(err.data))
+      if (err.cause) {
+        logger.debug("Fetch error cause:", err.cause)
+      }
     } else {
       logger.error(`Failed to delete docs: ${err}`)
     }
