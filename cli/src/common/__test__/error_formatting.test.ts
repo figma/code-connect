@@ -163,5 +163,15 @@ describe('Error Formatting', () => {
       expect(result).toContain('Required at "docs[0].figmaNode"')
       expect(result).not.toContain('Try re-running the command with --verbose')
     })
+
+    it('should extract error message with cause when present', () => {
+      const cause = new Error('self signed certificate')
+      ;(cause as any).code = 'SELF_SIGNED_CERT_IN_CHAIN'
+      const error = new Error('fetch failed')
+      ;(error as any).cause = cause
+      const result = extractErrorMessage(error)
+
+      expect(result).toBe('fetch failed: self signed certificate (SELF_SIGNED_CERT_IN_CHAIN)')
+    })
   })
 })

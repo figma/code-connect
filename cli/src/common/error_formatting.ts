@@ -126,6 +126,15 @@ export function extractErrorMessage(error: unknown, isVerbose = false): string {
         ? baseMessage
         : `${baseMessage} Try re-running the command with --verbose for more information.`
     }
+    if ((error as any).cause) {
+      const cause = (error as any).cause
+      const causeMsg = cause instanceof Error ? cause.message : String(cause)
+      const code = (cause as any)?.code || (error as any)?.code
+      const codeSuffix = code && !causeMsg.includes(code) ? ` (${code})` : ''
+      if (causeMsg && causeMsg !== error.message) {
+        return `${error.message}: ${causeMsg}${codeSuffix}`
+      }
+    }
     return error.message
   }
   if (typeof error === 'string') {

@@ -749,12 +749,12 @@ export function chunkOutcomeToResults(
 
   if (error) {
     const errorMsg = isFetchError(error)
-      ? error.data?.message || error.response.statusText
+      ? error.data?.message || error.response?.statusText || error.message
       : String(error)
     // 503 means the server-side killswitch is on — surface the server's
     // message directly without the per-file/per-node noise so the user
     // sees a single clear line during an incident.
-    if (isFetchError(error) && error.response.status === 503) {
+    if (isFetchError(error) && error.response?.status === 503) {
       exitWithError(errorMsg)
     } else {
       logger.error(`Failed to preview components in file ${fileKey}: ${errorMsg}`)

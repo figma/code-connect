@@ -25,7 +25,7 @@ async function postWithRetry<T>(
     try {
       return await request.post<T>(apiUrl, batch, { headers: getHeaders(accessToken, useOAuth) })
     } catch (err) {
-      if (!isFetchError(err)) throw err
+      if (!isFetchError(err) || !err.response) throw err
 
       const status = err.response.status
 
@@ -349,6 +349,9 @@ export async function upload({
         logger.error(`Failed to upload to Figma: ${err.message}`)
       }
       logger.debug(JSON.stringify(err?.data))
+      if (err.cause) {
+        logger.debug("Fetch error cause:", err.cause)
+      }
     } else {
       logger.error(`Failed to upload to Figma: ${err}`)
     }

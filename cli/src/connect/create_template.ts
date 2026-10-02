@@ -119,6 +119,9 @@ export async function createCodeConnectFromUrl({
         logger.error(`Failed to get node data from Figma: ${err.message}`)
       }
       logger.debug(JSON.stringify(err.data))
+      if (err.cause) {
+        logger.debug("Fetch error cause:", err.cause)
+      }
     } else {
       logger.error(`Failed to create: ${err}`)
     }

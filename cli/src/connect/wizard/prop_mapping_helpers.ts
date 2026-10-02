@@ -209,7 +209,7 @@ export async function generateAllPropsMappings({
       })
     } catch (e) {
       if (isFetchError(e)) {
-        logger.error(`Failed to fetch embeddings: ${e.data?.message || e.response?.status}`)
+        logger.error(`Failed to fetch embeddings: ${e.data?.message || (e.response ? e.response.status : e.message)}`)
       } else {
         logger.error(`Failed to compute embeddings: ${e}`)
       }
