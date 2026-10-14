@@ -5,12 +5,84 @@ import { spawnSync } from 'child_process'
 import {
   CodeConnectReactConfig,
   getGitRepoDefaultBranchName,
+  getProjectInfoFromConfig,
   getRemoteFileUrl,
   mapImportPath,
   mapImportSpecifier,
 } from '../project'
 
 describe('Project helper functions', () => {
+  describe('file discovery', () => {
+    let tmpDir: string
+
+    beforeEach(() => {
+      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'code-connect-discovery-test-'))
+    })
+
+    afterEach(() => {
+      fs.rmSync(tmpDir, { recursive: true, force: true })
+    })
+
+    function createFiles(files: string[]) {
+      for (const file of files) {
+        const filePath = path.join(tmpDir, file)
+        fs.mkdirSync(path.dirname(filePath), { recursive: true })
+        fs.writeFileSync(filePath, '')
+      }
+    }
+
+    it('discovers templates in a literal project path containing glob characters while honoring exclusions', async () => {
+      const projectName = '[customer]-project{copy,backup}'
+      const projectDir = path.join(tmpDir, projectName)
+      const templates = ['src/figma/Badge.figma.ts', 'src/figma/Badge.oam.figma.ts']
+      createFiles(
+        [...templates, 'src/figma/ignored/Ignore.figma.ts', 'node_modules/pkg/Module.figma.ts'].map(
+          (file) => path.join(projectName, file),
+        ),
+      )
+
+      const projectInfo = await getProjectInfoFromConfig(projectDir, {
+        include: ['**/*.figma.ts'],
+        exclude: ['src/figma/ignored/**'],
+      })
+
+      expect(projectInfo.files.sort()).toEqual(
+        templates.map((file) => path.join(projectDir, file)).sort(),
+      )
+    })
+
+    it('keeps leading-slash includes relative to the project directory while honoring exclusions', async () => {
+      const projectDir = path.join(tmpDir, 'project')
+      createFiles(['project/src/Badge.figma.ts', 'project/src/ignored/Ignore.figma.ts'])
+
+      const projectInfo = await getProjectInfoFromConfig(projectDir, {
+        include: ['/src/**/*.figma.ts'],
+        exclude: ['src/ignored/**'],
+      })
+
+      expect(projectInfo.files).toEqual([path.join(projectDir, 'src/Badge.figma.ts')])
+    })
+
+    it('preserves parent-directory includes and exclusions relative to the specified project directory', async () => {
+      const projectDir = path.join(tmpDir, 'project')
+      const templates = ['project/src/Badge.figma.ts', 'shared/Badge.oam.figma.ts']
+      createFiles([
+        ...templates,
+        'project/src/ignored/Ignore.figma.ts',
+        'shared/ignored/Ignore.figma.ts',
+      ])
+
+      const projectInfo = await getProjectInfoFromConfig(projectDir, {
+        include: ['src/**/*.figma.ts', '../shared/**/*.figma.ts'],
+        exclude: ['src/ignored/**', '../shared/ignored/**'],
+      })
+
+      expect(projectInfo.files.sort()).toEqual(
+        templates.map((file) => path.join(tmpDir, file)).sort(),
+      )
+    })
+  })
+
   function getConfig(importPaths: {}): CodeConnectReactConfig {
     return {
       parser: 'react',

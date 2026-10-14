@@ -776,12 +776,16 @@ export async function getProjectInfoFromConfig(
     exitWithError('No include globs specified in config file')
   }
 
-  const files = globSync(mapToAbsolutePaths(includeGlobs, absPath), {
-    nodir: true,
-    ignore: mapToAbsolutePaths(excludeGlobs, absPath),
-    // Otherwise this is true on *nix and false on Windows
-    absolute: true,
-  })
+  const files = globSync(
+    includeGlobs.map((globPath) => globPath.replace(/^\/+/, '')),
+    {
+      cwd: absPath,
+      nodir: true,
+      ignore: [...excludeGlobs, ...mapToAbsolutePaths(excludeGlobs, absPath)],
+      // Otherwise this is true on *nix and false on Windows
+      absolute: true,
+    },
+  )
 
   if (files.length > 10000) {
     logger.warn(

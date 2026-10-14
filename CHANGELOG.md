@@ -1,3 +1,26 @@
+# Code Connect v2.0.2 (14 October 2026)
+
+## Features
+
+### General
+
+- Code Connect publishing on Professional plans now confirms the active library and framework when they are first selected. If a publish exceeds the one-library, one-framework limit, the CLI explains the restriction and how a plan admin can change the selection or upgrade.
+- `figma connect publish` now sends preflight validation failure counts to Figma. Set `DO_NOT_TRACK=1` to disable this telemetry.
+
+## Fixed
+
+### General
+
+- `figma connect migrate` now leaves existing template files unchanged and reports success when no components need migrating.
+- Fixed Code Connect file discovery in project folders whose names contain special characters, while preserving configured file exclusions and project-relative includes with a leading slash.
+- Network request failures now include the underlying reason, such as a timeout or a connection error, instead of only showing "fetch failed". Run the command with `--verbose` to see the stack trace.
+- `figma connect create` now always generates a parserless template file, including in projects configured for a framework-specific parser. Unsupported output filenames are rejected with guidance to use `.figma.ts` or `.figma.js`.
+- JSON output from `figma connect preview` now includes each connection's source file.
+
+### Template files
+
+- Fixed `findLayers` crashing when filtering text layers by parent path, including text inside nested instances.
+
 # Code Connect v2.0.1 (10 September 2026)
 
 ## Fixed

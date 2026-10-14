@@ -219,6 +219,12 @@ export function createTemplateCodeConnect(args: CreateTemplateArgs): string {
     extension: 'ts',
   })
 
+  if (!/\.figma\.(template\.)?[jt]s$/.test(filePath)) {
+    exitWithError(
+      `Invalid template filename: ${filePath}. Use .figma.ts or .figma.js (or .figma.template.ts / .figma.template.js).`,
+    )
+  }
+
   const { declarations } = generateTemplateBody(component)
 
   const codeConnect = [

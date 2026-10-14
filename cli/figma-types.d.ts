@@ -57,6 +57,7 @@ declare module 'figma' {
     readonly type: 'TEXT'
     readonly name: string
     readonly textContent: string
+    readonly path?: string[]
     readonly __containingSlotName__?: string
     __render__(): string
   }

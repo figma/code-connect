@@ -192,6 +192,37 @@ describe('e2e test for `migrate` command', () => {
     }
   })
 
+  it('succeeds without writing or deleting files when all connections are already templates', async () => {
+    const testPath = getTestPath('react_basic')
+    const templatePaths = ['Button.figma.ts', 'Avatar.figma.ts'].map((file) =>
+      path.join(testPath, file),
+    )
+    const outputDir = path.join(testPath, 'already-migrated-output')
+    const configPath = path.join(testPath, 'already-migrated.config.json')
+
+    try {
+      await runMigrate(testPath)
+      const originalTemplates = templatePaths.map((file) => readFileSync(file, 'utf-8'))
+      writeFileSync(
+        configPath,
+        JSON.stringify({ codeConnect: { include: ['*.figma.ts'], label: 'React' } }),
+      )
+
+      const result = await runMigrate(
+        testPath,
+        `--config ${configPath} --outDir ${outputDir} --delete`,
+      )
+
+      expect(tidyStdOutput(result.stderr)).toContain('No components need migrating')
+      expect(tidyStdOutput(result.stderr)).not.toContain('component(s) to migrate')
+      expect(templatePaths.map((file) => readFileSync(file, 'utf-8'))).toEqual(originalTemplates)
+      expect(existsSync(outputDir)).toBe(false)
+    } finally {
+      rmSync(configPath, { force: true })
+      cleanupTemplateFiles(testPath)
+    }
+  })
+
   it('migrates Storybook connections to parserless template files', async () => {
     const testPath = getTestPath('react_storybook')
     const templatePath = path.join(testPath, 'StorybookComponent.figma.ts')

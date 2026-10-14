@@ -859,12 +859,19 @@ async function handleMigrate(cmd: BaseCommand & { javascript?: boolean }) {
     parserMode: 'migration',
   })
 
-  const allCodeConnectObjectsByFigmaUrl = groupCodeConnectObjectsByFigmaUrl(allCodeConnectObjects)
-  const groupCount = Object.keys(allCodeConnectObjectsByFigmaUrl).length
-  if (groupCount === 0) {
+  if (allCodeConnectObjects.length === 0) {
     exitWithError('No Code Connect objects found to migrate')
   }
 
+  const docsToMigrate = allCodeConnectObjects.filter((doc) => !doc.templateData?.isParserless)
+  if (docsToMigrate.length === 0) {
+    logger.info(
+      'No components need migrating. All detected connections already use template files.',
+    )
+    return
+  }
+
+  const groupCount = Object.keys(groupCodeConnectObjectsByFigmaUrl(docsToMigrate)).length
   logger.info(`Found ${groupCount} component(s) to migrate`)
   let migratedCount = 0
   let batchMigratedCount = 0
@@ -881,7 +888,7 @@ async function handleMigrate(cmd: BaseCommand & { javascript?: boolean }) {
   const useTypeScript = !cmd.javascript
   const batchMigratedDocs = new Set<CodeConnectJSON>()
   const migratedDocs = new Set<CodeConnectJSON>()
-  const batchDocsByPath = getBatchMigrationGroups(allCodeConnectObjects, {
+  const batchDocsByPath = getBatchMigrationGroups(docsToMigrate, {
     batchAll: cmd.batch === 'all',
     disabled: cmd.batch === 'none',
   })
@@ -915,9 +922,7 @@ async function handleMigrate(cmd: BaseCommand & { javascript?: boolean }) {
     }
   }
 
-  const regularCodeConnectObjects = allCodeConnectObjects.filter(
-    (doc) => !batchMigratedDocs.has(doc),
-  )
+  const regularCodeConnectObjects = docsToMigrate.filter((doc) => !batchMigratedDocs.has(doc))
   const codeConnectObjectsByFigmaUrl = groupCodeConnectObjectsByFigmaUrl(regularCodeConnectObjects)
 
   for (const [figmaUrl, group] of Object.entries(codeConnectObjectsByFigmaUrl)) {
@@ -988,7 +993,7 @@ async function handleMigrate(cmd: BaseCommand & { javascript?: boolean }) {
       if (fs.existsSync(configFilePath)) {
         logger.warn(`Config file already exists at ${highlight(configFilePath)}`)
       } else {
-        const { language: docLanguage, label } = allCodeConnectObjects[0]
+        const { language: docLanguage, label } = docsToMigrate[0]
 
         const language = getInferredLanguageForRaw(label, docLanguage)
         const config: CodeConnectParserlessConfig = {

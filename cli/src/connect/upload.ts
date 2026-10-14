@@ -1,9 +1,16 @@
 import { CodeConnectJSON } from '../connect/figma_connect'
-import { logger, underline, highlight, warn } from '../common/logging'
+import { logger, underline, highlight, warn, success } from '../common/logging'
 import { getApiUrl, getHeaders } from './figma_rest_api'
 import { exitWithFeedbackMessage } from './helpers'
 import { parseFigmaNode } from './validation'
 import { isFetchError, request } from '../common/fetch'
+
+const PRO_LIBRARY_REASON =
+  'Cannot publish Code Connect mappings to this library because another library is active for this Professional plan.'
+const PRO_FRAMEWORK_REASON =
+  /Cannot publish (.+?) Code Connect mappings because (.+?) is the active framework for this Professional plan\./
+const PRO_LIBRARY_ERROR_CODE = 'CODE_CONNECT_PRO_LIBRARY_INACTIVE'
+const PRO_FRAMEWORK_ERROR_CODE = 'CODE_CONNECT_PRO_FRAMEWORK_INACTIVE'
 
 const COMPONENT_BROWSER_CONFLICT_REASON = 'Code Connect UI mapping already exists'
 
@@ -25,7 +32,7 @@ async function postWithRetry<T>(
     try {
       return await request.post<T>(apiUrl, batch, { headers: getHeaders(accessToken, useOAuth) })
     } catch (err) {
-      if (!isFetchError(err)) throw err
+      if (!isFetchError(err) || !err.response) throw err
 
       const status = err.response.status
 
@@ -65,6 +72,16 @@ interface Args {
   force?: boolean
 }
 
+interface UploadFailure {
+  figmaNode: string
+  label: string
+  reason: string
+  errors?: Array<{
+    code: string
+    active_framework?: string
+  }>
+}
+
 interface UploadResponse {
   status: number
   error: boolean
@@ -73,7 +90,35 @@ interface UploadResponse {
     published_count: number
     failed_count: number
     published_nodes: Array<{ figmaNode: string; label: string }>
-    failed_nodes: Array<{ figmaNode: string; label: string; reason: string }>
+    failed_nodes: UploadFailure[]
+    new_active_selections?: Array<{
+      file_key: string
+      library_name: string
+      framework: string
+    }>
+  }
+}
+
+function logNewActiveSelections(
+  selections: UploadResponse['meta']['new_active_selections'],
+  docs: CodeConnectJSON[],
+): void {
+  for (const { file_key: fileKey, library_name: libraryName, framework } of selections ?? []) {
+    const libraryFileUrl = getLibraryFileUrl(fileKey, docs)
+    logger.info(
+      [
+        '',
+        success(highlight('Code Connect active selection set')),
+        '',
+        `  Library:   ${highlight(libraryName)}`,
+        `             ${underline(libraryFileUrl)}`,
+        `  Framework: ${highlight(framework)}`,
+        '',
+        "If this wasn't intentional, a plan admin can change the active library",
+        "and framework in Figma's Code Connect settings.",
+        '',
+      ].join('\n'),
+    )
   }
 }
 
@@ -82,8 +127,57 @@ interface UploadResponse {
  * @param doc - The code connect JSON
  * @returns A string representation of the code connect JSON
  */
-function codeConnectStr(doc: CodeConnectJSON): string {
-  return `${highlight(doc.component ?? '')}${doc.variant ? `(${Object.entries(doc.variant).map(([key, value]) => `${key}=${value}`)})` : ''} ${underline(doc.figmaNode)}`
+function codeConnectStr(doc: CodeConnectJSON, separator = ' '): string {
+  return `${highlight(doc.component ?? '')}${doc.variant ? `(${Object.entries(doc.variant).map(([key, value]) => `${key}=${value}`)})` : ''}${separator}${underline(doc.figmaNode)}`
+}
+
+function isProFailure({ errors, reason }: UploadFailure): boolean {
+  if (errors !== undefined) {
+    return errors.some(
+      ({ code }) => code === PRO_LIBRARY_ERROR_CODE || code === PRO_FRAMEWORK_ERROR_CODE,
+    )
+  }
+  // Older servers only return the human-readable reason.
+  return reason.includes(PRO_LIBRARY_REASON) || PRO_FRAMEWORK_REASON.test(reason)
+}
+
+function isComponentBrowserConflict({ errors, reason }: UploadFailure): boolean {
+  return errors === undefined && reason.includes(COMPONENT_BROWSER_CONFLICT_REASON)
+}
+
+function formatFailureReason(failure: UploadFailure): string {
+  let formattedReason = failure.reason
+  // Structured errors take precedence over wording; preserve unknown errors verbatim.
+  const { errors, reason, label } = failure
+  if (errors !== undefined) {
+    const reasons = errors.map(({ code, active_framework: activeFramework }) => {
+      if (code === PRO_LIBRARY_ERROR_CODE) {
+        return `${highlight('Library:')} Another library is active for this Professional plan.`
+      }
+      if (code === PRO_FRAMEWORK_ERROR_CODE && activeFramework !== undefined) {
+        return `${highlight('Framework:')} Cannot publish ${highlight(label)}; the active framework is ${highlight(activeFramework)}.`
+      }
+      return reason
+    })
+    formattedReason = [...new Set(reasons)].join('\n') || reason
+  } else {
+    // Keep the existing output when talking to a server without structured errors.
+    formattedReason = reason
+      .replace(
+        PRO_LIBRARY_REASON,
+        `${highlight('Library:')} Another library is active for this Professional plan.\n`,
+      )
+      .replace(
+        PRO_FRAMEWORK_REASON,
+        (_, requested: string, active: string) =>
+          `${highlight('Framework:')} Cannot publish ${highlight(requested)}; the active framework is ${highlight(active)}.`,
+      )
+  }
+  return formattedReason
+    .trim()
+    .split('\n')
+    .map((line) => `  ${line.trim()}`)
+    .join('\n')
 }
 
 /**
@@ -103,6 +197,30 @@ function getKeyFromFigmaNode(figmaNode: string): string {
   const nodeId = nodeIdParam.replace(/-/g, ':')
 
   return `${fileKey}-${nodeId}`
+}
+
+function getUploadResultKey(node: { figmaNode: string; label: string }): string {
+  return JSON.stringify([getKeyFromFigmaNode(node.figmaNode), node.label])
+}
+
+/**
+ * Returns the URL for a Figma library file, preserving the host used by the uploaded docs so
+ * links work in development environments as well as production.
+ */
+function getLibraryFileUrl(fileKey: string, docs: CodeConnectJSON[]): string {
+  for (const doc of docs) {
+    try {
+      const url = new URL(doc.figmaNode)
+      const pathMatch = url.pathname.match(/\/(file|design)\/([A-Za-z0-9]+)/)
+      if (pathMatch?.[2] === fileKey) {
+        return `${url.origin}/design/${fileKey}`
+      }
+    } catch {
+      // Invalid Figma node URLs are reported by the existing validation flow.
+    }
+  }
+
+  return `https://www.figma.com/design/${fileKey}`
 }
 
 /**
@@ -157,8 +275,8 @@ export async function upload({
     // Create a map from fileKey-nodeId to original docs for detailed output
     const docsMap = createDocsMap(cleanedDocs, verbose)
 
-    let allUploadedNodes = new Set<string>()
-    let allFailedNodes = new Map<string, string>() // key -> failure reason
+    const allUploadedNodes = new Set<string>()
+    const allFailedNodes = new Map<string, UploadFailure>()
 
     if (batchSize) {
       if (typeof batchSize !== 'number') {
@@ -226,13 +344,17 @@ export async function upload({
 
         if (data.meta?.published_nodes) {
           data.meta.published_nodes.forEach((node) =>
-            allUploadedNodes.add(getKeyFromFigmaNode(node.figmaNode)),
+            allUploadedNodes.add(getUploadResultKey(node)),
           )
         }
         if (data.meta?.failed_nodes) {
           data.meta.failed_nodes.forEach((node) =>
-            allFailedNodes.set(getKeyFromFigmaNode(node.figmaNode), node.reason),
+            allFailedNodes.set(getUploadResultKey(node), node),
           )
+        }
+        if (data.meta?.new_active_selections?.length) {
+          process.stderr.write('\n')
+          logNewActiveSelections(data.meta.new_active_selections, cleanedDocs)
         }
 
         currentBatch++
@@ -261,40 +383,39 @@ export async function upload({
       )
 
       const data = response.data
-
       if (data.meta?.published_nodes) {
-        data.meta.published_nodes.forEach((node) =>
-          allUploadedNodes.add(getKeyFromFigmaNode(node.figmaNode)),
-        )
+        data.meta.published_nodes.forEach((node) => allUploadedNodes.add(getUploadResultKey(node)))
       }
       if (data.meta?.failed_nodes) {
-        data.meta.failed_nodes.forEach((node) =>
-          allFailedNodes.set(getKeyFromFigmaNode(node.figmaNode), node.reason),
-        )
+        data.meta.failed_nodes.forEach((node) => allFailedNodes.set(getUploadResultKey(node), node))
       }
+      logNewActiveSelections(data.meta?.new_active_selections, cleanedDocs)
     }
 
     // Separate successful and failed uploads
     const successfulDocsByLabel: Record<string, CodeConnectJSON[]> = {}
-    const failedDocsByLabel: Record<string, Array<{ doc: CodeConnectJSON; reason: string }>> = {}
+    const failedDocsByLabel: Record<
+      string,
+      Array<{ doc: CodeConnectJSON; failure: UploadFailure }>
+    > = {}
 
-    for (const [mapKey, nodeDocs] of docsMap.entries()) {
+    for (const nodeDocs of docsMap.values()) {
       for (const doc of nodeDocs) {
         const label = doc.label
-        const docKey = getKeyFromFigmaNode(doc.figmaNode)
+        const docKey = getUploadResultKey(doc)
         const isUploaded = allUploadedNodes.has(docKey)
-        const failureReason = allFailedNodes.get(docKey)
+        const failure = allFailedNodes.get(docKey)
 
         if (isUploaded) {
           if (!successfulDocsByLabel[label]) {
             successfulDocsByLabel[label] = []
           }
           successfulDocsByLabel[label].push(doc)
-        } else if (failureReason) {
+        } else if (failure) {
           if (!failedDocsByLabel[label]) {
             failedDocsByLabel[label] = []
           }
-          failedDocsByLabel[label].push({ doc, reason: failureReason })
+          failedDocsByLabel[label].push({ doc, failure })
         }
       }
     }
@@ -306,13 +427,19 @@ export async function upload({
     }
 
     if (Object.keys(failedDocsByLabel).length > 0) {
+      const hasProRestrictions = Object.values(failedDocsByLabel).some((items) =>
+        items.some(({ failure }) => isProFailure(failure)),
+      )
+      if (hasProRestrictions) {
+        logger.error(
+          'Your Professional plan supports Code Connect for one library and one framework.\n',
+        )
+      }
       let hasComponentBrowserConflicts = false
       for (const [label, failedItems] of Object.entries(failedDocsByLabel)) {
-        const conflicts = failedItems.filter((item) =>
-          item.reason.includes(COMPONENT_BROWSER_CONFLICT_REASON),
-        )
+        const conflicts = failedItems.filter(({ failure }) => isComponentBrowserConflict(failure))
         const otherFailures = failedItems.filter(
-          (item) => !item.reason.includes(COMPONENT_BROWSER_CONFLICT_REASON),
+          ({ failure }) => !isComponentBrowserConflict(failure),
         )
 
         if (conflicts.length > 0) {
@@ -326,9 +453,28 @@ export async function upload({
 
         if (otherFailures.length > 0) {
           logger.error(
-            `Failed to upload to Figma, for ${label}:\n${otherFailures.map((item) => `-> ${codeConnectStr(item.doc)} (${item.reason})`).join('\n')}`,
+            [
+              highlight(`Failed to upload to Figma, for ${label}:`),
+              ...otherFailures.map(
+                ({ doc, failure }) =>
+                  `  ${codeConnectStr(doc, '\n  ')}\n\n${formatFailureReason(failure)}`,
+              ),
+            ].join('\n\n') + '\n',
           )
         }
+      }
+
+      if (hasProRestrictions) {
+        logger.error(
+          [
+            'A plan admin can change the active library and framework in',
+            "Figma's Code Connect settings, or upgrade your plan to connect",
+            'multiple libraries and frameworks.',
+            '',
+            `Upgrade your plan: ${underline('https://www.figma.com/pricing/')}`,
+            '',
+          ].join('\n'),
+        )
       }
 
       if (hasComponentBrowserConflicts && !force) {

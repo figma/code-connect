@@ -7,11 +7,13 @@ import { validateNodeId } from './helpers'
 import { getApiUrl, getHeaders } from './figma_rest_api'
 import type { BaseCommand } from '../commands/connect'
 import { isFetchError, request } from '../common/fetch'
+import { trackPreflightRejection } from './publish_metrics'
 
 export function parseFigmaNode(
   verbose: boolean,
   doc: CodeConnectJSON,
   silent: boolean = false,
+  exitOnInvalidNodeId = true,
 ): { fileKey: string; nodeId: string } | null {
   const figmaNodeUrl = url.parse(doc.figmaNode, true)
   const fileKeyMatch = figmaNodeUrl.path?.match(/(file|design)\/([a-zA-Z0-9]+)/)
@@ -24,8 +26,8 @@ export function parseFigmaNode(
   const fileKey = fileKeyMatch[2]
   const nodeId = figmaNodeUrl.query['node-id']
   if (nodeId && typeof nodeId === 'string') {
-    const figmaNodeId = validateNodeId(nodeId)
-    return { fileKey, nodeId: figmaNodeId }
+    const figmaNodeId = exitOnInvalidNodeId ? validateNodeId(nodeId) : validateNodeId(nodeId, false)
+    return figmaNodeId ? { fileKey, nodeId: figmaNodeId } : null
   } else {
     if (!silent || verbose) {
       logger.error(`Failed to get node-id from ${doc.figmaNode}`)
@@ -40,7 +42,7 @@ async function fetchNodeInfo(
   nodeIdsChunk: string[],
   accessToken: string,
   useOAuth = false,
-): Promise<any> {
+): Promise<{ nodes: any; status?: number }> {
   try {
     const response = await request.get<{ message: string; nodes: any }>(
       `${baseApiUrl}${fileKey}/nodes?ids=${nodeIdsChunk.join(',')}`,
@@ -50,9 +52,9 @@ async function fetchNodeInfo(
       logger.error(
         'Failed to fetch node info: ' + response.response.status + ' ' + response.data?.message,
       )
-      return null
+      return { nodes: null, status: response.response.status }
     }
-    return response.data.nodes
+    return { nodes: response.data.nodes }
   } catch (err) {
     if (isFetchError(err)) {
       if (err.response) {
@@ -66,7 +68,7 @@ async function fetchNodeInfo(
     } else {
       logger.error(`Failed to to fetch node info: ${err}`)
     }
-    return null
+    return { nodes: null, status: isFetchError(err) ? err.response?.status : undefined }
   }
 }
 
@@ -274,7 +276,7 @@ export async function validateDocs(
   const fileKeyToNodeIds: { [key: string]: any } = {}
   let valid = true
   docs.forEach((doc) => {
-    const parsedNode = parseFigmaNode(cmd.verbose, doc)
+    const parsedNode = parseFigmaNode(cmd.verbose, doc, false, false)
     if (!parsedNode) {
       valid = false
       return
@@ -285,6 +287,7 @@ export async function validateDocs(
   })
 
   if (!valid) {
+    if (!cmd.dryRun) await trackPreflightRejection(baseApiUrl, 'preflight_invalid_figma_node')
     return false
   }
 
@@ -303,7 +306,7 @@ export async function validateDocs(
     for (let batch = 0; batch < chunks.length; batch++) {
       const nodeIdsChunk = chunks[batch]
       logger.debug(`Running for ${baseApiUrl + fileKey + '/nodes?ids=' + nodeIdsChunk.join(',')}`)
-      const nodeMapRet = await fetchNodeInfo(
+      const { nodes: nodeMapRet, status } = await fetchNodeInfo(
         baseApiUrl,
         fileKey,
         nodeIdsChunk,
@@ -311,6 +314,12 @@ export async function validateDocs(
         useOAuth,
       )
       if (!nodeMapRet) {
+        if (!cmd.dryRun && (status === 401 || status === 403 || status === 404)) {
+          await trackPreflightRejection(
+            baseApiUrl,
+            status === 404 ? 'preflight_file_unavailable' : 'preflight_api_rejected',
+          )
+        }
         return false
       }
 
@@ -324,6 +333,9 @@ export async function validateDocs(
           })
           .every(Boolean)
     }
+  }
+  if (!valid && !cmd.dryRun) {
+    await trackPreflightRejection(baseApiUrl, 'preflight_invalid_document')
   }
   return valid
 }

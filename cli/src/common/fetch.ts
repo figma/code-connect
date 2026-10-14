@@ -1,5 +1,6 @@
 
 import { ProxyAgent, setGlobalDispatcher } from 'undici'
+import { logger } from './logging'
 
 type Method = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'post' | 'get' | 'put' | 'delete'
 
@@ -8,12 +9,31 @@ type Options<OptionsT extends RequestInit = RequestInit> = OptionsT & {
   query?: Record<string, any>
 }
 
-class FetchError extends Error {
+function networkErrorMessage(cause: unknown): string {
+  if (cause === undefined) return 'fetch failed'
+  const causeMsg = cause instanceof Error ? cause.message : String(cause)
+  const code =
+    cause && typeof cause === 'object' && 'code' in cause
+      ? (cause as { code?: string }).code
+      : undefined
+  const codeSuffix = code && !causeMsg.includes(code) ? ` (${code})` : ''
+  return `fetch failed: ${causeMsg}${codeSuffix}`
+}
+
+export class FetchError extends Error {
+  cause?: unknown
+
   constructor(
-    public response: Response,
-    public data: Record<any, any> | undefined,
+    public response?: Response,
+    public data?: Record<any, any>,
+    cause?: unknown,
   ) {
-    super()
+    // HTTP failures already report status and body at the call site. Keep their
+    // message empty so that output stays the same, and only describe network
+    // failures that never received a response.
+    super(response ? '' : networkErrorMessage(cause))
+    this.name = 'FetchError'
+    this.cause = cause
   }
 }
 
@@ -64,7 +84,14 @@ async function makeRequestInternal<ResponseT = unknown>(
     options.body = JSON.stringify(body)
   }
 
-  const response = await fetch(url, { ...options, method })
+  let response: Response
+  try {
+    response = await fetch(url, { ...options, method })
+  } catch (err) {
+    const cause = (err as { cause?: unknown } | null)?.cause ?? err
+    logger.debug('Fetch error cause:', cause instanceof Error ? cause.stack : cause)
+    throw new FetchError(undefined, undefined, cause)
+  }
   if (!response.ok) {
     let data
     try {

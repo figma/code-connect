@@ -8,11 +8,14 @@ export function isComponent(node: FigmaRestApi.Node): node is FigmaRestApi.Compo
   return node.type === 'COMPONENT' || node.type === 'COMPONENT_SET'
 }
 
-export const validateNodeId = function (id: string): string {
+export function validateNodeId(id: string): string
+export function validateNodeId(id: string, exitOnInvalid: false): string | null
+export function validateNodeId(id: string, exitOnInvalid = true): string | null {
   const newId = id.replace('-', ':')
   if (!guidRegex.test(newId)) {
     logger.error(`Invalid figma node URL: the provided node-id "${id}" is invalid`)
-    exitWithFeedbackMessage(1)
+    if (exitOnInvalid) exitWithFeedbackMessage(1)
+    return null
   }
   return newId
 }

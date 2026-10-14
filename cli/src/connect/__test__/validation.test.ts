@@ -1,6 +1,8 @@
-import { validateDoc } from '../validation'
+import { validateDoc, validateDocs } from '../validation'
 import { CodeConnectJSON } from '../figma_connect'
 import { logger } from '../../common/logging'
+import * as publishMetrics from '../publish_metrics'
+import type { BaseCommand } from '../../commands/connect'
 
 const MOCK_DOC: any = {
   variant: { toggled: 'on' },
@@ -77,5 +79,51 @@ describe('validateDoc', () => {
         )
       })
     })
+  })
+})
+
+describe('validateDocs telemetry', () => {
+  const cmd = { verbose: false, dryRun: false } as BaseCommand
+  const doc = { figmaNode: 'https://www.figma.com/design/abc/Test?node-id=1-2' } as CodeConnectJSON
+  let fetchSpy: jest.SpyInstance
+  let trackSpy: jest.SpyInstance
+
+  beforeEach(() => {
+    fetchSpy = jest.spyOn(global, 'fetch')
+    trackSpy = jest.spyOn(publishMetrics, 'trackPreflightRejection').mockResolvedValue()
+  })
+
+  afterEach(() => jest.restoreAllMocks())
+
+  it('counts malformed node IDs', async () => {
+    expect(await validateDocs(cmd, 'token', [{ ...doc, figmaNode: `${doc.figmaNode}bad` }])).toBe(
+      false,
+    )
+    expect(trackSpy).toHaveBeenCalledWith(
+      'https://api.figma.com/v1/files/',
+      'preflight_invalid_figma_node',
+    )
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it.each([401, 403, 404, 500])('tracks selected 4xx, not 5xx (%s)', async (status) => {
+    fetchSpy.mockResolvedValue(new Response('{"message":"error"}', { status }))
+    expect(await validateDocs(cmd, 'token', [doc])).toBe(false)
+    expect(trackSpy).toHaveBeenCalledTimes(status === 500 ? 0 : 1)
+    if (status !== 500) {
+      expect(trackSpy).toHaveBeenCalledWith(
+        'https://api.figma.com/v1/files/',
+        status === 404 ? 'preflight_file_unavailable' : 'preflight_api_rejected',
+      )
+    }
+  })
+
+  it('does not count dry-run rejections', async () => {
+    expect(
+      await validateDocs({ verbose: false, dryRun: true } as BaseCommand, 'token', [
+        { ...doc, figmaNode: 'bad' },
+      ]),
+    ).toBe(false)
+    expect(trackSpy).not.toHaveBeenCalled()
   })
 })

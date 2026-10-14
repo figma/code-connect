@@ -7,17 +7,7 @@ import {
 import fs from 'fs'
 import { FigmaRestApi, getApiUrl, getHeaders } from './figma_rest_api'
 import { exitWithError, logger } from '../common/logging'
-import { callParser, handleMessages } from './parser_executables'
-import { CodeConnectExecutableParserConfig, ProjectInfo } from './project'
-import { createReactCodeConnect } from '../react/create'
-import { z } from 'zod'
-import {
-  CreateRequestPayload,
-  CreateRequestPayloadMulti,
-  CreateResponsePayload,
-} from './parser_executable_types'
-import { fromError } from 'zod-validation-error'
-import { createHtmlCodeConnect } from '../html/create'
+import { ProjectInfo } from './project'
 import { createTemplateCodeConnect } from './create_template'
 import { isFetchError, request } from '../common/fetch'
 import { BaseCommand } from '../commands/connect'
@@ -98,73 +88,15 @@ export async function createCodeConnectFromUrl({
 
       logger.info('Generating Code Connect files...')
 
-      let result: z.infer<typeof CreateResponsePayload>
-
-      if (projectInfo.config.parser === 'react') {
-        const payload: CreateRequestPayloadMulti = {
-          mode: 'CREATE',
-          destinationDir: outDir ?? process.env.INIT_CWD ?? process.cwd(),
-          destinationFile: outFile,
-          normalizedName,
-          figmaConnections: [{ component: componentPayload }],
-          config: projectInfo.config,
-        }
-        result = await createReactCodeConnect(payload)
-      } else if (projectInfo.config.parser === 'html') {
-        const payload: CreateRequestPayloadMulti = {
-          mode: 'CREATE',
-          destinationDir: outDir ?? process.env.INIT_CWD ?? process.cwd(),
-          destinationFile: outFile,
-          normalizedName,
-          figmaConnections: [{ component: componentPayload }],
-          config: projectInfo.config,
-        }
-        result = await createHtmlCodeConnect(payload)
-      } else if (!(projectInfo.config as { parser?: string }).parser) {
-        const filename = createTemplateCodeConnect({
-          component: componentPayload,
-          normalizedName,
-          destinationDir: outDir ?? process.env.INIT_CWD ?? process.cwd(),
-          destinationFile: outFile,
-        })
-        result = {
-          createdFiles: [{ filePath: filename }],
-          messages: [],
-        }
-      } else {
-        try {
-          const payload: CreateRequestPayload = {
-            mode: 'CREATE',
-            destinationDir: outDir ?? process.env.INIT_CWD ?? process.cwd(),
-            destinationFile: outFile,
-            component: componentPayload,
-            config: projectInfo.config,
-            verbose: cmd.verbose,
-          }
-          const stdout = await callParser(
-            // We use `as` because the React parser makes the types difficult
-            // TODO remove once React is an executable parser
-            projectInfo.config as CodeConnectExecutableParserConfig,
-            payload,
-            projectInfo.absPath,
-          )
-
-          result = CreateResponsePayload.parse(stdout)
-        } catch (e) {
-          throw fromError(e)
-        }
-      }
-
-      const { hasErrors } = handleMessages(result.messages)
-
-      if (hasErrors) {
-        exitWithError('Errors encountered calling parser, exiting')
-      }
-
-      logger.info('Code Connect files generated successfully:')
-      result.createdFiles.forEach((file) => {
-        logger.info(`${file.filePath}`)
+      const filename = createTemplateCodeConnect({
+        component: componentPayload,
+        normalizedName,
+        destinationDir: outDir ?? process.env.INIT_CWD ?? process.cwd(),
+        destinationFile: outFile,
       })
+
+      logger.info('Code Connect file generated successfully:')
+      logger.info(filename)
     } else {
       logger.error(
         `Failed to get node information from Figma with status: ${response.response.status}`,

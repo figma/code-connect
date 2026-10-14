@@ -26,6 +26,7 @@ export interface NodeToPreview {
   nodeId: string
   url: string
   filePath: string
+  source?: string
   batchTemplateFilePath?: string
 }
 
@@ -33,6 +34,7 @@ export interface PreviewResult {
   url: string
   nodeId: string
   filePath: string
+  source?: string
   success: boolean
   snippet?: string
   language?: string
@@ -88,6 +90,7 @@ function toNodeToPreview(
     nodeId: parsed.nodeId,
     url: doc.figmaNode,
     filePath: path.relative(dir, doc._codeConnectFilePath || ''),
+    source: doc.source,
     batchTemplateFilePath: doc._batchTemplateFilePath,
   }
 }
@@ -248,7 +251,11 @@ async function fetchNodeSchemaBatch(
       }),
     )
   } catch (err) {
-    const detail = isFetchError(err) ? `status ${err.response?.status}` : String(err)
+    const detail = isFetchError(err)
+      ? err.response
+        ? `status ${err.response.status}`
+        : err.message
+      : String(err)
     logger.debug(`files/nodes fetch failed for ${nodeIds.length} node(s) (${detail})`)
     return Object.fromEntries(nodeIds.map((nodeId) => [nodeId, { status: 'error' }]))
   }
@@ -414,7 +421,8 @@ let _prettierParserMap: Record<string, string> | null = null
 export function getPrettierParserMap(): Record<string, string> {
   if (_prettierParserMap) return _prettierParserMap
 
-  const info = prettier.getSupportInfo() as {
+  // @ts-expect-error Prettier's types omit its supported pluginSearchDirs option.
+  const info = prettier.getSupportInfo({ pluginSearchDirs: false }) as {
     languages: Array<{ name: string; parsers?: string[] }>
   }
   _prettierParserMap = {}
@@ -447,7 +455,7 @@ export async function isPrettierParseable(snippet: string, language?: string): P
   }
 
   try {
-    await prettier.format(snippet, { parser })
+    await prettier.format(snippet, { parser, pluginSearchDirs: false })
     return true
   } catch {
     return false
@@ -469,6 +477,7 @@ export async function formatSnippet(snippet: string, language?: string): Promise
   try {
     let formatted = await prettier.format(snippet, {
       parser,
+      pluginSearchDirs: false,
       semi: false,
       singleQuote: true,
       printWidth: 80,
@@ -700,7 +709,9 @@ function sendPreviewChunk({
       `${baseApiUrl}/code_connect/preview_snippets?file_key=${fileKey}`,
       {
         nodeIds: chunkNodeIds,
-        figmaDocs: { all: chunkTemplates },
+        figmaDocs: {
+          all: chunkTemplates,
+        },
         ...(renderCombinations && Object.keys(renderCombinations).length > 0
           ? { renderCombinations }
           : {}),
@@ -749,12 +760,12 @@ export function chunkOutcomeToResults(
 
   if (error) {
     const errorMsg = isFetchError(error)
-      ? error.data?.message || error.response.statusText
+      ? error.data?.message || error.response?.statusText || error.message
       : String(error)
     // 503 means the server-side killswitch is on — surface the server's
     // message directly without the per-file/per-node noise so the user
     // sees a single clear line during an incident.
-    if (isFetchError(error) && error.response.status === 503) {
+    if (isFetchError(error) && error.response?.status === 503) {
       exitWithError(errorMsg)
     } else {
       logger.error(`Failed to preview components in file ${fileKey}: ${errorMsg}`)
@@ -764,6 +775,7 @@ export function chunkOutcomeToResults(
             url: node.url,
             nodeId: node.nodeId,
             filePath: node.filePath,
+            source: node.source,
             success: false,
             error: errorMsg,
             // Chunk-level failure is a server/network error, not a template problem.
@@ -797,6 +809,7 @@ export function chunkOutcomeToResults(
         url: node?.url || result.nodeUrl,
         nodeId: result.nodeId,
         filePath: node?.filePath || '',
+        source: node?.source,
         success,
         snippet: result.snippet,
         language: result.language,
@@ -829,6 +842,7 @@ export function chunkOutcomeToResults(
         url: node.url,
         nodeId: node.nodeId,
         filePath: node.filePath,
+        source: node.source,
         success: false,
         error,
         // Non-2xx from the endpoint is a transport-level failure, not a template problem.

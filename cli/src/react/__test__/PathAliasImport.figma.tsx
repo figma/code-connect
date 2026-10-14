@@ -3,6 +3,6 @@ import figma from '../index_react'
 // @ts-expect-error
 import { Button } from '@components/TestComponents'
 
-figma.connect(Button, 'ui2/button', {
+figma.connect(Button, 'ui/button', {
   example: () => <Button>Click me</Button>,
 })

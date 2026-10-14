@@ -642,6 +642,7 @@ describe('preview_utils', () => {
       expect(body.figmaDocs.all[0].component).toBe('Button')
     })
 
+
     it('should send only the requested batch group when groups in one batch file share a node ID', async () => {
       const mockDocs: CodeConnectJSON[] = [
         {
@@ -706,6 +707,7 @@ describe('preview_utils', () => {
         {
           figmaNode: 'https://figma.com/file/ABC123/test?node-id=1-2',
           _codeConnectFilePath: '/test/dir/Button.figma.tsx',
+          source: 'src/Button.tsx',
           component: 'Button',
           template: '<Button />',
           templateData: {},
@@ -716,6 +718,7 @@ describe('preview_utils', () => {
         {
           figmaNode: 'https://figma.com/file/ABC123/test?node-id=1-2',
           _codeConnectFilePath: '/test/dir/Badge.figma.template.js',
+          source: 'ios/Badge.swift',
           component: 'Badge',
           template: '<Badge />',
           templateData: {},
@@ -779,7 +782,9 @@ describe('preview_utils', () => {
       // First result should be attributed to Button.figma.tsx, second to Badge
       expect(results).toHaveLength(2)
       expect(results[0].filePath).toBe('Button.figma.tsx')
+      expect(results[0].source).toBe('src/Button.tsx')
       expect(results[1].filePath).toBe('Badge.figma.template.js')
+      expect(results[1].source).toBe('ios/Badge.swift')
     })
 
     it('should report result as failure when snippet is missing', async () => {
