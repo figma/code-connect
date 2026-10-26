@@ -5,6 +5,7 @@ import { upload } from '../connect/upload'
 import { validateDocs } from '../connect/validation'
 import { createCodeConnectFromUrl } from '../connect/create'
 import {
+  convertRemoteFileUrlToRelativePath,
   CodeConnectConfig,
   CodeConnectExecutableParserConfig,
   CodeConnectParserlessConfig,
@@ -19,7 +20,6 @@ import { LogLevel, error, exitWithError, highlight, logger, success } from '../c
 import { CodeConnectJSON } from '../connect/figma_connect'
 import { convertStorybookFiles } from '../storybook/convert'
 import { delete_docs } from '../connect/delete_docs'
-import { runWizard } from '../connect/wizard/run_wizard'
 import { callParser, handleMessages } from '../connect/parser_executables'
 import { fromError } from 'zod-validation-error'
 import { ParseRequestPayload, ParseResponsePayload } from '../connect/parser_executable_types'
@@ -50,7 +50,6 @@ import {
 } from '../connect/migration_batch_helpers'
 import { CodePropertiesError, isRawTemplate, parseRawFile } from '../connect/raw_templates'
 import { parseBatchFile } from '../connect/batch_templates'
-import { convertRemoteFileUrlToRelativePath } from '../connect/wizard/run_wizard'
 import { getGitRepoAbsolutePath } from '../connect/project'
 
 export type BaseCommand = commander.Command & {
@@ -111,9 +110,7 @@ function addBaseCommand(command: commander.Command, name: string, description: s
 
 export function addConnectCommandToProgram(program: commander.Command) {
   // Main command, invoked with `figma connect`
-  const connectCommand = addBaseCommand(program, 'connect', 'Figma Code Connect').action(
-    withUpdateCheck(runWizard),
-  )
+  const connectCommand = addBaseCommand(program, 'connect', 'Figma Code Connect')
 
   // Make shared base flags work on either side of the subcommand name —
   // `figma connect -v publish` and `figma connect publish -v` both honour -v.
@@ -373,7 +370,21 @@ export async function getCodeConnectObjects(
     !isTemplateOnlyProject &&
     projectInfo.config.parser
   ) {
+    if (projectInfo.files.length === 0) {
+      exitWithError(
+        'No files matched your include/exclude patterns. Check your working directory and the include/exclude patterns in figma.config.json.',
+      )
+    }
+
+    const unrecognizedFiles = projectInfo.files.filter((file) => !parserlessFileSet.has(file))
+    const fileList = unrecognizedFiles
+      .map((file) => `  - ${path.relative(projectInfo.absPath, file)}`)
+      .join('\n')
+
     exitWithError(`Framework-specific parsers are no longer supported in Code Connect CLI v2.
+
+These matched files were not recognized as template files:
+${fileList}
 
 Run \`figma connect migrate\` to convert parser-based Code Connect to template files:
 https://developers.figma.com/docs/code-connect/templates-migration-guide/
@@ -381,7 +392,7 @@ https://developers.figma.com/docs/code-connect/templates-migration-guide/
 Alternatively, if you're not able to migrate right now, continue using Code Connect v1:
 npm install --save-dev @figma/code-connect@1
 
-If this project has already been migrated, remove the \`parser\` setting from figma.config.json or update its \`include\` patterns to match only template files.`)
+If this project has already been migrated, exclude unrelated files from figma.config.json or check that your templates have a leading // url=, // component=, or // source= directive.`)
   }
 
   if (isTemplateOnlyProject) {

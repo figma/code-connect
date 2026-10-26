@@ -1,8 +1,12 @@
 import path from 'path'
-import { extractSignature } from '../../signature_extraction'
+import { Project } from 'ts-morph'
+import { extractSignatureFromProject } from '../signature_extraction'
 
-describe('extractSignature', () => {
-  const componentsFilepath = path.join(__dirname, 'tsProgram', 'react', 'Components.tsx')
+describe('extractSignatureFromProject', () => {
+  const tsMorphProject = new Project({
+    tsConfigFilePath: path.join(__dirname, '../../../tsconfig.json'),
+  })
+  const componentsFilepath = path.join(__dirname, 'signature_extraction', 'Components.tsx')
 
   const TEST_CASES: {
     testName: string
@@ -104,7 +108,8 @@ describe('extractSignature', () => {
 
   TEST_CASES.forEach(({ testName, exportName, expectedProps }) => {
     it(`Extracts types for: ${testName}`, () => {
-      const result = extractSignature({
+      const result = extractSignatureFromProject({
+        tsMorphProject,
         nameToFind: exportName,
         sourceFilePath: componentsFilepath,
       })

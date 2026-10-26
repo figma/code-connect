@@ -12,7 +12,6 @@ import { exitWithFeedbackMessage } from './helpers'
 import { CodeConnectLabel, SyntaxHighlightLanguage } from './label_language_mapping'
 
 const DEFAULT_CONFIG_FILE_NAME = 'figma.config.json'
-const ENV_FILE_NAME = '.env'
 
 export const DEFAULT_INCLUDE_GLOBS_BY_PARSER = {
   react: [`**/*.{tsx,jsx}`],
@@ -81,11 +80,6 @@ export type BaseCodeConnectConfig = {
    * If not specified, language is inferred from the label or parser type.
    */
   language?: SyntaxHighlightLanguage
-
-  /**
-   * The URL of the Figma file to use during the interactive setup wizard for connecting code components to Figma components.
-   */
-  interactiveSetupFigmaFileUrl?: string
 
   /**
    * Custom Figma API URL to use instead of https://api.figma.com/v1
@@ -636,10 +630,6 @@ export function getDefaultConfigPath(dir: string) {
   return path.resolve(path.join(dir, DEFAULT_CONFIG_FILE_NAME))
 }
 
-export function getEnvPath(dir: string) {
-  return path.resolve(path.join(dir, ENV_FILE_NAME))
-}
-
 export async function parseOrDetermineConfig(
   dir: string,
   configPath: string,
@@ -684,47 +674,6 @@ export async function parseOrDetermineConfig(
   return {
     config,
     hasConfigFile,
-  }
-}
-
-/**
- * Check if a .env file exists in the provided directory and if it contains a FIGMA_ACCESS_TOKEN.
- */
-export async function checkForEnvAndToken(dir: string) {
-  // Scan the provided directory for a .env file
-  const envPath = await findUp('.env', { cwd: dir })
-
-  if (!envPath) {
-    // No .env file found
-    return {
-      hasEnvFile: false,
-      envHasFigmaToken: false,
-    }
-  }
-
-  // Read the contents of the .env file
-  const envContents = fs.readFileSync(envPath, 'utf-8')
-
-  // Determine if the .env file contains a FIGMA_ACCESS_TOKEN
-  const envVars = envContents.split('\n').reduce(
-    (
-      acc: {
-        [key: string]: string
-      },
-      line,
-    ) => {
-      const [key, value] = line.split('=')
-      acc[key] = value
-      return acc
-    },
-    {},
-  )
-
-  const figmaAccessToken = envVars['FIGMA_ACCESS_TOKEN']
-
-  return {
-    hasEnvFile: true,
-    envHasFigmaToken: !!figmaAccessToken,
   }
 }
 
@@ -961,4 +910,26 @@ export function mapImportSpecifier(
     }
   }
   return null
+}
+
+export function convertRemoteFileUrlToRelativePath({
+  remoteFileUrl,
+  gitRootPath,
+  dir,
+}: {
+  remoteFileUrl: string
+  gitRootPath: string
+  dir: string
+}) {
+  if (!gitRootPath) {
+    return null
+  }
+  const pathWithinRepo = remoteFileUrl.replace(new RegExp(`.*?(tree|blob)/[^/]*`), '')
+
+  if (!pathWithinRepo) {
+    return null
+  }
+  const absPath = path.join(gitRootPath, pathWithinRepo)
+
+  return path.relative(dir, absPath)
 }

@@ -1,8 +1,6 @@
 import { isFetchError, request } from '../common/fetch'
 import { logger } from '../common/logging'
 
-const version = require('../../package.json').version
-
 export function getApiUrl(figmaNode: string, apiUrlOverride?: string) {
   if (apiUrlOverride) {
     logger.debug(`Using custom API URL: ${apiUrlOverride}`)
@@ -14,7 +12,6 @@ export function getApiUrl(figmaNode: string, apiUrlOverride?: string) {
 export function getHeaders(token: string, useOAuth = false): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'User-Agent': `code-connect-cli/${version}`,
   }
   if (useOAuth) {
     headers['Authorization'] = `Bearer ${token}`

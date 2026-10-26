@@ -1,3 +1,22 @@
+# Code Connect v2.1.0 (26 October 2026)
+
+## Removed
+
+- Removed the interactive setup wizard. Running `figma connect` now shows the available commands. We recommend the [`figma-code-connect` skill](https://github.com/figma/mcp-server-guide/blob/main/skills/figma-code-connect/SKILL.md), included in the Figma plugin for your AI coding agent, as its replacement.
+
+## Fixed
+
+### General
+
+- Parser rejection errors now list matched files that were not recognized as templates, and separately explain when no files matched the configuration.
+- CLI network requests now consistently identify the Code Connect package and installed version, making them easier to recognize in network logs.
+
+### Template files
+
+- `findConnectedInstances` and `findLayers` with `traverseInstances: true` now return layers in layer order. Previously, sibling layers were returned in reverse order.
+- When more than one layer matches, `findInstance`, `findText` and `findConnectedInstance` with `traverseInstances: true`, and `figma.nestedProps`, now return the first match in layer order.
+
+
 # Code Connect v2.0.2 (14 October 2026)
 
 ## Features

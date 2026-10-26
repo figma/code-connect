@@ -1,5 +1,7 @@
 import { trackPreflightRejection } from '../publish_metrics'
 
+const { version } = require('../../../package.json')
+
 describe('trackPreflightRejection', () => {
   const send = jest.fn()
   const originalDoNotTrack = process.env.DO_NOT_TRACK
@@ -24,7 +26,10 @@ describe('trackPreflightRejection', () => {
       expect(url).toBe('https://www.figma.com/api/figment-proxy/put')
       expect(options).toMatchObject({
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': `code-connect-cli/${version} (@figma/code-connect)`,
+        },
       })
       expect(JSON.parse(options.body)).toEqual([
         {

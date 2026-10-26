@@ -2,13 +2,10 @@
 
 import * as commander from 'commander'
 import { addConnectCommandToProgram } from './commands/connect'
-import { maybePrefillWizardQuestionsForTesting } from './connect/wizard/helpers'
 
 require('dotenv').config()
 
 async function run() {
-  maybePrefillWizardQuestionsForTesting()
-
   const program = new commander.Command().version(require('./../package.json').version)
 
   addConnectCommandToProgram(program)

@@ -1,3 +1,5 @@
+import { USER_AGENT } from '../common/user_agent'
+
 export async function trackPreflightRejection(
   apiUrl: string,
   reason:
@@ -19,7 +21,7 @@ export async function trackPreflightRejection(
 
     await send(`${figmentOrigin}/api/figment-proxy/put`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'User-Agent': USER_AGENT },
       body: JSON.stringify([
         {
           figment_metadata: { namespace: 'figapi' },

@@ -4,6 +4,7 @@ import path from 'path'
 import { spawnSync } from 'child_process'
 import {
   CodeConnectReactConfig,
+  convertRemoteFileUrlToRelativePath,
   getGitRepoDefaultBranchName,
   getProjectInfoFromConfig,
   getRemoteFileUrl,
@@ -347,5 +348,17 @@ describe('Project helper functions', () => {
     it('falls back to "master" when no branch info is available', () => {
       expect(getGitRepoDefaultBranchName(tmpDir)).toBe('master')
     })
+  })
+})
+
+describe('convertRemoteFileUrlToRelativePath', () => {
+  it('converts to relative path', () => {
+    const result = convertRemoteFileUrlToRelativePath({
+      remoteFileUrl:
+        'https://github.com/slees-figma/sims-design-system/blob/main/components/ds/Modal.tsx',
+      gitRootPath: '/user/me/my-repo',
+      dir: '/user/me/my-repo/components',
+    })
+    expect(result).toBe(path.join('ds', 'Modal.tsx'))
   })
 })

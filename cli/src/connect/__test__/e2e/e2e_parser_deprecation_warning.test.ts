@@ -44,10 +44,23 @@ describe('e2e test for parser removal', () => {
   })
 
   it('rejects migrated projects whose parser configuration still matches source files', async () => {
-    await expect(runParse('migrated_html')).rejects.toMatchObject({
+    const error = await runParse('migrated_html').catch((error) => error)
+
+    expect(error.code).toBe(1)
+    expect(error.stderr).toContain('These matched files were not recognized as template files:')
+    expect(error.stderr).toContain(`  - ${path.join('src', 'button.component.ts')}`)
+    expect(error.stderr).toContain(`  - ${path.join('src', 'utils.ts')}`)
+    expect(error.stderr).not.toContain('button.figma.template.ts')
+  })
+
+  it('reports empty matches without claiming that parser-based files were found', async () => {
+    const error = await runParse('empty_include').catch((error) => error)
+
+    expect(error).toMatchObject({
       code: 1,
-      stderr: expect.stringContaining('remove the `parser` setting'),
+      stderr: expect.stringContaining('No files matched your include/exclude patterns.'),
     })
+    expect(error.stderr).not.toContain(PARSER_REMOVAL_NOTICE_FRAGMENT)
   })
 
   it('rejects partially migrated projects', async () => {

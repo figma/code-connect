@@ -1,48 +1,9 @@
 import path from 'path'
-import { Project, ScriptTarget, SourceFile, Symbol, ts } from 'ts-morph'
-import { findTsConfigPath } from '../../common/tsconfig'
+import { Project, SourceFile, Symbol, ts } from 'ts-morph'
 
 const DEFAULT_COMPONENT = 'DefaultComponent'
 const REACT_INTERFACE_NAMES = ['HTMLAttributes', 'Attributes', 'AriaAttributes', 'DOMAttributes']
 const IGNORE_REACT_PROPS = ['ref', 'key']
-
-/**
- * Initializing a ts-morph project can take time so lets cache it.
- * We are assuming the underlying project does not change during the course of the CLI run.
- */
-let cachedTsMorphProject: Project
-export function extractSignature({
-  nameToFind,
-  sourceFilePath,
-}: {
-  nameToFind: string
-  sourceFilePath: string
-}) {
-  if (!cachedTsMorphProject) {
-    const tsConfigFilePath = findTsConfigPath(path.dirname(sourceFilePath))
-    const options = tsConfigFilePath
-      ? { tsConfigFilePath }
-      : {
-          compilerOptions: {
-            target: ScriptTarget.ESNext,
-            module: ts.ModuleKind.CommonJS,
-            jsx: ts.JsxEmit.React,
-            esModuleInterop: true,
-            skipLibCheck: true,
-            lib: ['ES2021'],
-            strict: true,
-            rootDir: 'src',
-          },
-        }
-    cachedTsMorphProject = new Project(options)
-  }
-
-  return extractSignatureFromProject({
-    tsMorphProject: cachedTsMorphProject,
-    sourceFilePath,
-    nameToFind,
-  })
-}
 
 export function extractSignatureFromProject({
   tsMorphProject,

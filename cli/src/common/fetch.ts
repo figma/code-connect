@@ -1,6 +1,7 @@
 
 import { ProxyAgent, setGlobalDispatcher } from 'undici'
 import { logger } from './logging'
+import { USER_AGENT } from './user_agent'
 
 type Method = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'post' | 'get' | 'put' | 'delete'
 
@@ -84,9 +85,12 @@ async function makeRequestInternal<ResponseT = unknown>(
     options.body = JSON.stringify(body)
   }
 
+  const headers = new Headers(options.headers)
+  headers.set('User-Agent', USER_AGENT)
+
   let response: Response
   try {
-    response = await fetch(url, { ...options, method })
+    response = await fetch(url, { ...options, method, headers })
   } catch (err) {
     const cause = (err as { cause?: unknown } | null)?.cause ?? err
     logger.debug('Fetch error cause:', cause instanceof Error ? cause.stack : cause)
