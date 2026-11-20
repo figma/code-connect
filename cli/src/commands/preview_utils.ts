@@ -18,6 +18,7 @@ import {
   type AvailableProperty,
 } from '../connect/property_combinations'
 import { collapsePreviewResults } from './preview_collapse'
+import { PreviewPropertySelection } from './preview_property_selection'
 
 type PreviewCommand = BaseCommand & { output?: string }
 
@@ -31,6 +32,7 @@ export interface NodeToPreview {
 }
 
 export interface PreviewResult {
+  batchTemplateFilePath?: string
   url: string
   nodeId: string
   filePath: string
@@ -77,7 +79,9 @@ function matchedFilePath(doc: CodeConnectJSON, fileName: string): string {
 }
 
 function templateKey(codeConnectFilePath: string, batchTemplateFilePath?: string): string {
-  return `${codeConnectFilePath}::${batchTemplateFilePath ? path.resolve(batchTemplateFilePath) : ''}`
+  return `${codeConnectFilePath}::${
+    batchTemplateFilePath ? path.resolve(batchTemplateFilePath) : ''
+  }`
 }
 
 function toNodeToPreview(
@@ -157,7 +161,10 @@ export async function collectNodesToPreview(
       const uniqueFiles = new Set(matches.map((d) => matchedFilePath(d, fileName)))
       if (uniqueFiles.size === 1) {
         logger.info(
-          `Found ${matches.length} component definition(s) in ${path.relative(dir, Array.from(uniqueFiles)[0] || '')}`,
+          `Found ${matches.length} component definition(s) in ${path.relative(
+            dir,
+            Array.from(uniqueFiles)[0] || '',
+          )}`,
         )
       } else {
         logger.info(`Found ${matches.length} component definition(s) in ${uniqueFiles.size} files:`)
@@ -509,7 +516,9 @@ export function displayResults(results: PreviewResult[]): void {
     if (!result.unresolvedInstances?.length) return
     const names = result.unresolvedInstances.map((u) => u.name || u.guid).join(', ')
     console.log(
-      `  ${yellow(`⚠ ${result.unresolvedInstances.length} nested instance(s) not Code Connected: ${names}`)}`,
+      `  ${yellow(
+        `⚠ ${result.unresolvedInstances.length} nested instance(s) not Code Connected: ${names}`,
+      )}`,
     )
   }
 
@@ -776,6 +785,7 @@ export function chunkOutcomeToResults(
             nodeId: node.nodeId,
             filePath: node.filePath,
             source: node.source,
+            batchTemplateFilePath: node.batchTemplateFilePath,
             success: false,
             error: errorMsg,
             // Chunk-level failure is a server/network error, not a template problem.
@@ -810,6 +820,7 @@ export function chunkOutcomeToResults(
         nodeId: result.nodeId,
         filePath: node?.filePath || '',
         source: node?.source,
+        batchTemplateFilePath: node?.batchTemplateFilePath,
         success,
         snippet: result.snippet,
         language: result.language,
@@ -843,6 +854,7 @@ export function chunkOutcomeToResults(
         nodeId: node.nodeId,
         filePath: node.filePath,
         source: node.source,
+        batchTemplateFilePath: node.batchTemplateFilePath,
         success: false,
         error,
         // Non-2xx from the endpoint is a transport-level failure, not a template problem.
@@ -987,6 +999,12 @@ function expandFlagName(cmd: PreviewCommand): '--all' | '--unique' {
 }
 
 export function validatePreviewOptions(cmd: PreviewCommand): void {
+  if ((Array.isArray(cmd.all) || Array.isArray(cmd.unique)) && cmd.inspect) {
+    exitWithError(
+      `Property selection with ${expandFlagName(cmd)} cannot be combined with --inspect`,
+    )
+  }
+
   if (cmd.all && cmd.props) {
     const implied = cmd.unique ? ' (which implies --all)' : ''
     exitWithError(
@@ -1007,6 +1025,7 @@ async function buildPropertyPreviewInputs({
   accessToken,
   propsPairs,
   maxCombinations,
+  selection,
 }: {
   enabled: boolean
   baseApiUrl: string
@@ -1015,6 +1034,7 @@ async function buildPropertyPreviewInputs({
   accessToken: string
   propsPairs?: ParsedPropertyPair[]
   maxCombinations: number
+  selection?: PreviewPropertySelection
 }): Promise<{
   propertyCombinationsByNodeId?: Record<string, PropertyCombination[]>
   availablePropsByNodeId?: Record<string, AvailableProperty[]>
@@ -1032,7 +1052,15 @@ async function buildPropertyPreviewInputs({
   )
   for (const nodeId of uniqueNodeIds) {
     const result = definitionsByNodeId[nodeId] ?? { status: 'error' }
+    const node = nodes.find((node) => node.nodeId === nodeId)!
+    const { filePath } = node
     if (result.status === 'error') {
+      if (selection) {
+        exitWithError(
+          `Cannot validate properties selected with ${selection.flag} for ${filePath} (node ${nodeId}): ` +
+            "couldn't fetch property definitions. Check your token's Code Connect: Write and File content: Read scopes and retry.",
+        )
+      }
       logger.warn(
         `Couldn't fetch property definitions for node ${nodeId} (ensure your token has the ` +
           `Code Connect: Write and File content: Read scopes); rendering its default property combination only`,
@@ -1040,11 +1068,14 @@ async function buildPropertyPreviewInputs({
       continue
     }
     if (result.status === 'empty') {
+      selection?.forNode(filePath, nodeId, {})
       // Not an error: the component simply has no properties or variants to vary.
       if (propsPairs) {
         logger.warn(
           `Node ${nodeId} has no component properties or variants, so --props ` +
-            `(${propsPairs.map((p) => p.name).join(', ')}) has no effect; rendering its only property combination.`,
+            `(${propsPairs
+              .map((p) => p.name)
+              .join(', ')}) has no effect; rendering its only property combination.`,
         )
       } else {
         logger.info(
@@ -1060,13 +1091,16 @@ async function buildPropertyPreviewInputs({
         buildPropertyCombinationFromProps(defs, propsPairs)
       if (unknown.length > 0) {
         logger.warn(
-          `Unknown propert${unknown.length > 1 ? 'ies' : 'y'} for node ${nodeId}: ${unknown.join(', ')}. ` +
-            `Available: ${availableProperties.map((p) => p.name).join(', ')}`,
+          `Unknown propert${unknown.length > 1 ? 'ies' : 'y'} for node ${nodeId}: ${unknown.join(
+            ', ',
+          )}. ` + `Available: ${availableProperties.map((p) => p.name).join(', ')}`,
         )
       }
       for (const { name, value, options } of invalid) {
         logger.warn(
-          `"${value}" is not a valid value for ${name} on node ${nodeId}. Options: ${options.join(', ')}`,
+          `"${value}" is not a valid value for ${name} on node ${nodeId}. Options: ${options.join(
+            ', ',
+          )}`,
         )
       }
       for (const { name, types } of ambiguous) {
@@ -1081,6 +1115,7 @@ async function buildPropertyPreviewInputs({
       const { propertyCombinations, availableProperties, truncated } =
         enumeratePropertyCombinations(defs, {
           maxCombinations,
+          includedProperties: selection?.forNode(filePath, nodeId, defs),
         })
       availablePropsByNodeId[nodeId] = availableProperties
       if (truncated) {
@@ -1099,50 +1134,29 @@ async function buildPropertyPreviewInputs({
   return { propertyCombinationsByNodeId, availablePropsByNodeId }
 }
 
-async function previewNodesForFile({
-  fileKey,
-  nodes,
-  configuredApiUrl,
-  accessToken,
-  dir,
-  allCodeConnectObjects,
-  renderPropertyCombinations,
-  propsPairs,
-  maxCombinations,
-}: {
-  fileKey: string
-  nodes: NodeToPreview[]
-  configuredApiUrl?: string
-  accessToken: string
-  dir: string
-  allCodeConnectObjects: CodeConnectJSON[]
-  renderPropertyCombinations: boolean
-  propsPairs?: ParsedPropertyPair[]
-  maxCombinations: number
-}): Promise<PreviewResult[]> {
-  const baseApiUrl = getApiUrl(nodes[0].url, configuredApiUrl)
-  const { propertyCombinationsByNodeId, availablePropsByNodeId } = await buildPropertyPreviewInputs(
-    {
-      enabled: renderPropertyCombinations,
-      baseApiUrl,
-      fileKey,
-      nodes,
-      accessToken,
-      propsPairs,
-      maxCombinations,
-    },
-  )
+/** Keep templates sharing a node in separate requests; batch all other templates together. */
+function groupNonOverlappingTemplates(nodes: NodeToPreview[]): NodeToPreview[][] {
+  const templates = new Map<string, NodeToPreview[]>()
+  for (const node of nodes) {
+    const key = templateKey(node.filePath, node.batchTemplateFilePath)
+    const templateNodes = templates.get(key) ?? []
+    templateNodes.push(node)
+    templates.set(key, templateNodes)
+  }
 
-  return previewFile({
-    fileKey,
-    nodes,
-    baseApiUrl,
-    accessToken,
-    dir,
-    allCodeConnectObjects,
-    propertyCombinationsByNodeId,
-    availablePropsByNodeId,
-  })
+  const groups: Array<{ nodes: NodeToPreview[]; nodeIds: Set<string> }> = []
+  for (const templateNodes of templates.values()) {
+    let group = groups.find((candidate) =>
+      templateNodes.every((node) => !candidate.nodeIds.has(node.nodeId)),
+    )
+    if (!group) {
+      group = { nodes: [], nodeIds: new Set() }
+      groups.push(group)
+    }
+    group.nodes.push(...templateNodes)
+    for (const node of templateNodes) group.nodeIds.add(node.nodeId)
+  }
+  return groups.map((group) => group.nodes)
 }
 
 async function validateRenderedSnippets(results: PreviewResult[]): Promise<void> {
@@ -1212,6 +1226,8 @@ export async function handlePreview(files: string[], cmd: PreviewCommand) {
   logger.info(`Previewing ${nodesToCheck.length} component(s)...`)
   const nodesByFileKey = groupNodesByFileKey(nodesToCheck)
 
+  validatePreviewOptions(cmd)
+
   if (cmd.inspect) {
     await handleInspect({
       nodesByFileKey,
@@ -1222,24 +1238,47 @@ export async function handlePreview(files: string[], cmd: PreviewCommand) {
     return
   }
 
-  validatePreviewOptions(cmd)
   const maxCombinations = parseMaxCombinationsArg(cmd.maxCombinations)
   const propsPairs = cmd.props ? parsePropsArg(cmd.props) : undefined
 
-  const results: PreviewResult[] = []
+  const names = [cmd.all, cmd.unique].filter(Array.isArray).flat() as string[]
+  const selection = names.length
+    ? new PreviewPropertySelection(names, expandFlagName(cmd))
+    : undefined
+  // Validate the complete selection before sending any render requests. A name
+  // may be absent from one component as long as another selected component has it.
+  const preparedFiles = []
   for (const [fileKey, nodes] of Object.entries(nodesByFileKey)) {
-    const fileResults = await previewNodesForFile({
+    const baseApiUrl = getApiUrl(nodes[0].url, configuredApiUrl)
+    const inputs = await buildPropertyPreviewInputs({
+      enabled: !!cmd.all || !!propsPairs,
       fileKey,
       nodes,
-      configuredApiUrl,
+      baseApiUrl,
       accessToken,
-      dir,
-      allCodeConnectObjects,
-      renderPropertyCombinations: cmd.all || !!propsPairs,
       propsPairs,
       maxCombinations,
+      selection,
     })
-    results.push(...fileResults)
+    preparedFiles.push({ fileKey, nodes, baseApiUrl, ...inputs })
+  }
+  selection?.validate()
+
+  const results: PreviewResult[] = []
+  for (const prepared of preparedFiles) {
+    const groups =
+      cmd.all || propsPairs ? groupNonOverlappingTemplates(prepared.nodes) : [prepared.nodes]
+    for (const nodes of groups) {
+      results.push(
+        ...(await previewFile({
+          ...prepared,
+          nodes,
+          accessToken,
+          dir,
+          allCodeConnectObjects,
+        })),
+      )
+    }
   }
 
   await validateRenderedSnippets(results)

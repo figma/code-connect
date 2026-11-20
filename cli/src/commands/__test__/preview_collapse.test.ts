@@ -32,6 +32,51 @@ describe('collapsePreviewResults', () => {
     expect(out).toHaveLength(2)
   })
 
+  it('keeps identical output separate for different source files or Figma files', () => {
+    const out = collapsePreviewResults([
+      r({ filePath: 'Button.figma.ts', snippet: '<X />' }),
+      r({ filePath: 'Card.figma.ts', snippet: '<X />' }),
+      r({
+        filePath: 'Button.figma.ts',
+        url: 'https://figma.com/design/OTHER?node-id=1-2',
+        snippet: '<X />',
+      }),
+    ])
+    expect(out).toHaveLength(3)
+    expect(out.map((result) => result.propertyCombinationCount)).toEqual([1, 1, 1])
+  })
+
+  it.each([true, false])(
+    'keeps batch template outputs and coverage separate (success: %s)',
+    (success) => {
+      const out = collapsePreviewResults(
+        ['Button', 'Card'].flatMap((component) =>
+          ['A', 'B'].map((label) =>
+            r({
+              filePath: 'components.figma.batch.json',
+              batchTemplateFilePath: `/dist/${component}.js`,
+              source: `src/${component}.tsx`,
+              propertyCombinationLabel: label,
+              success,
+              ...(success ? { snippet: '<X />' } : { error: 'boom' }),
+            }),
+          ),
+        ),
+      )
+      expect(out).toHaveLength(2)
+      expect(out.map((result) => result.batchTemplateFilePath)).toEqual([
+        '/dist/Button.js',
+        '/dist/Card.js',
+      ])
+      expect(out.map((result) => result.source)).toEqual(['src/Button.tsx', 'src/Card.tsx'])
+      expect(out.map((result) => result.propertyCombinationCount)).toEqual([2, 2])
+      expect(out.map((result) => result.propertyCombinationLabels)).toEqual([
+        ['A', 'B'],
+        ['A', 'B'],
+      ])
+    },
+  )
+
   it('groups failures by error text, separately from successes', () => {
     const out = collapsePreviewResults([
       r({ propertyCombinationLabel: 'A', success: false, snippet: undefined, error: 'boom' }),

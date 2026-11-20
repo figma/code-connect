@@ -9,7 +9,13 @@ export function collapsePreviewResults(results: PreviewResult[]): PreviewResult[
   const order: string[] = []
   for (const result of results) {
     const output = result.success ? `s:${result.snippet ?? ''}` : `e:${result.error ?? ''}`
-    const key = `${result.nodeId} ${output}`
+    const key = JSON.stringify([
+      result.filePath,
+      result.batchTemplateFilePath,
+      result.url,
+      result.nodeId,
+      output,
+    ])
     const existing = groups.get(key)
     if (!existing) {
       const rep: PreviewResult = { ...result, propertyCombinationCount: 1 }

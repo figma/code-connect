@@ -128,29 +128,51 @@ describe('preview --unique implies --all', () => {
     })
   })
 
-  it('still parses the file argument when --unique precedes it', () => {
-    const program = new commander.Command()
-    addConnectCommandToProgram(program)
-    const sub = program.commands
-      .find((c) => c.name() === 'connect')!
-      .commands.find((c) => c.name() === 'preview')!
-    let files: string[] = []
-    let opts: Opts = {}
-    sub.action((...allArgs: unknown[]) => {
-      files = allArgs[0] as string[]
-      opts = allArgs[allArgs.length - 2] as Opts
-    })
-    program.parse(['node', 'cli', 'connect', 'preview', '--unique', 'Button.figma.tsx'])
-    // Unlike an optional-value flag (`--all [unique]`), a plain boolean cannot
-    // swallow the following positional.
-    expect(files).toEqual(['Button.figma.tsx'])
-    expect(opts).toMatchObject({ unique: true, all: true })
-  })
-
   it('leaves all unset when --unique is absent', () => {
     const preview = exerciseSubcommand('preview')
     const opts = preview(['connect', 'preview'])
     expect(opts.unique).toBeUndefined()
     expect(opts.all).toBeUndefined()
+  })
+})
+
+describe('preview property selection', () => {
+  it.each([
+    ['--unique', '--all', 'Size', 'Has Icon'],
+    ['--all', 'Size', 'Has Icon', '--unique'],
+    ['--unique', 'Size', 'Has Icon'],
+  ])('keeps selected props and positional files with %j', (...options) => {
+    const program = new commander.Command()
+    addConnectCommandToProgram(program)
+    const preview = program.commands
+      .find((c) => c.name() === 'connect')!
+      .commands.find((c) => c.name() === 'preview')!
+    let capturedFiles: string[] = []
+    let capturedOptions: Opts = {}
+    preview.action((files, opts) => {
+      capturedFiles = files
+      capturedOptions = opts
+    })
+    program.parse([
+      'node',
+      'cli',
+      'connect',
+      'preview',
+      'Button.figma.ts',
+      'Card.figma.ts',
+      ...options,
+    ])
+    expect(capturedFiles).toEqual(['Button.figma.ts', 'Card.figma.ts'])
+    expect(capturedOptions).toMatchObject(
+      options.includes('--all')
+        ? { all: ['Size', 'Has Icon'], unique: true }
+        : { all: true, unique: ['Size', 'Has Icon'] },
+    )
+  })
+
+  it('keeps bare --all as a request for every varying property', () => {
+    expect(
+      exerciseSubcommand('preview')(['connect', 'preview', 'Button.figma.ts', '--all']),
+    ).toMatchObject({ all: true })
   })
 })

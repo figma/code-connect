@@ -1,4 +1,4 @@
-const _stripAnsi = require('strip-ansi')
+import { stripVTControlCharacters } from 'util'
 
 /**
  * Tidy up the output from stdout, removing ANSI codes and trimming whitespace
@@ -10,7 +10,7 @@ const _stripAnsi = require('strip-ansi')
  */
 export function tidyStdOutput(input: string): string {
   return (
-    _stripAnsi(input.trim())
+    stripVTControlCharacters(input.trim())
       // remove any leading newlines
       .replace(/^\n+/, '')
       // remove any trailing newlines

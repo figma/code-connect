@@ -1,5 +1,5 @@
 
-import { ProxyAgent, setGlobalDispatcher } from 'undici'
+import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici'
 import { logger } from './logging'
 import { USER_AGENT } from './user_agent'
 
@@ -52,14 +52,14 @@ export function getProxyUrl() {
 }
 
 /**
- * Creates a ProxyAgent and sets it as the global dispatcher via unidici (which
- * affects fetch calls) if a proxy is set either in VS Code settings or as an
- * environment variable.
+ * Sets a proxy agent as the global dispatcher via undici (which affects fetch
+ * calls) if a proxy is set as an environment variable. The agent sends every
+ * request through that proxy, except requests to hosts listed in NO_PROXY,
+ * such as a local Figma server.
  */
 const proxyUrl = getProxyUrl()
-const agent = proxyUrl ? new ProxyAgent({ uri: proxyUrl }) : undefined
-if (agent) {
-  setGlobalDispatcher(agent)
+if (proxyUrl) {
+  setGlobalDispatcher(new EnvHttpProxyAgent({ httpProxy: proxyUrl, httpsProxy: proxyUrl }))
 }
 
 /**

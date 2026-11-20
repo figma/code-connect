@@ -100,7 +100,7 @@ Errors encountered calling parser, exiting`,
       expect(tidyStdOutput(e.stderr)).toBe(
         `Config file found, parsing ./e2e_parse_command/custom_parser_invalid_response using specified include globs
 Using custom parser command: node parser/custom_parser.js
-Error returned from parser: Validation error: Required at "docs[0].figmaNode"; Required at "docs[0].template"; Required at "docs[0].templateData"; Required at "docs[0].language"; Required at "docs[0].label". Try re-running the command with --verbose for more information.`,
+Error returned from parser: Validation error: Invalid input: expected string, received undefined at "docs[0].figmaNode"; Invalid input: expected string, received undefined at "docs[0].template"; Invalid input: expected object, received undefined at "docs[0].templateData"; Invalid option: expected one of "typescript"|"cpp"|"ruby"|"css"|"javascript"|"html"|"json"|"graphql"|"python"|"go"|"sql"|"swift"|"kotlin"|"rust"|"bash"|"xml"|"plaintext"|"jsx"|"tsx"|"dart" at "docs[0].language"; Invalid input: expected string, received undefined at "docs[0].label". Try re-running the command with --verbose for more information.`,
       )
     }
   })

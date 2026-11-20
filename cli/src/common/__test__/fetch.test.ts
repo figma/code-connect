@@ -1,3 +1,6 @@
+import { createServer, Server } from 'http'
+import { AddressInfo } from 'net'
+import { fetch as undiciFetch, getGlobalDispatcher, setGlobalDispatcher } from 'undici'
 import { isFetchError, request } from '../fetch'
 
 const { version } = require('../../../package.json')
@@ -75,5 +78,56 @@ describe('fetch requests', () => {
       expect(err.response.status).toBe(400)
       expect(err.data).toEqual({ message: 'nope' })
     }
+  })
+})
+
+describe('fetch proxy', () => {
+  const originalEnv = process.env
+  const originalDispatcher = getGlobalDispatcher()
+  const servers: Server[] = []
+
+  // Records what reaches it. The proxy refuses every tunnel, like an egress proxy refusing a host.
+  async function listen(name: string, seen: string[]) {
+    const server = createServer((req, res) => {
+      seen.push(`${name} ${req.method} ${req.url}`)
+      res.end('{}')
+    })
+    server.on('connect', (req, socket) => {
+      seen.push(`${name} CONNECT ${req.url}`)
+      socket.end('HTTP/1.1 403 Forbidden\r\n\r\n')
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    return (server.address() as AddressInfo).port
+  }
+
+  afterEach(async () => {
+    process.env = originalEnv
+    setGlobalDispatcher(originalDispatcher)
+    await Promise.all(
+      servers.splice(0).map((server) => new Promise((resolve) => server.close(resolve))),
+    )
+  })
+
+  it('connects directly to NO_PROXY hosts and sends the rest through HTTPS_PROXY', async () => {
+    const seen: string[] = []
+    const proxyPort = await listen('proxy', seen)
+    const figmaPort = await listen('local figma', seen)
+    // An egress-confined eval: only HTTPS_PROXY is set, and the local Figma server is exempt.
+    process.env = {
+      ...originalEnv,
+      HTTPS_PROXY: `http://127.0.0.1:${proxyPort}`,
+      NO_PROXY: '127.0.0.1',
+    }
+    for (const name of ['HTTP_PROXY', 'http_proxy', 'https_proxy', 'no_proxy'])
+      delete process.env[name]
+
+    // Loading the module installs its dispatcher. Jest's sandbox hides it from the
+    // built-in fetch, so send requests with undici's fetch, which uses that dispatcher.
+    jest.isolateModules(() => require('../fetch'))
+
+    await undiciFetch(`http://127.0.0.1:${figmaPort}/v1/files/abc`)
+    await expect(undiciFetch('http://api.figma.test/v1/me')).rejects.toThrow('fetch failed')
+    expect(seen).toEqual(['local figma GET /v1/files/abc', 'proxy CONNECT api.figma.test:80'])
   })
 })

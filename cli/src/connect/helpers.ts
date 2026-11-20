@@ -99,10 +99,11 @@ export function figmaUrlOfComponent(component: FigmaRestApi.Component, fileKey: 
 }
 
 /**
- * removes the ID part of a component property name
+ * removes the ID part of a component property name, e.g. `Step #1#12:34` -> `Step #1`,
+ * matching the ID pattern `normalizePropKey` strips from the property names templates read
  */
 export function normalizePropName(name: string) {
-  return name.replace(/#[0-9:]*/g, '')
+  return name.replace(/#[0-9]+:[0-9]+/g, '')
 }
 
 /**

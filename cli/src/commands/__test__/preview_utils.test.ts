@@ -56,6 +56,7 @@ jest.mock('../../connect/figma_rest_api', () => ({
 }))
 
 import {
+  chunkOutcomeToResults,
   collectNodesToPreview,
   filterTemplatesForNodes,
   formatSnippet,
@@ -346,6 +347,30 @@ describe('preview_utils', () => {
       expect(mockLogger.debug).toHaveBeenCalledWith(
         'Searching for files matching: Button.figma.tsx',
       )
+    })
+  })
+
+  it.each([
+    { response: null, error: new Error('network failure') },
+    { response: { response: { status: 500 }, data: {} }, error: null },
+  ])('preserves batch template identity on transport failures (%j)', (outcome) => {
+    const node = {
+      fileKey: 'ABC123',
+      nodeId: '1:2',
+      url: 'https://figma.com/file/ABC123?node-id=1-2',
+      filePath: 'components.figma.batch.json',
+      batchTemplateFilePath: '/test/dist/Button.js',
+    }
+    const results = chunkOutcomeToResults(
+      { chunkNodeIds: ['1:2'], ...outcome } as any,
+      [node],
+      'ABC123',
+    )
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({
+      batchTemplateFilePath: node.batchTemplateFilePath,
+      success: false,
+      errorDetails: { kind: 'transport' },
     })
   })
 
@@ -786,6 +811,276 @@ describe('preview_utils', () => {
       expect(results[1].filePath).toBe('Badge.figma.template.js')
       expect(results[1].source).toBe('ios/Badge.swift')
     })
+
+    it.each([
+      { unique: false, batch: false, sameNode: false },
+      { unique: true, batch: false, sameNode: false },
+      { unique: false, batch: true, sameNode: false },
+      { unique: true, batch: false, sameNode: true },
+      { unique: true, batch: true, sameNode: true },
+      { unique: false, batch: false, sameNode: false, differentFile: true },
+    ])(
+      'selects shared axes across components before rendering (%j)',
+      async ({ unique, batch, sameNode, differentFile }) => {
+        const docs = ['Button', 'Card'].map((component, i) => ({
+          figmaNode: `https://figma.com/file/${differentFile && i ? 'OTHER' : 'ABC123'}/test?node-id=${i && !sameNode ? '3-4' : '1-2'}`,
+          _codeConnectFilePath: batch
+            ? '/test/dir/components.figma.batch.json'
+            : `/test/dir/${component}.figma.ts`,
+          ...(batch ? { _batchTemplateFilePath: `/test/dir/${component}.figma.batch.js` } : {}),
+          component,
+          template: '<X />',
+          templateData: {},
+          language: 'typescript',
+          label: 'typescript',
+          metadata: { cliVersion: '1.0.0' },
+        })) as CodeConnectJSON[]
+        mockFs.existsSync.mockReturnValue(true)
+        mockFs.statSync.mockReturnValue({ isFile: () => true })
+        getCodeConnectObjects.mockResolvedValue(docs)
+        parseFigmaNode.mockImplementation((_verbose: boolean, doc: CodeConnectJSON) => ({
+          fileKey: doc.figmaNode.includes('OTHER') ? 'OTHER' : 'ABC123',
+          nodeId: doc.figmaNode.includes('3-4') ? '3:4' : '1:2',
+        }))
+        request.get.mockResolvedValue({
+          response: { status: 200 },
+          data: {
+            nodes: {
+              '1:2': {
+                document: {
+                  componentPropertyDefinitions: {
+                    Size: { type: 'VARIANT', defaultValue: 'M', variantOptions: ['S', 'M', 'L'] },
+                    'Has Icon#1:2': { type: 'BOOLEAN', defaultValue: true },
+                  },
+                },
+              },
+              '3:4': {
+                document: {
+                  componentPropertyDefinitions: {
+                    Layout: {
+                      type: 'VARIANT',
+                      defaultValue: 'Grid',
+                      variantOptions: ['Grid', 'List'],
+                    },
+                    'Has Icon#1:3': { type: 'BOOLEAN', defaultValue: false },
+                  },
+                },
+              },
+            },
+          },
+        })
+        request.post.mockImplementation(async (_url: string, body: any) => ({
+          response: { status: 200 },
+          data: {
+            status: 200,
+            error: false,
+            meta: {
+              results: Object.entries(body.renderCombinations).flatMap(
+                ([nodeId, combinations]: [string, any]) =>
+                  combinations.map((combination: any) => ({
+                    nodeId,
+                    nodeUrl: docs[nodeId === '1:2' ? 0 : 1].figmaNode,
+                    snippet: '<X />',
+                    language: 'typescript',
+                    propertyCombinationLabel: combination.label,
+                  })),
+              ),
+            },
+          },
+        }))
+        await handlePreview(
+          docs.map((doc) => (batch ? doc._batchTemplateFilePath! : doc._codeConnectFilePath!)),
+          {
+            dir: '/test/dir',
+            output: 'json',
+            all: unique ? true : sameNode ? ['Size'] : ['Size', 'Layout'],
+            unique: unique ? (sameNode ? ['Size'] : ['Size', 'Layout']) : false,
+          } as any,
+        )
+        expect(request.post).toHaveBeenCalledTimes(sameNode || differentFile ? 2 : 1)
+        const bodies = request.post.mock.calls.map((call: any[]) => call[1])
+        const combinations = bodies[0].renderCombinations
+        expect(combinations['1:2']).toHaveLength(3)
+        if (sameNode) {
+          expect(bodies[1].renderCombinations['1:2']).toHaveLength(3)
+          expect(
+            bodies.map((body: any) => body.figmaDocs.all.map((doc: any) => doc.component)),
+          ).toEqual([['Button'], ['Card']])
+        } else
+          expect((differentFile ? bodies[1] : bodies[0]).renderCombinations['3:4']).toHaveLength(2)
+        for (const [nodeId, icon] of [
+          ['1:2', true],
+          [sameNode ? '1:2' : '3:4', sameNode],
+        ] as const) {
+          expect(
+            (differentFile && nodeId === '3:4' ? bodies[1].renderCombinations : combinations)[
+              nodeId
+            ].every((c: any) =>
+              c.properties.some((p: any) => p.name === 'Has Icon' && p.value === icon),
+            ),
+          ).toBe(true)
+        }
+        const results = JSON.parse(consoleSpy.mock.calls[0][0])
+        expect(results.map((result: any) => result.filePath)).toEqual(
+          batch
+            ? Array(unique ? 2 : 5).fill('components.figma.batch.json')
+            : unique
+              ? ['Button.figma.ts', 'Card.figma.ts']
+              : [...Array(3).fill('Button.figma.ts'), ...Array(2).fill('Card.figma.ts')],
+        )
+        if (batch) {
+          expect([...new Set(results.map((result: any) => result.batchTemplateFilePath))]).toEqual(
+            docs.map((doc) => doc._batchTemplateFilePath),
+          )
+        }
+        expect(request.get).toHaveBeenCalledTimes(differentFile ? 2 : 1)
+        if (unique)
+          expect(results.map((result: any) => result.propertyCombinationCount)).toEqual([
+            3,
+            sameNode ? 3 : 2,
+          ])
+        expect(logger.warn).not.toHaveBeenCalled()
+      },
+    )
+
+    it.each(['unknown', 'ambiguous', 'unsupported', 'unavailable'])(
+      'rejects %s named selection before rendering any Figma file',
+      async (failure) => {
+        const docs = ['ABC123', 'OTHER'].map((fileKey, i) => ({
+          figmaNode: `https://figma.com/file/${fileKey}?node-id=1-2`,
+          _codeConnectFilePath: `/test/dir/Component${i}.figma.ts`,
+          template: '<X />',
+        })) as CodeConnectJSON[]
+        getCodeConnectObjects.mockResolvedValue(docs)
+        mockFs.existsSync.mockReturnValue(true)
+        mockFs.statSync.mockReturnValue({ isFile: () => true })
+        parseFigmaNode.mockImplementation((_verbose: boolean, doc: CodeConnectJSON) => ({
+          fileKey: doc.figmaNode.includes('OTHER') ? 'OTHER' : 'ABC123',
+          nodeId: '1:2',
+        }))
+        const definitions = (defs: any) => ({
+          response: { status: 200 },
+          data: { nodes: { '1:2': { document: { componentPropertyDefinitions: defs } } } },
+        })
+        request.get.mockResolvedValueOnce(
+          definitions({ Enabled: { type: 'BOOLEAN', defaultValue: false } }),
+        )
+        if (failure === 'unavailable')
+          request.get.mockRejectedValueOnce(new Error('network failure'))
+        else
+          request.get.mockResolvedValueOnce(
+            definitions(
+              failure === 'ambiguous'
+                ? {
+                    'Enabled#1:2': { type: 'BOOLEAN', defaultValue: false },
+                    'Enabled#1:3': { type: 'BOOLEAN', defaultValue: true },
+                  }
+                : failure === 'unsupported'
+                  ? { Enabled: { type: 'TEXT', defaultValue: 'text' } }
+                  : {},
+            ),
+          )
+        const { exitWithError } = jest.requireMock('../../common/logging')
+        exitWithError.mockImplementationOnce((message: string) => {
+          throw new Error(message)
+        })
+
+        await expect(
+          handlePreview(
+            docs.map((doc) => doc._codeConnectFilePath!),
+            {
+              dir: '/test/dir',
+              output: 'json',
+              all: failure === 'unknown' ? true : ['Enabled'],
+              unique: failure === 'unknown' ? ['Enabled', 'Typo'] : undefined,
+            } as any,
+          ),
+        ).rejects.toThrow(
+          failure === 'unknown'
+            ? 'matched nothing'
+            : failure === 'ambiguous'
+              ? 'matches multiple'
+              : failure === 'unsupported'
+                ? 'only BOOLEAN and VARIANT'
+                : "couldn't fetch property definitions",
+        )
+        expect(request.post).not.toHaveBeenCalled()
+        expect(consoleSpy).not.toHaveBeenCalled()
+      },
+    )
+
+    it.each([false, true])(
+      'batches unaffected templates and fetches schemas once (shared across templates: %s)',
+      async (sharedAcrossTemplates) => {
+        // Fifty independent nodes plus one duplicate mapping: only a duplicate in a
+        // different source template needs a second render request.
+        const docs = Array.from({ length: 50 }, (_, i) => ({
+          figmaNode: `https://figma.com/file/ABC123?node-id=${i + 1}-1`,
+          _codeConnectFilePath: `/test/dir/Component${i}.figma.ts`,
+          template: '<X />',
+        })) as CodeConnectJSON[]
+        docs.push({
+          ...docs[0],
+          ...(sharedAcrossTemplates ? { _codeConnectFilePath: '/test/dir/Other.figma.ts' } : {}),
+        })
+        getCodeConnectObjects.mockResolvedValue(docs)
+        mockFs.existsSync.mockReturnValue(true)
+        mockFs.statSync.mockReturnValue({ isFile: () => true })
+        parseFigmaNode.mockImplementation((_verbose: boolean, doc: CodeConnectJSON) => ({
+          fileKey: 'ABC123',
+          nodeId: doc.figmaNode.split('node-id=')[1].replace('-', ':'),
+        }))
+        request.get.mockResolvedValue({
+          response: { status: 200 },
+          data: {
+            nodes: Object.fromEntries(
+              docs.map((doc) => [
+                doc.figmaNode.split('node-id=')[1].replace('-', ':'),
+                {
+                  document: {
+                    componentPropertyDefinitions: {
+                      Enabled: { type: 'BOOLEAN', defaultValue: false },
+                    },
+                  },
+                },
+              ]),
+            ),
+          },
+        })
+        request.post.mockImplementation(async (_url: string, body: any) => ({
+          response: { status: 200 },
+          data: {
+            meta: {
+              results: body.nodeIds.flatMap((nodeId: string) =>
+                body.renderCombinations[nodeId].map((combination: any) => ({
+                  nodeId,
+                  snippet: '<X />',
+                  propertyCombinationLabel: combination.label,
+                })),
+              ),
+            },
+          },
+        }))
+
+        await handlePreview([...new Set(docs.map((doc) => doc._codeConnectFilePath!))], {
+          dir: '/test/dir',
+          output: 'json',
+          all: true,
+        } as any)
+
+        expect(request.get).toHaveBeenCalledTimes(1)
+        expect(request.post).toHaveBeenCalledTimes(sharedAcrossTemplates ? 2 : 1)
+        const bodies = request.post.mock.calls.map((call: any[]) => call[1])
+        expect(bodies[0].nodeIds).toHaveLength(50)
+        expect(bodies[0].figmaDocs.all).toHaveLength(sharedAcrossTemplates ? 50 : 51)
+        if (sharedAcrossTemplates) {
+          expect(bodies[1].nodeIds).toEqual(['1:1'])
+          expect(
+            bodies[1].figmaDocs.all.map((doc: CodeConnectJSON) => doc._codeConnectFilePath),
+          ).toEqual(['/test/dir/Other.figma.ts'])
+        }
+      },
+    )
 
     it('should report result as failure when snippet is missing', async () => {
       const mockDoc: CodeConnectJSON = {
@@ -1304,6 +1599,24 @@ describe('preview_utils', () => {
 
     // `--unique` on its own can't reach here without `all` also being set —
     // commander's .implies() guarantees it (see shared_options.test.ts).
+    it.each(['--all', '--unique'])('rejects %s property selection with inspect', (flag) => {
+      validatePreviewOptions(
+        cmd({
+          all: flag === '--all' ? ['Size'] : true,
+          unique: flag === '--unique' ? ['Size'] : undefined,
+          inspect: true,
+        }),
+      )
+      expect(exitWithError).toHaveBeenCalledWith(
+        `Property selection with ${flag} cannot be combined with --inspect`,
+      )
+    })
+
+    it('accepts selected properties with unique', () => {
+      validatePreviewOptions(cmd({ all: ['Size'], unique: true }))
+      expect(exitWithError).not.toHaveBeenCalled()
+    })
+
     it('accepts --unique together with --all', () => {
       validatePreviewOptions(cmd({ unique: true, all: true }))
       expect(exitWithError).not.toHaveBeenCalled()

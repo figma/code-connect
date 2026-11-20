@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Node 22",
+  "extends": "./tsconfig-base.json",
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2024", "es2025.collection", "esnext.array", "esnext.iterator"]
+  }
+}

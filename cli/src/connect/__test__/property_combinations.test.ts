@@ -115,6 +115,56 @@ describe('enumeratePropertyCombinations', () => {
     expect(truncated).toEqual({ total: 8, cap: 4 })
   })
 
+  it('selects axes before capping and holds unselected properties at their own defaults', () => {
+    const defs: Record<string, FigmaRestApi.ComponentPropertyDefinition> = {
+      Size: { type: VARIANT, defaultValue: 'M', variantOptions: ['S', 'M', 'L', 'XL'] },
+      'Has Icon#1:2': { type: BOOLEAN, defaultValue: true },
+    }
+    for (let i = 0; i < 8; i++) defs[`Bool${i}`] = { type: BOOLEAN, defaultValue: false }
+    const result = enumeratePropertyCombinations(defs, {
+      maxCombinations: 500,
+      includedProperties: Array.from({ length: 8 }, (_, i) => ({
+        name: `Bool${i}`,
+        type: BOOLEAN,
+      })),
+    })
+    expect(result.truncated).toBeNull()
+    expect(result.propertyCombinations).toHaveLength(256)
+    for (const combination of result.propertyCombinations) {
+      expect(combination.properties).toEqual(
+        expect.arrayContaining([
+          { name: 'Size', type: VARIANT, value: 'M' },
+          { name: 'Has Icon', type: BOOLEAN, value: true },
+        ]),
+      )
+      expect(combination.label).not.toContain('Size=')
+      expect(combination.label).not.toContain('Has Icon=')
+    }
+    expect(result.availableProperties).toHaveLength(10)
+    expect(
+      result.propertyCombinations.some((combination) => combination.label.includes('Bool7=true')),
+    ).toBe(true)
+  })
+
+  it('renders one complete default overlay when no varying properties are selected', () => {
+    const { propertyCombinations } = enumeratePropertyCombinations(
+      {
+        Disabled: { type: BOOLEAN, defaultValue: true },
+        Label: { type: TEXT, defaultValue: 'Hello' },
+      },
+      { includedProperties: [] },
+    )
+    expect(propertyCombinations).toEqual([
+      {
+        label: 'default',
+        properties: [
+          { name: 'Disabled', type: BOOLEAN, value: true },
+          { name: 'Label', type: TEXT, value: 'Hello' },
+        ],
+      },
+    ])
+  })
+
   it('renders all property combinations with no cap by default', () => {
     // 7 booleans = 128 combinations.
     const defs: Record<string, FigmaRestApi.ComponentPropertyDefinition> = {}

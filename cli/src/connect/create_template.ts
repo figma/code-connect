@@ -9,6 +9,7 @@ import { getOutFileName } from './create_common'
 import {
   exitWithFeedbackMessage,
   findComponentsInDocument,
+  normalizePropName,
   parseFileKey,
   parseNodeIds,
 } from './helpers'
@@ -133,16 +134,12 @@ interface CreateTemplateArgs {
   destinationFile: string | undefined
 }
 
-function normalizePropName(name: string) {
-  return name.replace(/#[0-9:]*/g, '')
-}
-
 function normalizePropValue(name: string) {
   return name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
 }
 
 function generateCodePropName(name: string) {
-  return camelCase(name.replace(/#[0-9:]+$/g, '').replace(/[^a-zA-Z0-9\s]/g, ''))
+  return camelCase(normalizePropName(name).replace(/[^a-zA-Z0-9\s]/g, ''))
 }
 
 function isBooleanKind(propValue: string) {
@@ -166,27 +163,27 @@ function generatePropDeclaration(
   propDef: ComponentPropertyDefinition,
 ): string | null {
   const codePropName = generateCodePropName(propName)
-  const figmaPropName = normalizePropName(propName)
+  const figmaPropName = JSON.stringify(normalizePropName(propName))
 
   if (propDef.type === 'BOOLEAN') {
-    return `const ${codePropName} = figma.selectedInstance.getBoolean("${figmaPropName}")`
+    return `const ${codePropName} = figma.selectedInstance.getBoolean(${figmaPropName})`
   }
   if (propDef.type === 'TEXT') {
-    return `const ${codePropName} = figma.selectedInstance.getString("${figmaPropName}")`
+    return `const ${codePropName} = figma.selectedInstance.getString(${figmaPropName})`
   }
   if (propDef.type === 'VARIANT') {
     const isBooleanVariant =
       propDef.variantOptions?.length === 2 && propDef.variantOptions.every(isBooleanKind)
     if (isBooleanVariant) {
-      return `const ${codePropName} = figma.selectedInstance.getBoolean("${figmaPropName}")`
+      return `const ${codePropName} = figma.selectedInstance.getBoolean(${figmaPropName})`
     } else {
       const options = (propDef.variantOptions || [])
         .map((v) => {
-          const key = isValidIdentifier(v) ? v : `"${v}"`
-          return `  ${key}: "${normalizePropValue(v)}"`
+          const key = isValidIdentifier(v) ? v : JSON.stringify(v)
+          return `  ${key}: ${JSON.stringify(normalizePropValue(v))}`
         })
         .join(',\n')
-      return `const ${codePropName} = figma.selectedInstance.getEnum("${figmaPropName}", {\n${options},\n})`
+      return `const ${codePropName} = figma.selectedInstance.getEnum(${figmaPropName}, {\n${options},\n})`
     }
   }
   return null

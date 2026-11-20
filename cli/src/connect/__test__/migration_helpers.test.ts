@@ -915,6 +915,30 @@ export default figma.tsx\`<Button />\``
     })
   })
 
+  it.each([
+    { parser: 'SwiftUI', tag: 'swift', escaped: `"\${title.replace(/\\n/g, '\\\\n')}"` },
+    { parser: 'Compose', tag: 'kotlin', escaped: `"\${title.replace(/\\n/g, "\\\\n")}"` },
+  ])(
+    'only escapes newlines in a $parser text property when it holds a string',
+    ({ tag, escaped }) => {
+      const doc: CodeConnectJSON = {
+        figmaNode: 'https://figma.com/file/abc?node-id=1:1',
+        component: 'Button',
+        template: `const figma = require('figma')
+const title = figma.properties.string('Label')
+export default figma.${tag}\`Button(title: ${escaped})\``,
+        templateData: { nestable: true },
+        language: SyntaxHighlightLanguage.TypeScript,
+        label: tag,
+        metadata: { cliVersion: '1.0.0' },
+      }
+      const result = prepareMigratedTemplate(doc)
+      expect(result).toContain('typeof title === "string" ? title.replace(/\\n/g, "\\\\n") : title')
+      expect(result).not.toMatch(/\$\{\s*title\.replace/)
+      expect(prepareMigratedTemplate({ ...doc, template: result })).toBe(result)
+    },
+  )
+
   it('does not duplicate id when template already has id field', () => {
     const doc: CodeConnectJSON = {
       figmaNode: 'https://figma.com/file/abc?node-id=1:1',

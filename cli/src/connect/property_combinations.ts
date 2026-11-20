@@ -5,7 +5,7 @@ import { FigmaRestApi } from './figma_rest_api'
 // workspace package breaks a locally built/linked CLI. MUST stay in sync so the
 // property keys we send line up with the server's `.properties`.
 const PROP_ID_PATTERN = /(#[0-9]+:[0-9]+)/g
-function normalizePropKey(key: string): string {
+export function normalizePropKey(key: string): string {
   return key.replace(PROP_ID_PATTERN, '').replace(/\s+/g, ' ').trim()
 }
 
@@ -61,7 +61,7 @@ export interface EnumeratePropertyCombinationsResult {
  */
 export function enumeratePropertyCombinations(
   defs: Record<string, FigmaRestApi.ComponentPropertyDefinition>,
-  opts: { maxCombinations?: number } = {},
+  opts: { maxCombinations?: number; includedProperties?: AvailableProperty[] } = {},
 ): EnumeratePropertyCombinationsResult {
   const cap = opts.maxCombinations ?? Infinity
   const entries = Object.entries(defs)
@@ -79,7 +79,13 @@ export function enumeratePropertyCombinations(
 
   for (const [rawName, def] of entries) {
     const name = normalizePropKey(rawName)
-    if (def.type === FigmaRestApi.ComponentPropertyType.Variant) {
+    if (
+      opts.includedProperties !== undefined &&
+      !opts.includedProperties.some((prop) => prop.name === name && prop.type === def.type)
+    ) {
+      // Select axes before capping; unselected properties remain in every overlay.
+      fixed.push({ name, type: def.type, value: def.defaultValue })
+    } else if (def.type === FigmaRestApi.ComponentPropertyType.Variant) {
       const values =
         def.variantOptions && def.variantOptions.length > 0
           ? def.variantOptions

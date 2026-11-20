@@ -1,3 +1,30 @@
+# Code Connect v2.1.1 (20 November 2026)
+
+## Features
+
+### General
+
+- Preview can now vary only the properties you care about with `--all Size "Has Icon"`, holding all other properties at their own defaults before applying the 500-combination limit. The selection applies across all selected components and can also be supplied directly to `--unique`, for example `--unique Size "Has Icon"`. Bare `--all` still varies every Boolean and Variant property. Place component file arguments before `--all` or `--unique`; quote property names containing spaces. Ambiguous or unsupported names, names unmatched across all selected components, and unavailable property definitions cause an error before rendering.
+
+## Changed
+
+### General
+
+- The CLI now uses Zod 4 to check the output of parsers, for example during `figma connect migrate`. Error messages for invalid parser output are worded differently, and every prop in `templateData.props` must include `args`.
+
+## Fixed
+
+### General
+
+- Preview keeps identical snippets from separate batch templates distinct with `--unique`.
+- Templates that `figma connect migrate` creates from SwiftUI and Compose Code Connect no longer fail to load in Dev Mode when a text property is missing from the component. The migrated template now shows the missing property instead of the error `replace is not a function`.
+
+- The CLI now respects the `NO_PROXY` environment variable. Hosts listed in it are reached directly instead of through the proxy set in `HTTPS_PROXY` or `HTTP_PROXY`.
+- `figma connect create` now correctly escapes component property names and variant options that contain quotes, backslashes, or line breaks. Previously these characters could produce a generated template file containing broken or unintended code.
+- Security update: upgraded glob to v14 and minimatch to v11 to fix a denial-of-service vulnerability in minimatch ([CVE-2026-118764](https://github.com/advisories/GHSA-g3hv-75wg-m249)). The ts-morph dependency still uses minimatch v10 until ts-morph releases an update.
+- `figma connect create` and `client.getComponents()` now keep `#` characters that are part of a property name, removing only the ID Figma adds to the end. For example, a property named `Tab #2` is now referenced as `"Tab #2"` instead of `"Tab "`, which the generated template could not find. Properties such as `Tab #1` and `Tab #2` also no longer share one name in `client.getComponents()` results.
+
+
 # Code Connect v2.1.0 (26 October 2026)
 
 ## Removed

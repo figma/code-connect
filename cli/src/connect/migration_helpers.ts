@@ -240,6 +240,7 @@ export function prepareMigratedTemplateBody(
   let template = doc.template
   template = removeSwiftHelpers(template)
   template = migrateTemplateToUseServerSideHelpers(template)
+  template = guardGeneratedNewlineEscapes(template)
   if (!includeProps) {
     template = removePropsDefinitionAndMetadata(template)
   }
@@ -262,6 +263,19 @@ export function prepareMigratedTemplate(
 ): string {
   const template = prepareMigratedTemplateBody(doc, includeProps, useTypeScript)
   return formatTemplate(template)
+}
+
+/**
+ * The SwiftUI and Compose parsers escape newlines in text properties with
+ * `${name.replace(/\n/g, '\\n')}`. When the property is missing, `name` holds
+ * its error rather than a string, so only call `replace` on strings.
+ */
+function guardGeneratedNewlineEscapes(template: string): string {
+  return template.replace(
+    /\$\{([A-Za-z_$][\w$]*)\.replace\(\/\\n\/g, (['"])\\\\n\2\)\}/g,
+    (_, name, quote) =>
+      `\${typeof ${name} === 'string' ? ${name}.replace(/\\n/g, ${quote}\\\\n${quote}) : ${name}}`,
+  )
 }
 
 function removeSwiftHelpers(template: string): string {

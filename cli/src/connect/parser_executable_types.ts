@@ -63,7 +63,7 @@ export const ParseResponsePayload = z.object({
       // so can be omitted if it's not relevant to the language/framework
       component: z.string().optional(),
       // Variant restrictions keyed by Figma property name e.g. `{ 'With icon': true }`
-      variant: z.record(z.any()).optional(),
+      variant: z.record(z.string(), z.any()).optional(),
       // Optional source path/URL, which can either be a path on disk, which
       // we'll show as a SCM link, or a URL (e.g. for a Storybook parser which
       // wants to link to the story in Storybook rather than the file in Github)
@@ -90,7 +90,7 @@ export const ParseResponsePayload = z.object({
         // TODO We could look to extract this from the template somehow instead,
         // (e.g. run it with figma.properties.* stubbed to record accesses) to
         // avoid needing this duplication.
-        props: z.record(z.object({ kind: z.string(), args: z.any() }) as any),
+        props: z.record(z.string(), z.object({ kind: z.string(), args: z.any() }) as any),
         // Optional array of imports for this component. These are prepended
         // to the example code, but it's useful to keep them separate e.g. if
         // we ever want to auto-insert imports in VS Code. If more control

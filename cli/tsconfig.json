@@ -1,5 +1,5 @@
 {
-  "extends": "./tsconfig-base.json",
+  "extends": "./tsconfig-node.json",
   "compilerOptions": {
     "module": "node16", // TODO: figure out why tests fail with node20
     "jsx": "react-jsx",
@@ -15,13 +15,7 @@
     "noImplicitOverride": false,
     "noUnusedParameters": false,
     "noUncheckedIndexedAccess": false,
-    "isolatedDeclarations": false,
+    "isolatedDeclarations": false
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "**/__test__",
-    "src/components",
-    "scripts"
-  ]
+  "exclude": ["node_modules", "dist", "**/__test__", "src/components", "scripts"]
 }

@@ -68,7 +68,7 @@ export type BaseCommand = commander.Command & {
   includeProps?: boolean
   batch?: BatchMigrationMode
   delete?: boolean
-  all?: boolean
+  all?: boolean | string[]
   maxCombinations?: string
   props?: string[]
   inspect?: boolean
@@ -212,8 +212,8 @@ export function addConnectCommandToProgram(program: commander.Command) {
     )
     .option('--output <format>', 'Output format: table (default) or json', 'table')
     .option(
-      '--all',
-      "Render the snippet for every possible combination of the component's boolean and variant properties. Requires a single component file argument.",
+      '--all [names...]',
+      'Render every combination of Boolean and Variant properties. Optionally name only the properties to vary; all others use their defaults. Names are case-insensitive; quote names containing spaces. Ambiguous or unsupported property names, or names unmatched across all selected components, are errors. Place component file arguments before --all.',
     )
     .option(
       '--max-combinations <number>',
@@ -228,12 +228,10 @@ export function addConnectCommandToProgram(program: commander.Command) {
       "List the component's properties/variants (name, type, options, default) without rendering. Respects --output.",
     )
     .addOption(
-      // Implies --all, so `--unique` is meaningful on its own and there is no
-      // way to ask for deduplication without asking for the combinations it
-      // dedupes. Downstream code only ever reads `all`.
+      // Expansion is shared with --all; --unique also collapses identical snippets.
       new commander.Option(
-        '--unique',
-        'Implies --all, but folds property combinations that render identical output into a single result (reported with the count of combinations it covers). Useful when boolean/variant axes do not change the rendered snippet.',
+        '--unique [names...]',
+        'Render combinations of Boolean and Variant properties, reporting each distinct snippet once. Optionally name only the properties to vary; all others use their defaults. Place component file arguments before --unique.',
       ).implies({ all: true }),
     )
     .action(withUpdateCheck(handlePreview))

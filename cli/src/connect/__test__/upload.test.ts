@@ -1,5 +1,5 @@
 import chalk from 'chalk'
-import stripAnsi from 'strip-ansi'
+import { stripVTControlCharacters as stripAnsi } from 'util'
 import { logger } from '../../common/logging'
 
 jest.mock('../../common/fetch', () => ({
